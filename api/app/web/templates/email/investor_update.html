@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Investor Update</title></head>
+<body style="margin:0;background:#f7f8fa;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#101828;">
+  <div style="max-width:640px;margin:0 auto;padding:24px;">
+    <div style="background:#ffffff;border:1px solid #e6e8ec;border-radius:16px;padding:24px;">
+      <h1 style="margin:0;font-size:20px;">{{ company_name }} — Investor Update</h1>
+      <p style="color:#667085;font-size:13px;margin:8px 0 0;">{{ ctx.period }}</p>
+
+      <h2 style="font-size:14px;margin:24px 0 8px;text-transform:uppercase;letter-spacing:0.04em;color:#667085;">Key metrics</h2>
+      <table role="presentation" width="100%" style="border-collapse:collapse;font-size:14px;">
+        <tr><td style="padding:6px 0;color:#667085;">Cash</td><td style="text-align:right;font-weight:600;">{{ ctx.cash|rupees }}</td></tr>
+        <tr><td style="padding:6px 0;color:#667085;">Net burn / mo</td><td style="text-align:right;font-weight:600;">{{ ctx.net_burn|rupees }}</td></tr>
+        <tr><td style="padding:6px 0;color:#667085;">Runway</td><td style="text-align:right;font-weight:600;">{{ ctx.runway_fmt }}</td></tr>
+        <tr><td style="padding:6px 0;color:#667085;">Receivables</td><td style="text-align:right;font-weight:600;">{{ ctx.ar|rupees }}</td></tr>
+      </table>
+
+      <h2 style="font-size:14px;margin:24px 0 8px;text-transform:uppercase;letter-spacing:0.04em;color:#667085;">Cap table</h2>
+      <p style="font-size:13px;color:#475467;margin:0;">Total shares: {{ ctx.cap_table.total_shares }}</p>
+      {% for cat, pct in ctx.cap_table.ownership.items() %}
+      <div style="font-size:13px;color:#475467;">{{ cat|capitalize }}: {{ (pct * 100)|round(1) }}%</div>
+      {% endfor %}
+
+      {% if ctx.highlights %}
+      <h2 style="font-size:14px;margin:24px 0 8px;text-transform:uppercase;letter-spacing:0.04em;color:#667085;">Highlights</h2>
+      <ul style="font-size:13px;color:#475467;margin:0;padding-left:18px;">
+        {% for h in ctx.highlights %}<li>{{ h }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+
+      <p style="margin:24px 0 0;font-size:11px;color:#98a2b3;">Figures reconciled to the books and validated by Mahsa.</p>
+    </div>
+  </div>
+</body></html>

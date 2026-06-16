@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="topbar">
+  <h1>Financial Command Center</h1>
+  <span class="muted">v{{ settings.version }}</span>
+</div>
+
+<div class="kpis">
+  <div class="kpi"><div class="kpi__label">Cash</div><div class="kpi__value" id="kpi-cash">{{ kpis.cash_fmt }}</div></div>
+  <div class="kpi"><div class="kpi__label">Net Burn / mo</div><div class="kpi__value" id="kpi-burn">{{ kpis.net_burn_fmt }}</div></div>
+  <div class="kpi"><div class="kpi__label">Runway</div><div class="kpi__value" id="kpi-runway">{{ kpis.runway_fmt }}</div></div>
+  <div class="kpi"><div class="kpi__label">AR</div><div class="kpi__value">{{ kpis.ar_fmt }}</div></div>
+  <div class="kpi"><div class="kpi__label">AP</div><div class="kpi__value">{{ kpis.ap_fmt }}</div></div>
+</div>
+
+<div class="section-title">Domain Health</div>
+{% if not mahsa_up %}
+<p class="muted" style="margin-bottom:var(--sp-3)">Mahsa sidecar unreachable — showing modules without live scores.</p>
+{% endif %}
+<div class="cards">
+  {% for d in domains %}
+  <div class="card" id="{{ d.key }}">
+    <div class="card__title">
+      {{ d.key }}
+      {% if d.status %}
+        <span class="pill pill--{{ d.color }}">{{ d.status|upper }}</span>
+      {% else %}
+        <span class="pill pill--green">Live</span>
+      {% endif %}
+    </div>
+    <div class="card__meta">
+      {% if d.score is not none %}
+        <span class="kpi__value" style="font-size:var(--fs-md)">{{ d.score }}<span class="muted" style="font-size:var(--fs-sm)">/100</span></span>
+      {% else %}
+        Module wired — fold loop active.
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="section-title">Compliance Calendar</div>
+{% if calendar %}
+<div class="cards">
+  {% for c in calendar %}
+  <div class="card">
+    <div class="card__title" style="text-transform:none">
+      {{ c.form_name }}
+      {% if c.label == "OVERDUE" %}<span class="pill pill--red">OVERDUE</span>
+      {% else %}<span class="pill pill--amber">{{ c.label }}</span>{% endif %}
+    </div>
+    <div class="card__meta">
+      Due {{ c.due_date }}{% if c.days_overdue is defined %} · {{ c.days_overdue }} day(s) overdue{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="muted">No filings due in the alert window. You're clear.</p>
+{% endif %}
+
+<div class="section-title">Approvals Pending ({{ approvals|length }})</div>
+{% if approvals %}
+<div class="cards">
+  {% for a in approvals %}
+  <div class="card">
+    <div class="card__title">{{ a.domain }}<span class="pill pill--{{ a.color }}">{{ a.status|upper }}</span></div>
+    <div class="card__meta">
+      {% for b in a.banners %}{{ b.text }}<br><span class="muted">{{ b.citation }}</span>{% else %}Needs your review.{% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="muted">Nothing awaiting approval.</p>
+{% endif %}
+
+<p class="muted" style="margin-top:var(--sp-6)">
+  Mahsa is the gatekeeper. Every figure shown here is recomputed and validated by the Rust
+  DIF core and recorded in the hash-chained audit log.
+</p>
+{% endblock %}

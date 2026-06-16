@@ -1,0 +1,240 @@
+"""Treasury service: bank-CSV import and the cash / burn / runway math.
+
+All money is integer paise and all math is exact. Time is **injected** (`as_of`) so the
+service is deterministic and testable — it never reads the clock itself.
+"""
+
+from __future__ import annotations
+
+import csv
+import io
+from datetime import date
+from decimal import Decimal
+from typing import Any
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.core.domain import BaseDomainService
+from app.core.money import Paise
+from app.db.models.treasury import BankAccount, BankTransaction
+from app.domains.treasury.manifest import MANIFEST
+
+# Canonical field -> ordered list of header substrings seen across Indian bank statements.
+_HEADER_MAP: dict[str, tuple[str, ...]] = {
+    "date": ("transaction date", "tran date", "txn date", "value date", "date"),
+    "description": ("narration", "transaction remarks", "particulars", "remarks", "description"),
+    "reference": ("chq./ref.no.", "ref no", "cheque no", "chq/ref", "reference", "ref"),
+    "debit": ("withdrawal amt", "withdrawal amount", "withdrawal", "debit", "dr"),
+    "credit": ("deposit amt", "deposit amount", "deposit", "credit", "cr"),
+    "balance": ("closing balance", "balance", "bal"),
+}
+
+_DATE_FORMATS = (
+    "%Y-%m-%d",
+    "%d/%m/%Y",
+    "%d/%m/%y",
+    "%d-%m-%Y",
+    "%d-%m-%y",
+    "%d-%b-%Y",
+    "%d %b %Y",
+)
+
+
+def _parse_date(raw: str) -> date | None:
+    raw = raw.strip()
+    for fmt in _DATE_FORMATS:
+        try:
+            return _strptime(raw, fmt)
+        except ValueError:
+            continue
+    return None
+
+
+def _strptime(raw: str, fmt: str) -> date:
+    from datetime import datetime
+
+    return datetime.strptime(raw, fmt).date()
+
+
+def _cell(row: list[str], cols: dict[str, int], field: str) -> str | None:
+    """Return the trimmed cell for ``field`` if the column exists and the row is long
+    enough; otherwise ``None``."""
+    idx = cols.get(field)
+    if idx is None or idx >= len(row):
+        return None
+    return row[idx].strip()
+
+
+def _parse_amount(raw: str) -> Paise:
+    cleaned = raw.replace(",", "").replace("₹", "").replace("Rs.", "").strip()
+    if cleaned in ("", "-", "0", "0.0", "0.00"):
+        return Paise(0)
+    try:
+        return Paise.from_rupees(Decimal(cleaned))
+    except Exception:
+        return Paise(0)
+
+
+def _months_back(anchor: date, months: int) -> date:
+    """The date ``months`` whole months before ``anchor`` (clamped to month length)."""
+    total = anchor.year * 12 + (anchor.month - 1) - months
+    year, month = divmod(total, 12)
+    month += 1
+    # clamp day to the last valid day of the target month
+    import calendar
+
+    day = min(anchor.day, calendar.monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+class TreasuryService(BaseDomainService):
+    domain = "treasury"
+    keywords = ("cash", "bank", "runway", "burn", "treasury", "balance", "fd", "deposit")
+    manifest = MANIFEST
+
+    # ---- CSV import -----------------------------------------------------------------
+
+    def _resolve_columns(self, header: list[str]) -> dict[str, int]:
+        lowered = [h.strip().lower() for h in header]
+        cols: dict[str, int] = {}
+        for field, candidates in _HEADER_MAP.items():
+            for cand in candidates:
+                idx = next((i for i, h in enumerate(lowered) if cand in h), None)
+                if idx is not None:
+                    cols[field] = idx
+                    break
+        if "date" not in cols or ("debit" not in cols and "credit" not in cols):
+            raise ValueError("unrecognised bank CSV: need a date column and a debit/credit column")
+        return cols
+
+    def import_csv(self, session: Session, account_id: int, csv_text: str) -> dict[str, int]:
+        """Import a bank statement CSV into ``bank_transactions`` and update the account
+        balance. Returns counts + closing balance (paise). Idempotency is the caller's
+        concern (dedupe by reference is a future feature — see manifest)."""
+        account = session.get(BankAccount, account_id)
+        if account is None:
+            raise ValueError(f"bank account {account_id} not found")
+
+        reader = csv.reader(io.StringIO(csv_text))
+        rows = [r for r in reader if any(cell.strip() for cell in r)]
+        if not rows:
+            return {
+                "account_id": account_id,
+                "rows_imported": 0,
+                "rows_skipped": 0,
+                "closing_balance_paise": account.current_balance,
+            }
+
+        cols = self._resolve_columns(rows[0])
+        imported = 0
+        skipped = 0
+        running = Paise(account.current_balance)
+
+        for row in rows[1:]:
+            date_raw = _cell(row, cols, "date")
+            txn_date = _parse_date(date_raw) if date_raw else None
+            if txn_date is None:
+                skipped += 1
+                continue
+
+            debit_raw = _cell(row, cols, "debit")
+            credit_raw = _cell(row, cols, "credit")
+            debit = _parse_amount(debit_raw) if debit_raw else Paise(0)
+            credit = _parse_amount(credit_raw) if credit_raw else Paise(0)
+            if debit == 0 and credit == 0:
+                skipped += 1
+                continue
+
+            running = Paise(running + credit - debit)
+            balance = running
+            balance_raw = _cell(row, cols, "balance")
+            if balance_raw:
+                parsed_bal = _parse_amount(balance_raw)
+                if parsed_bal != 0:
+                    balance = parsed_bal
+                    running = parsed_bal
+
+            session.add(
+                BankTransaction(
+                    account_id=account_id,
+                    txn_date=txn_date.isoformat(),
+                    description=_cell(row, cols, "description"),
+                    reference=_cell(row, cols, "reference"),
+                    debit=int(debit),
+                    credit=int(credit),
+                    balance=int(balance),
+                )
+            )
+            imported += 1
+
+        account.current_balance = int(running)
+        session.flush()
+        return {
+            "account_id": account_id,
+            "rows_imported": imported,
+            "rows_skipped": skipped,
+            "closing_balance_paise": int(running),
+        }
+
+    # ---- metrics --------------------------------------------------------------------
+
+    def cash_position(self, session: Session) -> dict[str, Any]:
+        accounts = session.scalars(select(BankAccount)).all()
+        by_account = {a.bank_name: int(a.current_balance) for a in accounts}
+        total = sum(by_account.values())
+        largest = max(by_account.values(), default=0)
+        share = (largest / total) if total > 0 else 0.0
+        return {
+            "total_cash_paise": total,
+            "account_count": len(accounts),
+            "largest_account_share": round(share, 6),
+            "by_account": by_account,
+        }
+
+    def window_totals(self, session: Session, as_of: date, months: int = 3) -> tuple[Paise, Paise]:
+        """(total_debits, total_credits) in the trailing ``months`` window ending ``as_of``."""
+        start = _months_back(as_of, months)
+        txns = session.scalars(select(BankTransaction)).all()
+        debits = 0
+        credits = 0
+        for t in txns:
+            d = _parse_date(t.txn_date)
+            if d is None or d <= start or d > as_of:
+                continue
+            debits += int(t.debit)
+            credits += int(t.credit)
+        return Paise(debits), Paise(credits)
+
+    def metrics(self, session: Session, as_of: date, months: int = 3) -> dict[str, Any]:
+        cash = self.cash_position(session)
+        debits, credits = self.window_totals(session, as_of, months)
+        monthly_burn = Paise(round(int(debits) / months))
+        monthly_revenue = Paise(round(int(credits) / months))
+        net_burn = Paise(max(0, int(monthly_burn) - int(monthly_revenue)))
+        runway = None if net_burn == 0 else round(int(cash["total_cash_paise"]) / int(net_burn), 2)
+        return {
+            "as_of": as_of.isoformat(),
+            "window_months": months,
+            "cash_paise": cash["total_cash_paise"],
+            "monthly_burn_paise": int(monthly_burn),
+            "monthly_revenue_paise": int(monthly_revenue),
+            "net_burn_paise": int(net_burn),
+            "runway_months": runway,
+            "largest_account_share": cash["largest_account_share"],
+            "account_count": cash["account_count"],
+        }
+
+    # ---- Mahsa contract -------------------------------------------------------------
+
+    def build_snapshot(self, session: Session, as_of: date | None = None) -> dict[str, Any]:
+        anchor = as_of or date(1970, 1, 1)
+        m = self.metrics(session, anchor)
+        return {
+            "as_of": m["as_of"],
+            "cash": m["cash_paise"],
+            "monthly_burn": m["monthly_burn_paise"],
+            "monthly_revenue": m["monthly_revenue_paise"],
+            "bank_account_count": m["account_count"],
+            "largest_account_share": m["largest_account_share"],
+        }

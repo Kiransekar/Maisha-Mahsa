@@ -1,0 +1,65 @@
+/* Design tokens — the single source of truth for the UI. Pixel-level polish starts here.
+   Change a value here, never a hard-coded literal in a component. */
+:root {
+  /* Type scale (1.250 major third), 16px base */
+  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", "SF Mono", ui-monospace, monospace;
+  --fs-xs: 0.64rem;
+  --fs-sm: 0.8rem;
+  --fs-base: 1rem;
+  --fs-md: 1.25rem;
+  --fs-lg: 1.563rem;
+  --fs-xl: 1.953rem;
+  --lh-tight: 1.2;
+  --lh-base: 1.5;
+
+  /* Spacing scale (4px base) */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+
+  /* Radii & elevation */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --shadow-1: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.10);
+  --shadow-2: 0 4px 8px -2px rgba(16, 24, 40, 0.10), 0 2px 4px -2px rgba(16, 24, 40, 0.06);
+
+  /* Neutral palette */
+  --c-bg: #f7f8fa;
+  --c-surface: #ffffff;
+  --c-border: #e6e8ec;
+  --c-text: #101828;
+  --c-text-muted: #667085;
+
+  /* Brand + status accents (the Mahsa traffic-light is sacred: green/amber/red) */
+  --c-brand: #4338ca;
+  --c-brand-weak: #eef2ff;
+  --c-green: #027a48;
+  --c-green-bg: #ecfdf3;
+  --c-amber: #b54708;
+  --c-amber-bg: #fffaeb;
+  --c-red: #b42318;
+  --c-red-bg: #fef3f2;
+
+  --nav-w: 220px;
+  --transition: 140ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c-bg: #0c0e12;
+    --c-surface: #15181e;
+    --c-border: #252a33;
+    --c-text: #f0f2f5;
+    --c-text-muted: #98a2b3;
+    --c-brand-weak: #1e1b4b;
+    --shadow-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow-2: 0 4px 12px rgba(0, 0, 0, 0.5);
+  }
+}

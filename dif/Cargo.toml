@@ -1,0 +1,31 @@
+[package]
+name = "mahsa"
+version = "4.0.0"
+edition = "2021"
+description = "Mahsa — deterministic DIF (fold/validate/unfold) sidecar for Maisha-Mahsa"
+license = "MIT OR Apache-2.0"
+
+[lib]
+name = "mahsa"
+path = "src/lib.rs"
+
+[[bin]]
+name = "mahsa"
+path = "src/main.rs"
+
+[dependencies]
+axum = "0.7"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+
+[dev-dependencies]
+proptest = "1"
+tower = { version = "0.5", features = ["util"] }
+
+[profile.release]
+opt-level = "z"
+lto = true
+strip = true
+codegen-units = 1

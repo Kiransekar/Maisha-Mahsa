@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ settings.app_name }}{% endblock %}</title>
+  <link rel="stylesheet" href="/static/css/app.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
+</head>
+<body>
+  <div class="layout">
+    <aside class="nav">
+      <div class="nav__brand"><span class="dot"></span> Maisha-Mahsa</div>
+      <a class="nav__item is-active" href="/">Dashboard</a>
+      {% set domain_labels = ["treasury","revenue","payables","payroll","gst","tax","equity","compliance","ledger","forecast","expense","vault"] %}
+      {% for d in domain_labels %}
+        <a class="nav__item" href="/#{{ d }}" style="text-transform:capitalize">{{ d }}</a>
+      {% endfor %}
+    </aside>
+    <main class="main">
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Payroll Approval</title></head>
+<body style="margin:0;background:#f7f8fa;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#101828;">
+  <div style="max-width:640px;margin:0 auto;padding:24px;">
+    <div style="background:#ffffff;border:1px solid #e6e8ec;border-radius:16px;padding:24px;">
+      <h1 style="margin:0;font-size:20px;">Payroll Approval · {{ ctx.month_year }}</h1>
+      <p style="color:#667085;font-size:13px;margin:8px 0 0;">
+        {{ ctx.employee_count }} employee(s) · Net payable
+        <strong style="color:#101828;">{{ ctx.total_net|rupees }}</strong>
+      </p>
+
+      {% set color = "#b42318" if ctx.validation_status=="red" else ("#b54708" if ctx.validation_status=="yellow" else "#027a48") %}
+      <div style="margin:16px 0;padding:10px 12px;border-radius:8px;border-left:4px solid {{ color }};background:#f7f8fa;">
+        <strong style="color:{{ color }};">Mahsa: {{ ctx.validation_status|upper }}</strong>
+        {% if ctx.mahsa_note %}<div style="font-size:13px;color:#475467;margin-top:4px;">{{ ctx.mahsa_note }}</div>{% endif %}
+      </div>
+
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;">
+        <tr style="color:#667085;text-align:right;">
+          <th style="text-align:left;padding:6px 0;">Employee</th><th>Gross</th><th>Deductions</th><th>Net</th>
+        </tr>
+        {% for e in ctx.entries %}
+        <tr style="border-top:1px solid #f0f1f3;text-align:right;font-variant-numeric:tabular-nums;">
+          <td style="text-align:left;padding:6px 0;">{{ e.name }}</td>
+          <td>{{ e.gross|rupees }}</td>
+          <td>{{ e.deductions|rupees }}</td>
+          <td>{{ e.net|rupees }}</td>
+        </tr>
+        {% endfor %}
+        <tr style="border-top:2px solid #e6e8ec;text-align:right;font-weight:700;font-variant-numeric:tabular-nums;">
+          <td style="text-align:left;padding:8px 0;">Total</td>
+          <td>{{ ctx.total_gross|rupees }}</td>
+          <td>{{ ctx.total_deductions|rupees }}</td>
+          <td>{{ ctx.total_net|rupees }}</td>
+        </tr>
+      </table>
+
+      <p style="font-size:12px;color:#667085;margin-top:12px;">
+        Employer PF {{ ctx.total_pf_employer|rupees }} · Employer ESI {{ ctx.total_esi_employer|rupees }}
+      </p>
+      <p style="margin:20px 0 0;font-size:11px;color:#98a2b3;">Reply <em>APPROVE</em> to release this payroll run.</p>
+    </div>
+  </div>
+</body></html>

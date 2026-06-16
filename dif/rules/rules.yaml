@@ -1,0 +1,231 @@
+# Maisha-Mahsa CA-signed rule set. Rules are DATA, never code.
+# Every rule MUST cite a statute + section. `domain: global` rules run on every request;
+# domain rules run only when that domain is in scope. metric `intent:<dim>` reads the
+# global intent vector; any other metric is resolved from the Snapshot.
+#
+# Seed set per PRD §4.4. Expand as each domain module is built; bump `version` on change
+# and record the change in BUILD_PROGRESS.md.
+version: "2026.06.1"
+
+rules:
+  - id: TREASURY-001
+    domain: treasury
+    description: "Cash runway below 3 months — preserve cash, block discretionary spend."
+    statute: "Internal treasury policy"
+    section: "TP-1"
+    severity: block
+    all_of:
+      - { metric: runway_months, op: lt, value: 3 }
+    action: "Block non-essential outflows; alert founder; model 3 cost-cut scenarios."
+
+  - id: PAYROLL-001
+    domain: payroll
+    description: "PF (EPF) not deposited by the 15th of the following month."
+    statute: "EPF & MP Act 1952"
+    section: "Para 38 / Sec 6"
+    severity: block
+    all_of:
+      - { metric: pf_days_overdue, op: gt, value: 0 }
+    action: "Deposit PF immediately; interest u/s 7Q + damages u/s 14B accrue daily."
+
+  - id: PAYROLL-002
+    domain: payroll
+    description: "ESI contribution not deposited by the 15th of the following month."
+    statute: "ESI Act 1948"
+    section: "Sec 39-40 / Reg 31"
+    severity: block
+    all_of:
+      - { metric: esi_days_overdue, op: gt, value: 0 }
+    action: "Deposit ESI immediately; interest @12% p.a. and damages apply."
+
+  - id: PAYROLL-003
+    domain: payroll
+    description: "A payroll entry has negative net pay — deductions exceed gross."
+    statute: "Payment of Wages Act 1936"
+    section: "Sec 7"
+    severity: block
+    all_of:
+      - { metric: min_net_pay_paise, op: lt, value: 0 }
+    action: "Recheck salary structure and statutory deductions; net pay cannot be negative."
+
+  - id: PAYROLL-004
+    domain: payroll
+    description: "Statutory bonus provision is under-funded vs the 8.33% minimum."
+    statute: "Payment of Bonus Act 1965"
+    section: "Sec 10"
+    severity: warning
+    all_of:
+      - { metric: bonus_reserve, op: lt, value: 1 }
+    action: "Top up the bonus provision to at least 8.33% of eligible wages."
+
+  - id: GST-001
+    domain: gst
+    description: "GSTR-3B filed/paid after the 20th — late fee Rs.50/day accrues."
+    statute: "CGST Act 2017"
+    section: "Sec 47 / Rule 61"
+    severity: block
+    all_of:
+      - { metric: gstr3b_days_late, op: gt, value: 0 }
+    action: "File GSTR-3B and pay tax + late fee + interest u/s 50 (18% p.a.)."
+
+  - id: GST-002
+    domain: gst
+    description: "ITC claimed exceeds 105% of GSTR-2B eligible credit (Rule 36(4) cap)."
+    statute: "CGST Rules 2017"
+    section: "Rule 36(4)"
+    severity: warning
+    all_of:
+      - { metric: itc_claimed_ratio, op: gt, value: 1.05 }
+    action: "Reverse excess ITC or reconcile 2B before filing to avoid demand + interest."
+
+  - id: GST-003
+    domain: gst
+    description: "Outward tax declared in GSTR-1 does not match GSTR-3B (liability mismatch)."
+    statute: "CGST Act 2017"
+    section: "Sec 37 / 39"
+    severity: warning
+    all_of:
+      - { metric: gstr1_3b_mismatch_paise, op: gt, value: 100 }
+    action: "Reconcile GSTR-1 vs GSTR-3B before filing; mismatches trigger DRC-01B notices."
+
+  - id: TAX-001
+    domain: tax
+    description: "Q1 advance tax paid is below 15% of estimated liability (234C interest risk)."
+    statute: "Income Tax Act 1961"
+    section: "Sec 211 / 234C"
+    severity: warning
+    all_of:
+      - { metric: advance_tax_q1_ratio, op: lt, value: 0.15 }
+    action: "Top up advance tax to 15% before 15 Jun to avoid 234C interest."
+
+  - id: TAX-002
+    domain: tax
+    description: "TDS not deposited by the 7th of the following month."
+    statute: "Income Tax Act 1961"
+    section: "Sec 200 / Rule 30; 201(1A)"
+    severity: block
+    all_of:
+      - { metric: tds_days_overdue, op: gt, value: 0 }
+    action: "Deposit TDS now; interest @1.5%/month u/s 201(1A) + Rs.200/day fee u/s 234E."
+
+  - id: TAX-003
+    domain: tax
+    description: "A quarterly TDS return (24Q/26Q/27Q) was filed after its due date."
+    statute: "Income Tax Act 1961"
+    section: "Sec 234E"
+    severity: warning
+    all_of:
+      - { metric: tds_return_days_late, op: gt, value: 0 }
+    action: "File the TDS return; late fee Rs.200/day u/s 234E applies (capped at TDS amount)."
+
+  - id: PAYABLES-001
+    domain: payables
+    description: "MSME vendor unpaid beyond 45 days (MSMED Act disallowance + interest)."
+    statute: "MSMED Act 2006"
+    section: "Sec 15-16"
+    severity: warning
+    all_of:
+      - { metric: msme_max_days_unpaid, op: gt, value: 45 }
+    action: "Clear MSME dues; unpaid amount is disallowed u/s 43B(h) of the IT Act."
+
+  - id: PAYABLES-002
+    domain: payables
+    description: "A bill cleared with a PO 3-way-match variance beyond the 5% tolerance."
+    statute: "Internal procurement control"
+    section: "P2P-1"
+    severity: warning
+    all_of:
+      - { metric: max_match_variance_pct, op: gt, value: 5 }
+    action: "Investigate the PO/GRN/invoice variance before releasing payment."
+
+  - id: REVENUE-001
+    domain: revenue
+    description: "e-Invoice (IRN) missing while aggregate turnover exceeds Rs.5 crore."
+    statute: "CGST Rules 2017"
+    section: "Rule 48(4)"
+    severity: block
+    all_of:
+      - { metric: annual_turnover_rupees, op: gt, value: 50000000 }
+      - { metric: einvoice_missing, op: gt, value: 0 }
+    action: "Generate IRN before issuing the invoice; non-IRN invoice is invalid for ITC."
+
+  - id: REVENUE-002
+    domain: revenue
+    description: "Receivables are dangerously concentrated in a single customer (>40%)."
+    statute: "Internal credit-risk policy"
+    section: "CR-1"
+    severity: warning
+    all_of:
+      - { metric: customer_concentration_ratio, op: gt, value: 0.40 }
+    action: "Diversify the customer base or tighten credit terms for the dominant account."
+
+  - id: EQUITY-001
+    domain: equity
+    description: "ESOP pool exceeds 10% without recorded board/shareholder approval."
+    statute: "SEBI (SBEB & SE) Regulations 2021"
+    section: "Reg 5-6"
+    severity: block
+    all_of:
+      - { metric: esop_pool_pct, op: gt, value: 0.10 }
+      - { metric: esop_board_approved, op: lt, value: 1 }
+    action: "Obtain board + special resolution before expanding the ESOP pool."
+
+  - id: VAULT-001
+    domain: vault
+    description: "A stored document failed its SHA-256 integrity check (possible tampering)."
+    statute: "Companies Act 2013"
+    section: "Sec 128 / IT Act Sec 65B"
+    severity: block
+    all_of:
+      - { metric: integrity_failures, op: gt, value: 0 }
+    action: "Quarantine the document; restore from backup and investigate the integrity break."
+
+  - id: EXPENSE-001
+    domain: expense
+    description: "One or more reimbursement claims exceed the per-category expense policy limit."
+    statute: "Internal expense policy"
+    section: "EXP-1"
+    severity: warning
+    all_of:
+      - { metric: over_policy_claims, op: gt, value: 0 }
+    action: "Review the flagged claims against policy before approving reimbursement."
+
+  - id: FORECAST-001
+    domain: forecast
+    description: "Projected cash goes negative within the forecast horizon (overdraft)."
+    statute: "Internal FP&A / treasury policy"
+    section: "FP-1"
+    severity: warning
+    all_of:
+      - { metric: forecast_min_cash_paise, op: lt, value: 0 }
+    action: "Re-forecast: cut burn, accelerate collections, or raise before the projected shortfall."
+
+  - id: LEDGER-001
+    domain: ledger
+    description: "Trial balance does not tie out — total debits ≠ total credits."
+    statute: "Companies Act 2013"
+    section: "Sec 128 (books of account)"
+    severity: block
+    all_of:
+      - { metric: trial_balance_diff_paise, op: ne, value: 0 }
+    action: "Locate the unbalanced journal entry; books must satisfy double-entry before close."
+
+  - id: COMPLIANCE-001
+    domain: compliance
+    description: "AOC-4 filed more than 30 days after the AGM."
+    statute: "Companies Act 2013"
+    section: "Sec 137"
+    severity: warning
+    all_of:
+      - { metric: aoc4_days_after_agm, op: gt, value: 30 }
+    action: "File AOC-4; additional fee of Rs.100/day applies u/s 137(3)."
+
+  - id: COMPLIANCE-002
+    domain: global
+    description: "One or more statutory filings are overdue across any domain."
+    statute: "Various (see compliance calendar)"
+    section: "—"
+    severity: warning
+    all_of:
+      - { metric: overdue_filings, op: gt, value: 0 }
+    action: "Open the compliance calendar; clear overdue filings to restore Green status."

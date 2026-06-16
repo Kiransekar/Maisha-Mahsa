@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ company_name }} — Daily CFO Brief</title>
+</head>
+<!-- Inline styles only: email clients ignore <style>/external CSS. Mirrors web tokens. -->
+<body style="margin:0;background:#f7f8fa;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#101828;">
+  <div style="max-width:640px;margin:0 auto;padding:24px;">
+    <div style="background:#ffffff;border:1px solid #e6e8ec;border-radius:16px;padding:24px;">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <h1 style="margin:0;font-size:20px;letter-spacing:-0.01em;">{{ company_name }} · Daily CFO Brief</h1>
+        <span style="color:#667085;font-size:13px;">{{ brief.as_of }}</span>
+      </div>
+
+      {% if brief.overall_score is not none %}
+      <p style="margin:12px 0 0;font-size:13px;color:#667085;">
+        Overall health
+        <strong style="color:#101828;font-size:15px;">{{ brief.overall_score }}/100</strong>
+      </p>
+      {% endif %}
+
+      <!-- Needs your eyes -->
+      <h2 style="font-size:14px;margin:24px 0 8px;text-transform:uppercase;letter-spacing:0.04em;color:#667085;">Needs your eyes</h2>
+      {% if brief.needs_attention %}
+        {% for h in brief.needs_attention %}
+        <div style="border:1px solid #e6e8ec;border-radius:10px;padding:12px;margin-bottom:8px;border-left:4px solid {% if h.color=='red' %}#b42318{% elif h.color=='amber' %}#b54708{% else %}#027a48{% endif %};">
+          <div style="font-weight:600;text-transform:capitalize;">{{ h.domain }}
+            <span style="float:right;color:{% if h.color=='red' %}#b42318{% elif h.color=='amber' %}#b54708{% else %}#027a48{% endif %};">
+              {{ h.status|upper }}{% if h.score is not none %} · {{ h.score }}/100{% endif %}
+            </span>
+          </div>
+          {% for b in h.banners %}
+            <div style="font-size:13px;color:#475467;margin-top:6px;">
+              {{ b.text }}<br>
+              <span style="color:#98a2b3;font-size:12px;">{{ b.citation }} — {{ b.action }}</span>
+            </div>
+          {% endfor %}
+        </div>
+        {% endfor %}
+      {% else %}
+        <p style="font-size:13px;color:#027a48;">All domains are green. Nothing needs your attention today.</p>
+      {% endif %}
+
+      <!-- Domain health scorecard -->
+      <h2 style="font-size:14px;margin:24px 0 8px;text-transform:uppercase;letter-spacing:0.04em;color:#667085;">Domain Health</h2>
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:13px;">
+        {% for h in brief.scorecard %}
+        <tr style="border-bottom:1px solid #f0f1f3;">
+          <td style="padding:8px 0;text-transform:capitalize;">{{ h.domain }}</td>
+          <td style="padding:8px 0;text-align:right;font-variant-numeric:tabular-nums;">{% if h.score is not none %}{{ h.score }}{% else %}—{% endif %}</td>
+          <td style="padding:8px 0 8px 12px;text-align:right;width:64px;color:{% if h.color=='red' %}#b42318{% elif h.color=='amber' %}#b54708{% else %}#027a48{% endif %};font-weight:600;">{{ h.status|upper }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+
+      <p style="margin:24px 0 0;font-size:11px;color:#98a2b3;line-height:1.5;">
+        Every figure was recomputed and validated by Mahsa (the deterministic Rust core) and
+        recorded in the hash-chained audit log. Reply to act on any approval.
+      </p>
+    </div>
+  </div>
+</body>
+</html>

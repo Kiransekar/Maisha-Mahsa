@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Compliance Alert</title></head>
+<body style="margin:0;background:#f7f8fa;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#101828;">
+  <div style="max-width:640px;margin:0 auto;padding:24px;">
+    <div style="background:#ffffff;border:1px solid #e6e8ec;border-radius:16px;padding:24px;">
+      <h1 style="margin:0;font-size:20px;">Compliance Alert · {{ ctx.as_of }}</h1>
+      <p style="color:#667085;font-size:13px;margin:8px 0 0;">{{ ctx.total }} filing(s) need attention.</p>
+
+      {% if ctx.overdue %}
+      <h2 style="font-size:14px;margin:24px 0 8px;color:#b42318;text-transform:uppercase;letter-spacing:0.04em;">Overdue</h2>
+      {% for a in ctx.overdue %}
+      <div style="border-left:4px solid #b42318;padding:8px 12px;margin-bottom:6px;background:#fef3f2;border-radius:8px;">
+        <strong>{{ a.form_name }}</strong> — due {{ a.due_date }}
+        <span style="color:#b42318;">· {{ a.days_overdue }} day(s) overdue</span>
+      </div>
+      {% endfor %}
+      {% endif %}
+
+      {% if ctx.upcoming %}
+      <h2 style="font-size:14px;margin:24px 0 8px;color:#b54708;text-transform:uppercase;letter-spacing:0.04em;">Upcoming</h2>
+      {% for a in ctx.upcoming %}
+      <div style="border-left:4px solid #b54708;padding:8px 12px;margin-bottom:6px;background:#fffaeb;border-radius:8px;">
+        <strong>{{ a.form_name }}</strong> — due {{ a.due_date }} <span style="color:#b54708;">· {{ a.label }}</span>
+      </div>
+      {% endfor %}
+      {% endif %}
+
+      <p style="margin:24px 0 0;font-size:11px;color:#98a2b3;">Deadlines tracked by the Maisha-Mahsa compliance calendar.</p>
+    </div>
+  </div>
+</body></html>

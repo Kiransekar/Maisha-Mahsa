@@ -1,0 +1,57 @@
+# Full local stack (PRD §8). `make dev` brings this up.
+# Self-hosted, no paid APIs. SQLite lives on a mounted volume next to the api service.
+services:
+  dif:
+    build:
+      context: ../dif
+      dockerfile: Dockerfile
+    environment:
+      MAHSA_ADDR: "0.0.0.0:8088"
+    ports:
+      - "8088:8088"
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ../api
+      dockerfile: Dockerfile
+    environment:
+      MAISHA_MAHSA_URL: "http://dif:8088"
+      MAISHA_DATABASE_URL: "sqlite:////data/maisha.db"
+      MAISHA_APP_PASSWORD: "${MAISHA_APP_PASSWORD:-change-me}"
+    volumes:
+      - maisha_data:/data
+    ports:
+      - "8000:8000"
+    depends_on:
+      - dif
+      - redis
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "60", "1"]
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  mailhog:
+    image: mailhog/mailhog:latest
+    ports:
+      - "8025:8025"   # web UI
+      - "1025:1025"   # SMTP
+    restart: unless-stopped
+
+  # Local LLM (Maisha). Pull a model once it is up: `docker compose exec ollama ollama pull qwen3:14b`
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    restart: unless-stopped
+
+volumes:
+  maisha_data:
+  redis_data:
+  ollama_data:
