@@ -214,6 +214,11 @@ class RevenueService(BaseDomainService):
                     "sgst": int(inv.sgst_amount),
                     "hsn": first_item.hsn_code if first_item else None,
                     "gstin": customer.gstin if customer else None,
+                    # extra fields for the GSTN GSTR-1 JSON export (ignored by build_gstr1):
+                    "idt": inv.invoice_date,
+                    "pos": customer.state if customer else None,
+                    "val": int(inv.total_amount),
+                    "qty": int(first_item.quantity) if first_item else 0,
                 }
             )
         return lines

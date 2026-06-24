@@ -3,6 +3,7 @@ static/template assets. Creates the schema on startup for local/dev use."""
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -37,12 +38,14 @@ from app.domains.compliance.router import router as compliance_router
 from app.domains.equity.router import router as equity_router
 from app.domains.expense.router import router as expense_router
 from app.domains.forecast.router import router as forecast_router
+from app.domains.gst import gst_calc
 from app.domains.gst.router import router as gst_router
 from app.domains.ledger.router import router as ledger_router
 from app.domains.payables.router import router as payables_router
 from app.domains.payroll.router import router as payroll_router
 from app.domains.payroll.service import PayrollService
 from app.domains.revenue.router import router as revenue_router
+from app.domains.revenue.service import RevenueService
 from app.domains.tax.router import router as tax_router
 from app.domains.treasury.router import router as treasury_router
 from app.domains.vault.router import router as vault_router
@@ -266,6 +269,18 @@ def create_app() -> FastAPI:
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         return _pdf(content, f"form16-{employee_id}-{fy}.pdf")
+
+    @app.get("/d/gst/gstr1.json")
+    async def gstr1_json_route(period: str, db: Session = Depends(get_session)) -> Response:
+        lines = RevenueService().gstr1_lines(db, period)
+        payload = gst_calc.gstr1_json(
+            lines, gstin=settings.company_gstin, filing_period=period
+        )
+        return Response(
+            content=json.dumps(payload, indent=2),
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="gstr1-{period}.json"'},
+        )
 
     @app.get("/ask", response_class=HTMLResponse)
     async def ask_page(

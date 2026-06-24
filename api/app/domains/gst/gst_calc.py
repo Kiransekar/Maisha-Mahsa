@@ -213,6 +213,111 @@ def build_gstr1(lines: list[dict], *, filing_period: str) -> dict[str, Any]:
     }
 
 
+# ---- GSTR-1 JSON export (GSTN offline-utility schema) ---------------------------------
+
+# 2-letter → numeric GST state codes (place of supply). Unknown codes pass through.
+_STATE_CODES = {
+    "JK": "01", "HP": "02", "PB": "03", "CH": "04", "UK": "05", "HR": "06", "DL": "07",
+    "RJ": "08", "UP": "09", "BR": "10", "SK": "11", "AR": "12", "NL": "13", "MN": "14",
+    "MZ": "15", "TR": "16", "ML": "17", "AS": "18", "WB": "19", "JH": "20", "OR": "21",
+    "CG": "22", "MP": "23", "GJ": "24", "MH": "27", "KA": "29", "GA": "30", "KL": "32",
+    "TN": "33", "PY": "34", "AN": "35", "TG": "36", "AP": "37", "LD": "31", "LA": "38",
+}
+
+
+def _to_rupees(paise: Any) -> float:
+    return round(int(paise) / 100, 2)
+
+
+def _gst_rate(taxable: int, igst: int, cgst: int, sgst: int) -> float:
+    tax = igst if igst else (cgst + sgst)
+    return round(tax / taxable * 100, 2) if taxable else 0.0
+
+
+def _to_ddmmyyyy(iso: str) -> str:
+    y, m, d = iso.split("-")
+    return f"{d}-{m}-{y}"
+
+
+def gstr1_json(
+    lines: list[dict], *, gstin: str, filing_period: str, gross_turnover: int | None = None
+) -> dict[str, Any]:
+    """Build the GSTR-1 return in the GSTN offline-utility JSON schema from outward-supply
+    lines (as produced by ``RevenueService.gstr1_lines``). Amounts are rupee decimals, dates
+    ``DD-MM-YYYY``, period ``MMYYYY``; lines with a buyer GSTIN go to B2B, the rest to B2CS."""
+    fp = filing_period[5:7] + filing_period[:4]  # "YYYY-MM" -> "MMYYYY"
+    b2b: dict[str, dict[str, dict]] = {}  # ctin -> {inum -> invoice}
+    b2cs: dict[tuple, dict[str, int]] = {}  # (pos, rt, sply_ty) -> sums
+    hsn: dict[str, dict[str, Any]] = {}
+
+    for ln in lines:
+        taxable = int(ln.get("taxable", 0))
+        igst, cgst, sgst = int(ln.get("igst", 0)), int(ln.get("cgst", 0)), int(ln.get("sgst", 0))
+        rt = _gst_rate(taxable, igst, cgst, sgst)
+        pos = _STATE_CODES.get((ln.get("pos") or "").upper(), ln.get("pos") or "")
+        item = {
+            "num": 1,
+            "itm_det": {
+                "txval": _to_rupees(taxable), "rt": rt,
+                "iamt": _to_rupees(igst), "camt": _to_rupees(cgst),
+                "samt": _to_rupees(sgst), "csamt": 0,
+            },
+        }
+        buyer = ln.get("gstin")
+        if buyer:
+            inv = {
+                "inum": ln.get("invoice_no"),
+                "idt": _to_ddmmyyyy(ln["idt"]) if ln.get("idt") else "",
+                "val": _to_rupees(ln.get("val", taxable + igst + cgst + sgst)),
+                "pos": pos, "rchrg": "N", "inv_typ": "R", "itms": [item],
+            }
+            b2b.setdefault(buyer, {})[str(inv["inum"])] = inv
+        else:
+            key = (pos, rt, "INTER" if igst else "INTRA")
+            agg = b2cs.setdefault(key, {"txval": 0, "iamt": 0, "camt": 0, "samt": 0})
+            agg["txval"] += taxable
+            agg["iamt"] += igst
+            agg["camt"] += cgst
+            agg["samt"] += sgst
+        code = ln.get("hsn")
+        if code:
+            h = hsn.setdefault(
+                code, {"txval": 0, "iamt": 0, "camt": 0, "samt": 0, "qty": 0, "rt": rt}
+            )
+            h["txval"] += taxable
+            h["iamt"] += igst
+            h["camt"] += cgst
+            h["samt"] += sgst
+            h["qty"] += int(ln.get("qty", 0))
+
+    out: dict[str, Any] = {"gstin": gstin, "fp": fp}
+    if gross_turnover is not None:
+        out["gt"] = _to_rupees(gross_turnover)
+    if b2b:
+        out["b2b"] = [{"ctin": ctin, "inv": list(invs.values())} for ctin, invs in b2b.items()]
+    if b2cs:
+        out["b2cs"] = [
+            {
+                "sply_ty": sply, "pos": pos, "typ": "OE", "rt": rt,
+                "txval": _to_rupees(v["txval"]), "iamt": _to_rupees(v["iamt"]),
+                "camt": _to_rupees(v["camt"]), "samt": _to_rupees(v["samt"]), "csamt": 0,
+            }
+            for (pos, rt, sply), v in b2cs.items()
+        ]
+    if hsn:
+        out["hsn"] = {
+            "data": [
+                {
+                    "num": i + 1, "hsn_sc": code, "uqc": "NA", "qty": v["qty"], "rt": v["rt"],
+                    "txval": _to_rupees(v["txval"]), "iamt": _to_rupees(v["iamt"]),
+                    "camt": _to_rupees(v["camt"]), "samt": _to_rupees(v["samt"]), "csamt": 0,
+                }
+                for i, (code, v) in enumerate(hsn.items())
+            ]
+        }
+    return out
+
+
 # ---- GSTR-9 annual return -------------------------------------------------------------
 
 

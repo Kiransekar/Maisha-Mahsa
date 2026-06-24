@@ -388,3 +388,12 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
   `GET /d/payroll/{id}/payslip?period=` and `/form16?fy=` return `application/pdf`. 2 manifest rows
   flipped ⬜→✅. Tested (pure builders %PDF, service methods, API-seeded download, 404). **`make
   verify` green: Rust 52, Python 343, eval 13/13.** 23 deferred features done.
+- 2026-06-24: **GSTR-1 JSON export — GSTN offline-utility schema (researched).** Research confirmed
+  the GSTN schema (rupee decimals, DD-MM-YYYY dates, MMYYYY period, b2b/b2cs/hsn blocks).
+  `gst_calc.gstr1_json(lines, *, gstin, filing_period)` (pure): groups buyer-GSTIN lines into B2B
+  (ctin→inv→itms.itm_det), aggregates the rest into B2CS, builds the HSN summary; +37-entry alpha→
+  numeric state-code map for `pos`. `RevenueService.gstr1_lines` enriched (idt/pos/val/qty;
+  build_gstr1 ignores extras). Route `GET /d/gst/gstr1.json?period=` → downloadable JSON. New
+  setting `MAISHA_COMPANY_GSTIN`. Enhances the already-done `gstr1` feature (no new manifest row).
+  Tested (pure builder b2b/b2cs/hsn + conversions, API-seeded download). **`make verify` green:
+  Rust 52, Python 347, eval 13/13.**

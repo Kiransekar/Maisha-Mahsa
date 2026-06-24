@@ -197,6 +197,34 @@ def test_payslip_unknown_employee_404():
     assert client.get("/d/payroll/99999/payslip", params={"period": "2026-06"}).status_code == 404
 
 
+def test_gstr1_json_export_downloads():
+    # seed a customer + posted invoice via the API, then export the GSTN-schema JSON
+    cust = client.post(
+        "/api/revenue/customers",
+        json={"name": "Acme", "state": "MH", "gstin": "27AAPFU0939F1ZV"},
+    )
+    assert cust.status_code in (200, 201)
+    cid = cust.json().get("customer_id") or cust.json().get("id")
+    inv = client.post(
+        "/api/revenue/invoices",
+        json={
+            "invoice_number": "JEXP-1", "customer_id": cid, "invoice_date": "2026-05-10",
+            "lines": [
+                {"description": "svc", "quantity": 1, "rate": 10000000, "hsn_code": "9983"}
+            ],
+            "gst_rate": 18,
+        },
+    )
+    assert inv.status_code in (200, 201)
+
+    resp = client.get("/d/gst/gstr1.json", params={"period": "2026-05"})
+    assert resp.status_code == 200
+    assert resp.headers["content-type"].startswith("application/json")
+    payload = resp.json()
+    assert payload["fp"] == "052026"
+    assert payload["b2b"][0]["ctin"] == "27AAPFU0939F1ZV"
+
+
 def test_audit_page_renders_and_verifies_chain():
     resp = client.get("/audit")
     assert resp.status_code == 200

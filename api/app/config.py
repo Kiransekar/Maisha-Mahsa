@@ -22,6 +22,9 @@ class Settings(BaseSettings):
     # Single-user auth (PRD §11.1). Set MAISHA_APP_PASSWORD in production.
     app_password: str = "change-me"
 
+    # Filer GSTIN for GSTR-1 JSON export (set MAISHA_COMPANY_GSTIN in production).
+    company_gstin: str = ""
+
     # Default acting user for audit entries until full auth lands.
     default_user_id: str = "founder"
 
