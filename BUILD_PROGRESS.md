@@ -162,3 +162,69 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
   payroll_approval / investor_update) + a `rupees` Jinja filter + `EmailChannel` methods.
   Remaining Layer 5: cron-schedule the 8pm brief + alert dispatch (ARQ/cron, infra). Rust 52,
   Python 169.
+- 2026-06-23: **Harness layer P0-① — golden eval harness built (LLM-layer foundation).** New
+  strategy/plan docs (`HARNESS_ENGINEERING.md`, `P0_HARNESS_PLAN.md`) map published
+  harness-engineering work (Anthropic *Building Effective Agents*, OpenAI Structured
+  Outputs/Agents-SDK, SWE-agent ACI, ReAct/Reflexion, τ-bench/Inspect pass^k, DSPy, MCP) onto
+  the project; new `skills/harness-layer`. Code: `app/llm/schema.py` — the strict `ActionClaim`
+  contract (extra=forbid, money as paise `StrictStr`, never floats; `canonical()` for pass^k).
+  `api/evals/` — declarative `EvalCase`/`Expectation`, `ScriptedProducer` (no-LLM stub),
+  scorers (`paise_exact`, `citation_correct`, `abstains_when_thin`), pass^k runner + CLI,
+  text/JSON report. Cases for **treasury** (runway-healthy + no-data-abstain) and **gst**
+  (3b-late → GST-001 citation), ground truth cross-checked against the real `build_snapshot`.
+  New `make eval` gate, wired into `make verify`; `evals` added to the editable install +
+  `mypy app evals`. **`make verify` green: Rust 52, Python 176 (+7 harness tests incl. a
+  negative case per scorer), eval 3/3.** The LLM is still a drafter only — Mahsa unchanged,
+  Golden Rule intact. Next: P0-①b (cases for the other 10 domains) → P0-② (real LLM generator).
+- 2026-06-24: **Harness layer P0-①b — eval cases for all 12 domains.** Added `api/evals/cases/`
+  for revenue (missing-IRN turnover), payables (MSME-overdue → PAYABLES-001 citation), payroll
+  (min net pay), tax (TDS 40-days overdue), ledger (balanced books / net profit), forecast
+  (no-projection baseline), equity (ESOP pool %), compliance (overdue filing → COMPLIANCE-002),
+  expense (over-policy → EXPENSE-001), vault (integrity clean) — plus the existing treasury + gst.
+  Every case's ground truth cross-checked against the real `build_snapshot` (values mirror the
+  validated `tests/unit/<domain>/test_*_service.py` snapshot assertions, as_of 2026-06-16).
+  **`make verify` green: Rust 52, Python 176, eval 13/13 across 12 domains.** Citation scorer now
+  exercised on 3 domains (gst/payables/expense/compliance). Next: P0-② real LLM generator.
+- 2026-06-24: **Harness layer P0-② — the Maisha LLM generator (drafting layer).** New
+  `api/app/llm/`: `client.py` (LLMClient protocol; `OllamaClient` via `/api/chat` with
+  `format`=JSON-schema constrained decoding + temp 0; `ClaudeClient` forced-tool fallback;
+  `CannedClient`; `build_client`), `tools.py` (deterministic calc-wrapping tools + `flatten`/
+  `enrich` so the model never does arithmetic — runway/late-fee derived by tools), `prompt.py`
+  (pure system+user assembly; "do NOT do arithmetic", FACTS-only numbers, RULES-only citations,
+  abstain-when-thin; per-domain rule hints), `maisha.py` (`MaishaGenerator.produce` →
+  enrich→prompt→constrained LLM→parse `ActionClaim`, pins router's domain; `ClaimProducer`
+  protocol shared by run_loop + eval harness). Config: `MAISHA_LLM_PROVIDER` (default "off"),
+  ollama/claude settings, temp 0. `run_loop` gains an optional `generator` step BEFORE the
+  Mahsa fold (claim attached to `LoopOutcome`, never trusted — Mahsa still folds the snapshot;
+  default None = unchanged). Eval harness `--provider stub|ollama|claude` + `make eval-real`;
+  clients unit-tested via `httpx.MockTransport` (no live server). **`make verify` green: Rust
+  52, Python 196 (+20), eval 13/13.** Golden Rule intact. NOTE: persisting LLM trace fields
+  (model/prompt/claim hashes) to the audit log is P1 (needs a schema column/table). Next:
+  P0-③ evaluator-optimizer retry loop (regenerate on Mahsa RED, bounded, template fallback).
+- 2026-06-24: **Harness layer P0-③ — evaluator-optimizer retry loop. P0 COMPLETE.** New
+  `api/app/llm/retry.py`: the evaluator is the deterministic fact set — `unbacked_numbers`
+  flags any claimed value not present among `enrich(snapshot)` facts (the Golden Rule applied
+  live to the draft); `generate_verified` regenerates with feedback (the unbacked values +
+  Mahsa's triggered rules) bounded by `MAISHA_LLM_MAX_RETRIES` (default 2); on exhaustion
+  `fallback_claim` returns a fully fact-backed claim and flags `requires_approval`. `feedback`
+  threaded through `MaishaGenerator.produce`/`ClaimProducer`/prompt. `run_loop` now folds via
+  Mahsa first (verdict is independent of the draft), then runs `generate_verified`; LoopOutcome
+  gains `claim_verified` + `requires_approval` (Mahsa RED OR retry exhaustion). **`make verify`
+  green: Rust 52, Python 203 (+7), eval 13/13.** No unbacked number can reach a human.
+  **All P0 done (①eval harness, ①b 12-domain cases, ②LLM generator, ③retry loop).** Next is
+  P1: input guardrails (injection/PII), persist LLM trace fields to audit_log (schema change),
+  determinism hygiene; then P2 (DSPy prompt compilation, MCP tool servers, eval-gated routing).
+- 2026-06-24: **Harness layer P1 — input guardrails + LLM tracing + determinism hygiene.**
+  (a) `app/llm/guardrails.py`: prompt-injection/jailbreak detection (blocks → safe abstain,
+  model never called) + PII redaction (PAN/Aadhaar/GSTIN/email/phone, applied only for cloud
+  provider); wired into `MaishaGenerator.produce` (new `redact_pii`/`label` ctor args).
+  (b) `app/db/models/shared.py::LlmTrace` + `app/core/trace_store.py`: per-draft observability
+  row (model_label, input_sha256 = hash of domain+query+snapshot, claim_sha256, attempts,
+  verified, requires_approval, linked to audit_log.this_hash) — hashes only, no raw prompt;
+  written in `run_loop` when a claim is produced. (c) Determinism: temp 0 (config), model id in
+  `model_label`, input/claim hashes give reproducibility; graceful degradation (LLM off → no
+  claim) intact. `_build_producer` sets label `provider:model` + cloud PII flag. **`make verify`
+  green: Rust 52, Python 215 (+12: guardrails, generator-guard, trace), eval 13/13.** Deferred:
+  token-count capture in trace (needs usage plumbing from clients); persisting guard findings
+  (currently logged). Next: P2 (DSPy-style prompt compilation, MCP tool servers, eval-gated
+  Ollama→Claude routing).

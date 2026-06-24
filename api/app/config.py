@@ -31,6 +31,19 @@ class Settings(BaseSettings):
     smtp_port: int = 1025
     email_sender: str = "cfo@maisha-mahsa.local"
 
+    # LLM / Maisha drafting layer (PRD §10 Layer 1, CLAUDE.md §7). The model only *drafts* —
+    # every number it states is recomputed by Mahsa downstream. Ollama (local) is the default;
+    # Claude is an explicit fallback. "off" disables the LLM step (run_loop stays deterministic).
+    llm_provider: str = "off"  # "ollama" | "claude" | "off"
+    ollama_url: str = "http://127.0.0.1:11434"
+    ollama_model: str = "qwen3:14b"
+    claude_model: str = "claude-opus-4-8"
+    claude_api_key: str = ""
+    claude_base_url: str = "https://api.anthropic.com"
+    llm_temperature: float = 0.0  # determinism (paired with the pass^k eval gate)
+    llm_timeout_s: float = 30.0
+    llm_max_retries: int = 2  # bounded regenerate-on-unbacked-number before template fallback
+
 
 @lru_cache
 def get_settings() -> Settings:

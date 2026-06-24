@@ -21,6 +21,8 @@ renders it. Mahsa is the gatekeeper; Maisha never emits an unvalidated number.
    - Rust fold/rules → `skills/rust-dif-core` + `skills/indian-fin-rules`
    - tests → `skills/test-discipline`
    - any UI → `skills/ui-polish`
+   - the LLM/eval harness layer (`api/app/llm/`, `api/evals/`) → `skills/harness-layer`
+     (see `HARNESS_ENGINEERING.md` + `P0_HARNESS_PLAN.md`)
 3. **Build bottom-up**: Rust fold+rules (with property tests) → Python service (exact paise,
    full unit tests) → router/UI → one integration test through the real loop.
 4. **Verify**: `make verify` must be green (rust tests + clippy + pytest + ruff + mypy).

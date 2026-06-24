@@ -59,6 +59,25 @@ class AuditLog(Base):
     this_hash: Mapped[str | None] = mapped_column(String)
 
 
+class LlmTrace(Base):
+    """Observability for the drafting layer (separate from the tamper-evident audit_log).
+    Stores hashes, not raw prompts, so a run is reproducible without persisting sensitive
+    text: ``input_sha256`` keys (domain+query+snapshot), ``claim_sha256`` keys the draft."""
+
+    __tablename__ = "llm_trace"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    timestamp: Mapped[str] = mapped_column(String, nullable=False)
+    domain: Mapped[str] = mapped_column(String, nullable=False)
+    audit_hash: Mapped[str | None] = mapped_column(String)  # links to audit_log.this_hash
+    model_label: Mapped[str] = mapped_column(String, nullable=False)
+    input_sha256: Mapped[str] = mapped_column(String, nullable=False)
+    claim_sha256: Mapped[str | None] = mapped_column(String)
+    attempts: Mapped[int] = mapped_column(Integer, default=1)
+    verified: Mapped[int] = mapped_column(Integer, default=0)  # 1 = every number fact-backed
+    requires_approval: Mapped[int] = mapped_column(Integer, default=0)
+
+
 class ComplianceCalendar(Base):
     __tablename__ = "compliance_calendar"
 

@@ -6,7 +6,7 @@ PIP := api/.venv/bin/pip
 # Prefer a rustup-installed cargo; fall back to PATH.
 CARGO := $(shell [ -x "$$HOME/.cargo/bin/cargo" ] && echo "$$HOME/.cargo/bin/cargo" || echo cargo)
 
-.PHONY: help verify test test-rust test-py lint fmt venv dev clean
+.PHONY: help verify test test-rust test-py eval eval-real lint fmt venv dev clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n",$$1,$$2}'
@@ -16,10 +16,16 @@ venv: ## Create the Python venv and install api in editable mode
 	$(PIP) install --upgrade pip
 	$(PIP) install -e "api[dev]"
 
-verify: lint test ## Full gate: lint + all tests (must be green before marking a module done)
+verify: lint test eval ## Full gate: lint + all tests + golden-eval (green before marking a module done)
 	@echo "✅ verify passed"
 
 test: test-rust test-py ## Run all tests
+
+eval: ## Golden-eval gate for the Maisha LLM layer (stub producer — the CI gate, no model)
+	cd api && .venv/bin/python -m evals.harness --all
+
+eval-real: ## Run the golden eval against a live model (MAISHA_LLM_PROVIDER, e.g. ollama)
+	cd api && .venv/bin/python -m evals.harness --all --provider ollama --report text
 
 test-rust: ## cargo test for the Mahsa DIF core
 	cd dif && $(CARGO) test
@@ -28,7 +34,7 @@ test-py: ## pytest unit + integration for the Maisha API
 	cd api && .venv/bin/pytest -q
 
 lint: ## ruff + mypy + clippy (warnings are errors)
-	cd api && .venv/bin/ruff check . && .venv/bin/mypy app
+	cd api && .venv/bin/ruff check . && .venv/bin/mypy app evals
 	cd dif && $(CARGO) clippy --all-targets -- -D warnings
 
 fmt: ## Format Rust + Python
