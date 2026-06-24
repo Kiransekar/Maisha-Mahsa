@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Parallel Run · {{ settings.app_name }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Parallel Run</h1></div>
+
+{% if not run %}
+<p class="muted" style="margin-bottom:var(--sp-4)">
+  Run Maisha alongside your existing process for a month. Each day, record what your current
+  system reports; Maisha reconciles it against its own figures. Cut over only when everything
+  agrees.
+</p>
+<form action="/parallel/start" method="post">
+  <label class="field" style="max-width:360px">
+    <span class="field__label">Run name</span>
+    <input type="text" name="name" value="Cut-over parallel run" required>
+  </label>
+  <button class="btn btn--primary" type="submit">Start 30-day parallel run</button>
+</form>
+{% if toast %}<div id="toast" class="toast toast--show">{{ toast }}</div>{% endif %}
+{% else %}
+<div class="kpis">
+  <div class="kpi"><div class="kpi__label">Status</div><div class="kpi__value">{{ run.status|upper }}</div></div>
+  <div class="kpi"><div class="kpi__label">Started</div><div class="kpi__value" style="font-size:var(--fs-md)">{{ run.started_on }}</div></div>
+  <div class="kpi"><div class="kpi__label">Ends</div><div class="kpi__value" style="font-size:var(--fs-md)">{{ run.ends_on }}</div></div>
+  <div class="kpi">
+    <div class="kpi__label">Readiness</div>
+    <div class="kpi__value">
+      <span class="pill pill--{{ 'green' if r.recommendation == 'GO' else 'amber' }}">{{ r.recommendation }}</span>
+    </div>
+  </div>
+</div>
+
+<div class="answer" style="margin-top:var(--sp-4)">
+  <div class="answer__prov">Agreement {{ r.agreement_pct }}% · {{ r.matches }}/{{ r.comparisons }} comparisons · {{ r.distinct_days }} day(s) observed</div>
+  {% if r.recommendation == 'GO' %}
+  <p class="answer__narrative">Every comparison agrees across the run window — safe to cut over.</p>
+  {% else %}
+  <p class="answer__narrative">Hold: resolve discrepancies and keep observing until the full window agrees.</p>
+  {% endif %}
+</div>
+
+<div class="section-title">Record today's external figure</div>
+<form class="scenario-form" hx-post="/parallel/observe" hx-target="#recon" hx-swap="innerHTML">
+  <label class="field"><span class="field__label">Domain</span><input type="text" name="domain" placeholder="treasury" required></label>
+  <label class="field"><span class="field__label">Metric</span><input type="text" name="metric" placeholder="cash" required></label>
+  <label class="field"><span class="field__label">Their value (paise for money)</span><input type="number" step="any" name="external_value" required></label>
+  <button class="btn btn--primary" type="submit">Record</button>
+</form>
+
+<div class="section-title">Reconciliation</div>
+<div id="recon">{% include "partials/recon.html" %}</div>
+{% endif %}
+{% endblock %}

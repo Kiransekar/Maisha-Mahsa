@@ -179,6 +179,27 @@ def test_every_top_level_page_renders(path):
     assert "/static/css/app.css" in resp.text
 
 
+def test_parallel_run_start_and_observe_flow():
+    # fresh app DB: no active run -> the start CTA is shown
+    page = client.get("/parallel")
+    assert page.status_code == 200
+    assert "Start 30-day parallel run" in page.text
+
+    # start the run (redirects back to /parallel)
+    started = client.post("/parallel/start", data={"name": "Test run"})
+    assert started.status_code == 200  # TestClient follows the 303 redirect
+    assert "Readiness" in started.text
+
+    # capture Maisha's figures, then record a matching external figure -> reconciles ✓
+    client.post("/history/capture")
+    obs = client.post(
+        "/parallel/observe",
+        data={"domain": "gst", "metric": "gstr3b_days_late", "external_value": "0"},
+    )
+    assert obs.status_code == 200
+    assert "Reconciliation" in obs.text or "gstr3b_days_late" in obs.text
+
+
 def test_capture_then_domain_trend_renders():
     # two captures -> the domain page shows real sparkline trends (no fabricated data).
     assert client.post("/history/capture").status_code == 200

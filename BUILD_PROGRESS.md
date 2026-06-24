@@ -314,3 +314,13 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
   `serve`) + Makefile `capture`/`brief`/`scheduler` targets. `tzdata` added to deps. **`make
   verify` green: Rust 52, Python 279, eval 13/13** (scheduler math + capture/brief jobs tested;
   CLI capture verified standalone = 90 metrics). Daily 8pm brief + trend capture now automated.
+- 2026-06-24: **Layer 6 — 1-month parallel run STARTED.** `ParallelRun`/`ParallelObservation`
+  models + `app/core/parallel.py`: start_run (30-day window), record_observation (founder's
+  existing-system figure), reconcile (external vs Maisha's captured MetricSnapshot for that
+  (domain,metric)/date → variance + within-tolerance), readiness (deterministic GO/HOLD —
+  GO only when every comparison agrees across the full window). `/parallel` page (start CTA →
+  reconciliation table + readiness banner + observe form), nav link, `docs/PARALLEL_RUN.md`
+  runbook. **`make verify` green: Rust 52, Python 285, eval 13/13.** **Run #1 kicked off in the
+  data DB: active 2026-06-24 → 2026-07-24, day-1 capture = 90 metrics; readiness HOLD until daily
+  observations accrue.** Daily ritual: scheduler captures Maisha nightly; founder records their
+  figures; cut over on GO.

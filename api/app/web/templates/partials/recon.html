@@ -1,0 +1,21 @@
+{# Reconciliation table: external figure vs Maisha's captured figure, with variance + verdict. #}
+{% if recs %}
+<table class="dtable">
+  <thead><tr><th>Date</th><th>Domain</th><th>Metric</th><th>Theirs</th><th>Maisha</th><th>Variance</th><th></th></tr></thead>
+  <tbody>
+    {% for c in recs %}
+    <tr>
+      <td class="mono">{{ c.observed_on }}</td>
+      <td style="text-transform:capitalize">{{ c.domain }}</td>
+      <td>{{ c.metric }}</td>
+      <td class="mono">{{ "%g"|format(c.external) }}</td>
+      <td class="mono">{% if c.maisha is none %}—{% else %}{{ "%g"|format(c.maisha) }}{% endif %}</td>
+      <td class="mono">{% if c.variance is none %}n/a{% else %}{{ "%g"|format(c.variance) }}{% endif %}</td>
+      <td>{% if c.ok %}<span class="vmark vmark--ok">✓</span>{% elif c.maisha is none %}<span class="muted">no capture</span>{% else %}<span class="vmark vmark--warn">⚠</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No observations yet. Record your existing system's figures to begin reconciling.</p>
+{% endif %}

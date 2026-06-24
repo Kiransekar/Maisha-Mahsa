@@ -8,14 +8,14 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from app.cfo_router import router as cfo_router
 from app.config import get_settings
-from app.core import history_store, trace_store
+from app.core import history_store, parallel, trace_store
 from app.core.approvals import pending_approvals, record_decision
 from app.core.ask import answer_query
 from app.core.audit import verify_chain
@@ -396,6 +396,44 @@ def create_app() -> FastAPI:
             request,
             "partials/inline_toast.html",
             {"message": f"Snapshot captured — {written} metrics recorded for trends."},
+        )
+
+    @app.get("/parallel", response_class=HTMLResponse)
+    async def parallel_page(request: Request, db: Session = Depends(get_session)) -> HTMLResponse:
+        run = parallel.active_run(db)
+        ctx: dict[str, Any] = {"run": run, "settings": settings, "nav_active": "parallel"}
+        if run is not None:
+            ctx["recs"] = parallel.reconcile(db, run)
+            ctx["r"] = parallel.readiness(db, run)
+        return templates.TemplateResponse(request, "parallel.html", ctx)
+
+    @app.post("/parallel/start")
+    async def parallel_start(
+        name: str = Form("Cut-over parallel run"), db: Session = Depends(get_session)
+    ) -> RedirectResponse:
+        if parallel.active_run(db) is None:
+            parallel.start_run(db, name=name, started_on=datetime.now(UTC).date(), days=30)
+            db.commit()
+        return RedirectResponse(url="/parallel", status_code=303)
+
+    @app.post("/parallel/observe", response_class=HTMLResponse)
+    async def parallel_observe(
+        request: Request,
+        domain: str = Form(...),
+        metric: str = Form(...),
+        external_value: float = Form(...),
+        db: Session = Depends(get_session),
+    ) -> HTMLResponse:
+        run = parallel.active_run(db)
+        if run is None:
+            raise HTTPException(status_code=409, detail="no active parallel run")
+        parallel.record_observation(
+            db, run_id=run.id, observed_on=datetime.now(UTC).date(),
+            domain=domain, metric=metric, external_value=external_value,
+        )
+        db.commit()
+        return templates.TemplateResponse(
+            request, "partials/recon.html", {"recs": parallel.reconcile(db, run)}
         )
 
     @app.get("/audit", response_class=HTMLResponse)

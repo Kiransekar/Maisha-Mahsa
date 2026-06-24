@@ -92,6 +92,34 @@ class MetricSnapshot(Base):
     value: Mapped[float] = mapped_column(Float, nullable=False)
 
 
+class ParallelRun(Base):
+    """A Layer-6 parallel run: Maisha runs alongside the founder's existing process for a
+    period; daily we reconcile their figures against Maisha's before cut-over."""
+
+    __tablename__ = "parallel_run"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    started_on: Mapped[str] = mapped_column(String, nullable=False)  # ISO date
+    ends_on: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, default="active")  # active | closed
+
+
+class ParallelObservation(Base):
+    """A figure the founder's existing system reports, to be reconciled against Maisha's
+    metric of the same (domain, metric) for that date. Same unit as the Maisha metric
+    (paise for money)."""
+
+    __tablename__ = "parallel_observation"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    run_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    observed_on: Mapped[str] = mapped_column(String, nullable=False)  # ISO date
+    domain: Mapped[str] = mapped_column(String, nullable=False)
+    metric: Mapped[str] = mapped_column(String, nullable=False)
+    external_value: Mapped[float] = mapped_column(Float, nullable=False)
+
+
 class Decision(Base):
     """A human approve/reject on a flagged domain state (F4). Keyed by ``state_hash`` (a hash
     of the snapshot), so a decision resolves the queue only until the underlying books change —
