@@ -357,3 +357,9 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
   source="manual". Lets payroll/GST/revenue auto-generate audit-tagged journal entries that keep
   the trial balance tied. Unit-tested; manifest flipped ⬜→✅. **`make verify` green: Rust 52,
   Python 327, eval 13/13.** 18 deferred features done.
+- 2026-06-24: **Deferred feature — gst GSTR-9 annual return.** `gst_calc.gstr9_annual` consolidates
+  a year from existing monthly artefacts: per-period `build_gstr1(...)['totals']` (outward) +
+  GSTR-3B records `{output, itc, tax_paid_cash}` → annual outward (taxable+tax by head), output
+  tax, ITC availed, cash paid, and the **GSTR-1-vs-3B differential** (>0 = under-declared in 3B /
+  additional liability) with a reconciled flag. Pure, exact paise; unit-tested; manifest flipped
+  ⬜→✅. **`make verify` green: Rust 52, Python 329, eval 13/13.** 19 deferred features done.

@@ -211,3 +211,40 @@ def build_gstr1(lines: list[dict], *, filing_period: str) -> dict[str, Any]:
         "totals": totals,
         "errors": errors,
     }
+
+
+# ---- GSTR-9 annual return -------------------------------------------------------------
+
+
+def gstr9_annual(gstr1_totals: list[dict], gstr3b_periods: list[dict]) -> dict[str, Any]:
+    """Consolidate a year into the GSTR-9 annual return from monthly artefacts:
+    ``gstr1_totals`` are the per-period ``build_gstr1(...)['totals']`` (outward supplies);
+    ``gstr3b_periods`` are per-period ``{output:{igst,cgst,sgst}, itc:{igst,cgst,sgst},
+    tax_paid_cash}``. Surfaces the GSTR-1-vs-3B differential (the reconciliation GSTR-9 exists
+    to expose): differential > 0 means tax under-declared in GSTR-3B (additional liability)."""
+    outward = {"taxable": 0, "igst": 0, "cgst": 0, "sgst": 0}
+    for t in gstr1_totals:
+        for key in outward:
+            outward[key] += int(t.get(key, 0))
+    outward["total_tax"] = outward["igst"] + outward["cgst"] + outward["sgst"]
+
+    output3b = {"igst": 0, "cgst": 0, "sgst": 0}
+    itc = {"igst": 0, "cgst": 0, "sgst": 0}
+    cash = 0
+    for p in gstr3b_periods:
+        for head in output3b:
+            output3b[head] += int(p.get("output", {}).get(head, 0))
+            itc[head] += int(p.get("itc", {}).get(head, 0))
+        cash += int(p.get("tax_paid_cash", 0))
+    output3b_total = sum(output3b.values())
+    differential = outward["total_tax"] - output3b_total
+
+    return {
+        "periods": len(gstr3b_periods),
+        "outward_per_gstr1": outward,
+        "output_tax_per_gstr3b": {**output3b, "total": output3b_total},
+        "itc_availed": {**itc, "total": sum(itc.values())},
+        "tax_paid_cash": cash,
+        "differential_tax": differential,  # >0: under-declared in 3B; <0: excess
+        "reconciled": differential == 0,
+    }

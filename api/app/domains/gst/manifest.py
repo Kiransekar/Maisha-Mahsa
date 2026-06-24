@@ -19,7 +19,7 @@ MANIFEST = DomainManifest(
         Feature("hsn_master", "HSN master + rate mapping", D),
         Feature("e_invoice", "e-Invoice IRN generation (> ₹5Cr)", N),
         Feature("rcm", "Reverse charge mechanism + self-invoice", D),
-        Feature("gstr9", "GSTR-9 / 9C annual return", N),
+        Feature("gstr9", "GSTR-9 / 9C annual return", D),
         Feature("composition", "Composition scheme handling", N),
         Feature("lut", "LUT for exports", N),
     ],
