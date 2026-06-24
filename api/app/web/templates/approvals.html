@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Approvals · {{ settings.app_name }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Approvals</h1></div>
+<p class="muted" style="margin-bottom:var(--sp-5)">
+  Items Mahsa flagged for sign-off. Approving or rejecting is sealed into the hash-chained
+  audit log and stays resolved until the underlying books change.
+</p>
+<div id="approvals-list">{% include "partials/approvals_list.html" %}</div>
+{% endblock %}

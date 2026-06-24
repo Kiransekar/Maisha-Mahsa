@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.cfo_router import router as cfo_router
 from app.config import get_settings
+from app.core.approvals import pending_approvals, record_decision
 from app.core.ask import answer_query
 from app.core.cfo import DomainHealth, collect_health
 from app.core.domain import BaseDomainService
@@ -246,6 +247,60 @@ def create_app() -> FastAPI:
         )
         return templates.TemplateResponse(
             request, "partials/answer_card.html", {"answer": answer, "settings": settings}
+        )
+
+    @app.get("/approvals", response_class=HTMLResponse)
+    async def approvals_page(
+        request: Request, db: Session = Depends(get_session)
+    ) -> HTMLResponse:
+        today = datetime.now(UTC).date()
+        items = []
+        mahsa_up = True
+        try:
+            items = await pending_approvals(
+                db, MahsaClient(settings.mahsa_url), registry, as_of=today
+            )
+        except MahsaError:
+            mahsa_up = False
+        return templates.TemplateResponse(
+            request,
+            "approvals.html",
+            {"items": items, "mahsa_up": mahsa_up, "settings": settings, "nav_active": "approvals"},
+        )
+
+    @app.post("/approvals/{domain}/decide", response_class=HTMLResponse)
+    async def approvals_decide(
+        domain: str,
+        request: Request,
+        decision: str = Form(...),
+        db: Session = Depends(get_session),
+    ) -> HTMLResponse:
+        today = datetime.now(UTC).date()
+        mahsa = MahsaClient(settings.mahsa_url)
+        toast = None
+        mahsa_up = True
+        try:
+            toast = await record_decision(
+                db,
+                domain=domain,
+                decision=decision,
+                mahsa=mahsa,
+                registry=registry,
+                as_of=today,
+                user_id=settings.default_user_id,
+            )
+            items = await pending_approvals(db, mahsa, registry, as_of=today)
+        except MahsaError:
+            items, mahsa_up = [], False
+            toast = "Mahsa offline — decision not recorded."
+        except ValueError as exc:
+            db.rollback()
+            items = await pending_approvals(db, mahsa, registry, as_of=today)
+            toast = str(exc)
+        return templates.TemplateResponse(
+            request,
+            "partials/approvals_list.html",
+            {"items": items, "mahsa_up": mahsa_up, "toast": toast, "settings": settings},
         )
 
     return app

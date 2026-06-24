@@ -1,0 +1,39 @@
+{# The approvals queue. Pending items show Approve/Reject; resolved items show their decision.
+   Re-rendered (into #approvals-list) after a decision. #}
+{% set pending = items | selectattr("resolution", "none") | list %}
+{% if not mahsa_up %}
+<p class="muted">Mahsa sidecar offline — approvals need a live verdict. Start Mahsa and reload.</p>
+{% elif not pending %}
+<p class="muted">Nothing awaiting approval. The books are clean. ✓</p>
+{% endif %}
+
+<div class="cards">
+  {% for a in items %}
+  <div class="card">
+    <div class="card__title" style="text-transform:capitalize">
+      {{ a.domain }}
+      <span class="pill pill--{{ a.color }}">{{ a.status|upper }}{% if a.score is not none %} · {{ a.score }}{% endif %}</span>
+    </div>
+    <div class="card__meta">
+      {% for c in a.citations %}
+        {{ c.text }}<br><span class="chip chip--red">{{ c.rule_id }} · {{ c.citation }}</span><br>
+      {% else %}Needs your review.{% endfor %}
+    </div>
+    <div class="approve-row">
+      {% if a.resolution %}
+        <span class="pill pill--{{ 'green' if a.resolution == 'approved' else 'red' }}">{{ a.resolution|upper }}</span>
+      {% else %}
+        <form hx-post="/approvals/{{ a.domain }}/decide" hx-target="#approvals-list" hx-swap="innerHTML">
+          <input type="hidden" name="decision" value="approved">
+          <button class="btn btn--primary" type="submit">Approve</button>
+        </form>
+        <form hx-post="/approvals/{{ a.domain }}/decide" hx-target="#approvals-list" hx-swap="innerHTML">
+          <input type="hidden" name="decision" value="rejected">
+          <button class="btn" type="submit">Reject</button>
+        </form>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% if toast %}<div id="toast" class="toast toast--show" hx-swap-oob="true" aria-live="polite">{{ toast }}</div>{% endif %}

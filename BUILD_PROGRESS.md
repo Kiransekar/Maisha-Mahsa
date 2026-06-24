@@ -262,3 +262,12 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
   no build step. **`make verify` green: Rust 52, Python 235 (+8: action handlers unit + route
   tests incl. validation error), eval 13/13.** Remaining: F4 approvals · F5 CFO · F6 audit/trace
   · F7 polish.
+- 2026-06-24: **Frontend F4 — approvals review → audit-chain write.** New `app/core/approvals.py`
+  (`pending_approvals` lists Mahsa-flagged domains w/ citations + a snapshot `state_hash` +
+  resolution; `record_decision` re-folds, seals an `approval.{approved,rejected}` entry onto the
+  hash-chained audit log via audit_store, and persists a `Decision`), `app/core/decision_store.py`,
+  `Decision` model. Routes `/approvals` (queue) + `POST /approvals/{domain}/decide` (HTMX → refresh
+  list + toast; degrades honestly if Mahsa offline). A decision resolves an item until the books
+  (snapshot hash) change, then it resurfaces. Nav + dashboard link to /approvals. **`make verify`
+  green: Rust 52, Python 241, eval 13/13** (incl. audit-chain still verifies after a decision).
+  Remaining: F5 CFO panel · F6 audit/trace viewer · F7 polish.

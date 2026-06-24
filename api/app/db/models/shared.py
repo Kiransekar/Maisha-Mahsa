@@ -79,6 +79,22 @@ class LlmTrace(Base):
     latency_ms: Mapped[int] = mapped_column(Integer, default=0)  # wall-clock of the draft step
 
 
+class Decision(Base):
+    """A human approve/reject on a flagged domain state (F4). Keyed by ``state_hash`` (a hash
+    of the snapshot), so a decision resolves the queue only until the underlying books change —
+    then the item resurfaces for re-approval. Each decision is also sealed into ``audit_log``."""
+
+    __tablename__ = "decision"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    timestamp: Mapped[str] = mapped_column(String, nullable=False)
+    domain: Mapped[str] = mapped_column(String, nullable=False)
+    decision: Mapped[str] = mapped_column(String, nullable=False)  # "approved" | "rejected"
+    state_hash: Mapped[str] = mapped_column(String, nullable=False)
+    audit_hash: Mapped[str | None] = mapped_column(String)
+    user_id: Mapped[str] = mapped_column(String, nullable=False)
+
+
 class ComplianceCalendar(Base):
     __tablename__ = "compliance_calendar"
 

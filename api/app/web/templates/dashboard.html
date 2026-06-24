@@ -59,7 +59,7 @@
 <p class="muted">No filings due in the alert window. You're clear.</p>
 {% endif %}
 
-<div class="section-title">Approvals Pending ({{ approvals|length }})</div>
+<div class="section-title">Approvals Pending ({{ approvals|length }}) · <a href="/approvals">review →</a></div>
 {% if approvals %}
 <div class="cards">
   {% for a in approvals %}

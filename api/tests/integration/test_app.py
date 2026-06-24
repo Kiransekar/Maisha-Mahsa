@@ -105,3 +105,17 @@ def test_action_submit_bad_input_re_renders_form_with_error():
 
 def test_unknown_action_404():
     assert client.get("/d/ledger/action/nope/form").status_code == 404
+
+
+def test_approvals_page_renders():
+    resp = client.get("/approvals")
+    assert resp.status_code == 200
+    assert "Approvals" in resp.text
+    # Mahsa is down in tests -> degraded message, page still renders
+    assert "Mahsa sidecar offline" in resp.text
+
+
+def test_approvals_decide_degrades_without_mahsa():
+    resp = client.post("/approvals/gst/decide", data={"decision": "approved"})
+    assert resp.status_code == 200
+    assert "Mahsa offline" in resp.text  # decision not recorded, surfaced honestly
