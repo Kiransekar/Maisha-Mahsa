@@ -81,3 +81,20 @@ def convertible_note_value(
         "interest": interest_paise,
         "maturity_value": int(principal) + interest_paise,
     }
+
+
+def dividend_distribution(
+    *, distributable_profit: int, declared: int, shares: int
+) -> dict[str, Any]:
+    """Dividend declaration check (Companies Act 2013 s.123): a dividend may be declared only
+    out of profits, so the declared amount must not exceed distributable profit. Returns whether
+    it's permitted, the per-share amount (paise), and the profit remaining."""
+    permitted = 0 <= declared <= distributable_profit
+    payout = declared if permitted else 0
+    per_share = payout // shares if shares > 0 and permitted else 0
+    return {
+        "permitted": permitted,
+        "declared": payout,
+        "per_share": per_share,
+        "remaining_profit": int(distributable_profit) - payout,
+    }

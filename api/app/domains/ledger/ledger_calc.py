@@ -82,3 +82,23 @@ def slm_annual(cost: int, salvage: int, useful_life_years: int) -> int:
 def wdv_annual(opening_wdv: int, rate_pct: float) -> int:
     """Written-down-value depreciation for one year = opening WDV × rate."""
     return _round_rupee(Decimal(int(opening_wdv)) * Decimal(str(rate_pct)) / 100)
+
+
+def bank_reconciliation(
+    book_balance: int,
+    bank_statement_balance: int,
+    *,
+    deposits_in_transit: int = 0,
+    unpresented_cheques: int = 0,
+) -> dict[str, Any]:
+    """Reconcile the cash-book balance to the bank statement. Adjusted bank balance =
+    statement + deposits in transit − unpresented cheques; reconciled when it ties to the
+    book balance (exact paise)."""
+    adjusted = int(bank_statement_balance) + int(deposits_in_transit) - int(unpresented_cheques)
+    difference = int(book_balance) - adjusted
+    return {
+        "book_balance": int(book_balance),
+        "adjusted_bank_balance": adjusted,
+        "difference": difference,
+        "reconciled": difference == 0,
+    }

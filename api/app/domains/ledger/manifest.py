@@ -18,8 +18,8 @@ MANIFEST = DomainManifest(
         Feature("balance_sheet", "Balance sheet (accounting equation)", D),
         Feature("depreciation", "Depreciation (SLM / WDV, Schedule II)", D),
         Feature("general_ledger", "Account-wise general ledger view", D),
-        Feature("cash_flow", "Cash flow statement (direct/indirect)", N),
-        Feature("bank_recon", "Bank reconciliation", N),
+        Feature("cash_flow", "Cash flow statement (direct/indirect)", D),
+        Feature("bank_recon", "Bank reconciliation", D),
         Feature("auto_posting", "Auto journal posting from payroll/GST/revenue", N),
     ],
 )

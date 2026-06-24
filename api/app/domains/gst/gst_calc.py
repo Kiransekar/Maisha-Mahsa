@@ -90,6 +90,24 @@ def _round_rupee(paise: int) -> int:
     return int(rupees) * 100
 
 
+def rcm_liability(supplies: list[dict]) -> dict[str, Any]:
+    """Reverse-charge mechanism: on notified inward supplies (e.g. legal, GTA, imports) the
+    recipient pays the GST and self-invoices. The same amount is available as ITC when eligible.
+    Each supply: {taxable, rate} (taxable in paise, rate as a percent)."""
+    total_taxable = 0
+    total_tax = 0
+    for s in supplies:
+        taxable = int(s["taxable"])
+        tax = _round_rupee(int(Decimal(taxable) * Decimal(str(s["rate"])) / 100))
+        total_taxable += taxable
+        total_tax += tax
+    return {
+        "taxable_value": total_taxable,
+        "rcm_tax_payable": total_tax,
+        "itc_available": total_tax,  # full ITC when the inward supply is eligible
+    }
+
+
 def late_fee_3b(days_late: int, *, is_nil: bool = False) -> int:
     if days_late <= 0:
         return 0

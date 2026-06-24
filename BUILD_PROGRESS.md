@@ -334,3 +334,11 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
   mostly external-dep/integration (OCR images, PDF payslip/Form-16, ECR, MCA forms, ITR) or larger
   workflows — next batches can take the calc-shaped ones (e.g. ledger cash_flow/bank_recon, gst rcm,
   tax 234B done, equity convertible done).
+- 2026-06-24: **Deferred per-domain features — batch 2 (6 more, calc-shaped, exact paise).**
+  ledger `cash_flow` (direct method, classify by counterpart account type; `create_account` gained
+  `is_cash`/`is_bank` flags) + `bank_reconciliation` (book vs statement ± in-transit/unpresented),
+  gst `rcm_liability` (reverse charge tax + ITC), tax `reconcile_26as` (Form 26AS vs books by TAN),
+  compliance `mca_deadlines` (AOC-4/MGT-7/DPT-3/DIR-3 KYC from AGM date), equity
+  `dividend_distribution` (s.123 out-of-profits check + per-share). Each unit-tested; 6 manifests
+  flipped ⬜→✅. **`make verify` green: Rust 52, Python 309, eval 13/13.** 12 deferred features now
+  done across 2 batches; remaining are external-dep (OCR/PDF/ECR/ITR) or larger workflows.

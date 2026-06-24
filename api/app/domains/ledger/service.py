@@ -45,6 +45,8 @@ class LedgerService(BaseDomainService):
         account_type: str,
         sub_type: str | None = None,
         opening_balance: int = 0,
+        is_cash: bool = False,
+        is_bank: bool = False,
     ) -> int:
         if account_type not in (*ledger_calc.DEBIT_NATURED, *ledger_calc.CREDIT_NATURED):
             raise ValueError(f"invalid account_type: {account_type}")
@@ -54,6 +56,8 @@ class LedgerService(BaseDomainService):
             account_type=account_type,
             sub_type=sub_type,
             opening_balance=opening_balance,
+            is_cash_account=1 if is_cash else 0,
+            is_bank_account=1 if is_bank else 0,
         )
         session.add(acct)
         session.flush()
@@ -164,6 +168,39 @@ class LedgerService(BaseDomainService):
             "lines": lines,
             "closing_balance": balance,
         }
+
+    def cash_flow(self, session: Session) -> dict[str, int]:
+        """Direct-method cash-flow statement. Each entry's net cash movement is classified by
+        its non-cash counterpart: income/expense → operating, asset → investing, equity/
+        liability → financing. Requires cash/bank accounts to be flagged (``is_cash``)."""
+        accounts = {a.id: a for a in session.scalars(select(ChartOfAccounts)).all()}
+        cash_ids = {
+            aid for aid, a in accounts.items() if a.is_cash_account or a.is_bank_account
+        }
+        flows = {"operating": 0, "investing": 0, "financing": 0, "net_change": 0}
+        if not cash_ids:
+            return flows
+        _bucket = {
+            "income": "operating", "expense": "operating",
+            "asset": "investing", "liability": "financing", "equity": "financing",
+        }
+        for entry in session.scalars(select(JournalEntry)).all():
+            lines = session.scalars(
+                select(JournalLine).where(JournalLine.journal_entry_id == entry.id)
+            ).all()
+            cash_delta = sum(
+                int(line.debit) - int(line.credit)
+                for line in lines
+                if line.account_id in cash_ids
+            )
+            non_cash = [line for line in lines if line.account_id not in cash_ids]
+            if cash_delta == 0 or not non_cash:
+                continue
+            counterpart = max(non_cash, key=lambda line: int(line.debit) + int(line.credit))
+            bucket = _bucket.get(accounts[counterpart.account_id].account_type, "operating")
+            flows[bucket] += cash_delta
+        flows["net_change"] = flows["operating"] + flows["investing"] + flows["financing"]
+        return flows
 
     # ---- depreciation ---------------------------------------------------------------
 

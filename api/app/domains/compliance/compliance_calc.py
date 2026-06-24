@@ -5,11 +5,27 @@ via ``as_of``.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 # Statutory domains that map 1:1 onto the compliance sub-vector dimensions.
 STATUTORY_DOMAINS = ("roc", "gst", "tds", "pf", "esi", "pt")
+
+
+def mca_deadlines(*, agm_date: str) -> list[dict[str, Any]]:
+    """MCA annual-filing deadlines for a private company given its AGM date (Companies Act
+    2013): AOC-4 within 30 days, MGT-7 within 60; DPT-3 by 30 Jun and DIR-3 KYC by 30 Sep."""
+    agm = date.fromisoformat(agm_date)
+    return [
+        {"domain": "roc", "form": "AOC-4", "statute": "Companies Act 2013 s.137",
+         "due_date": (agm + timedelta(days=30)).isoformat()},
+        {"domain": "roc", "form": "MGT-7", "statute": "Companies Act 2013 s.92",
+         "due_date": (agm + timedelta(days=60)).isoformat()},
+        {"domain": "roc", "form": "DPT-3", "statute": "Companies Act 2013 Rule 16",
+         "due_date": f"{agm.year}-06-30"},
+        {"domain": "roc", "form": "DIR-3 KYC", "statute": "Companies Act 2013 Rule 12A",
+         "due_date": f"{agm.year}-09-30"},
+    ]
 
 # Reminder cadence (PRD §1.10): T-7, T-1, T-0.
 ALERT_OFFSETS = {7: "T-7", 1: "T-1", 0: "T-0"}

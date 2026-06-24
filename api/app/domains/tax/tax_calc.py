@@ -90,6 +90,39 @@ def late_fee_234e(days_late: int, tds_amount: int) -> int:
     return min(int(_234E_PER_DAY) * int(days_late), int(tds_amount))
 
 
+def reconcile_26as(books: list[dict], as_26as: list[dict]) -> dict[str, Any]:
+    """Reconcile TDS credits in the books against Form 26AS (the department's record). Entries
+    are aggregated by deductor TAN: {tan, amount}. Flags mismatches and one-sided entries."""
+    book_by_tan: dict[str, int] = {}
+    dept_by_tan: dict[str, int] = {}
+    for e in books:
+        book_by_tan[e["tan"]] = book_by_tan.get(e["tan"], 0) + int(e["amount"])
+    for e in as_26as:
+        dept_by_tan[e["tan"]] = dept_by_tan.get(e["tan"], 0) + int(e["amount"])
+
+    matched: list[dict[str, Any]] = []
+    mismatched: list[dict[str, Any]] = []
+    missing_in_26as: list[dict[str, Any]] = []
+    missing_in_books: list[dict[str, Any]] = []
+    for tan in sorted(set(book_by_tan) | set(dept_by_tan)):
+        bv, dv = book_by_tan.get(tan), dept_by_tan.get(tan)
+        if dv is None:
+            missing_in_26as.append({"tan": tan, "books": bv})
+        elif bv is None:
+            missing_in_books.append({"tan": tan, "as_26as": dv})
+        elif bv == dv:
+            matched.append({"tan": tan, "amount": bv})
+        else:
+            mismatched.append({"tan": tan, "books": bv, "as_26as": dv, "variance": bv - dv})
+    return {
+        "matched": matched,
+        "mismatched": mismatched,
+        "missing_in_26as": missing_in_26as,
+        "missing_in_books": missing_in_books,
+        "reconciled": not (mismatched or missing_in_26as or missing_in_books),
+    }
+
+
 def audit_required(
     turnover: int, *, cash_ratio: float = 0.0, is_professional: bool = False
 ) -> bool:
