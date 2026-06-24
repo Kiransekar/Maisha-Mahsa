@@ -296,3 +296,11 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
   **Final coverage sweep**: parametrized tests render all 12 domain pages + all 5 top-level
   screens. **`make verify` green: Rust 52, Python 269, eval 13/13.** All of F1–F7 complete —
   the frontend is feature-complete and polished.
+- 2026-06-24: **Trends — snapshot history + honest sparkline charts.** `MetricSnapshot` table +
+  `app/core/history_store.py` (`capture` writes one row per numeric fact per domain at a point in
+  time; `domain_series` reads them chronologically — observability floats, never money math).
+  `app/web/charts.py::sparkline` = pure dependency-free inline SVG (≥2 real points or empty —
+  no fabricated trends; green/red by direction). Domain pages render a Trends section per metric
+  with history; `POST /history/capture` (button on CFO page; cron-ready) records a capture.
+  **`make verify` green: Rust 52, Python 274, eval 13/13.** Real charts unlocked without
+  inventing data; richer chart types can layer on the same series later.

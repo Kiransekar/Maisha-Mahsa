@@ -177,3 +177,14 @@ def test_every_top_level_page_renders(path):
     # the metallic theme + nav chrome are present on every page
     assert "Maisha-Mahsa" in resp.text
     assert "/static/css/app.css" in resp.text
+
+
+def test_capture_then_domain_trend_renders():
+    # two captures -> the domain page shows real sparkline trends (no fabricated data).
+    assert client.post("/history/capture").status_code == 200
+    assert client.post("/history/capture").status_code == 200
+    resp = client.get("/d/gst")
+    assert resp.status_code == 200
+    body = resp.text
+    assert "Trends" in body
+    assert "<svg" in body and "captures" in body

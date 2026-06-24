@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.cfo_router import router as cfo_router
 from app.config import get_settings
-from app.core import trace_store
+from app.core import history_store, trace_store
 from app.core.approvals import pending_approvals, record_decision
 from app.core.ask import answer_query
 from app.core.audit import verify_chain
@@ -47,7 +47,8 @@ from app.domains.treasury.router import router as treasury_router
 from app.domains.vault.router import router as vault_router
 from app.llm.tools import enrich
 from app.web.actions import actions_for, find_action
-from app.web.format import fact_rows
+from app.web.charts import sparkline
+from app.web.format import fact_rows, humanize
 
 _WEB = Path(__file__).parent / "web"
 templates = Jinja2Templates(directory=str(_WEB / "templates"))
@@ -165,6 +166,13 @@ def create_app() -> FastAPI:
         except MahsaError:
             mahsa_up = False
 
+        # Real trend charts from captured history — only metrics with ≥2 points (no fabrication).
+        trends = []
+        for metric, points in history_store.domain_series(db, domain).items():
+            svg = sparkline([v for _, v in points])
+            if svg:
+                trends.append({"label": humanize(metric), "svg": svg, "points": len(points)})
+
         return templates.TemplateResponse(
             request,
             "domain.html",
@@ -176,6 +184,7 @@ def create_app() -> FastAPI:
                 "mahsa_up": mahsa_up,
                 "settings": settings,
                 "actions": actions_for(domain),
+                "trends": trends,
                 "nav_active": domain,
             },
         )
@@ -374,6 +383,19 @@ def create_app() -> FastAPI:
             message = "Could not send — email transport (SMTP) unavailable."
         return templates.TemplateResponse(
             request, "partials/inline_toast.html", {"message": message}
+        )
+
+    @app.post("/history/capture", response_class=HTMLResponse)
+    async def history_capture(
+        request: Request, db: Session = Depends(get_session)
+    ) -> HTMLResponse:
+        today = datetime.now(UTC).date()
+        written = history_store.capture(db, registry, captured_at=today.isoformat(), as_of=today)
+        db.commit()
+        return templates.TemplateResponse(
+            request,
+            "partials/inline_toast.html",
+            {"message": f"Snapshot captured — {written} metrics recorded for trends."},
         )
 
     @app.get("/audit", response_class=HTMLResponse)

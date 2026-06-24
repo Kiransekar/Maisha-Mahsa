@@ -1,7 +1,13 @@
 {% extends "base.html" %}
 {% block title %}CFO Strategy · {{ settings.app_name }}{% endblock %}
 {% block content %}
-<div class="page-head"><h1>CFO Strategy</h1></div>
+<div class="page-head">
+  <h1>CFO Strategy</h1>
+  <form hx-post="/history/capture" hx-target="#cfo-capture-toast" hx-swap="innerHTML">
+    <button class="btn" type="submit" title="Record today's metrics for trend charts">Capture snapshot</button>
+  </form>
+</div>
+<div id="cfo-capture-toast"></div>
 
 <div class="kpis">
   <div class="kpi"><div class="kpi__label">Cash</div><div class="kpi__value">{{ kpis.cash_fmt }}</div></div>

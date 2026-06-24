@@ -29,6 +29,19 @@
 <div class="section-title">Figures</div>
 <div id="figures">{% include "partials/figures.html" %}</div>
 
+{% if trends %}
+<div class="section-title">Trends</div>
+<div class="trends">
+  {% for t in trends %}
+  <div class="trend">
+    <div class="trend__label">{{ t.label }}</div>
+    {{ t.svg | safe }}
+    <div class="trend__meta muted">{{ t.points }} captures</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
 {% if citations %}
 <div class="section-title">Triggered rules</div>
 <div class="cards">
