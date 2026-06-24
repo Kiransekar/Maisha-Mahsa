@@ -17,7 +17,7 @@ MANIFEST = DomainManifest(
         Feature("retention", "Retention policy (7y/3y/permanent)", D),
         Feature("search", "Full-text search (OCR text + tags)", D),
         Feature("integrity", "SHA-256 integrity verification (VAULT-001)", D),
-        Feature("ocr_pipeline", "Scan → OCR (Tesseract) image pipeline", N),
+        Feature("ocr_pipeline", "Scan → OCR (Tesseract) image pipeline", D),
         Feature("auto_archive", "Auto-archive on retention expiry", N),
         Feature("access_control", "RBAC access control", N),
     ],

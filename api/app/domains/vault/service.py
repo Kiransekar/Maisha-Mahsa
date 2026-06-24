@@ -14,6 +14,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core import ocr
 from app.core.domain import BaseDomainService
 from app.db.models.vault import Document
 from app.domains.vault import vault_calc
@@ -24,6 +25,16 @@ class VaultService(BaseDomainService):
     domain = "vault"
     keywords = ("document", "vault", "ocr", "scan", "retention", "search", "receipt", "archive")
     manifest = MANIFEST
+
+    def ingest_image(
+        self, session: Session, *, file_name: str, image_bytes: bytes, upload_date: str
+    ) -> dict[str, Any]:
+        """Scan/photo → OCR text → ingest (the text becomes the searchable, hash-chained
+        content). Raises ``OcrUnavailable`` when Tesseract isn't installed."""
+        text = ocr.image_to_text(image_bytes)
+        return self.ingest(
+            session, file_name=file_name, content=text, upload_date=upload_date, doc_type="scan"
+        )
 
     # ---- ingestion ------------------------------------------------------------------
 

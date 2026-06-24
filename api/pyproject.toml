@@ -28,6 +28,11 @@ dev = [
     "ruff>=0.4",
     "mypy>=1.9",
 ]
+# OCR (optional) — also needs the `tesseract-ocr` system package installed.
+ocr = [
+    "pytesseract>=0.3.10",
+    "pillow>=10.0",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]

@@ -198,6 +198,22 @@ def test_payslip_and_form16_pdf_download():
     assert "#~#" in ecr.text  # EPFO ECR delimiter
 
 
+def test_ocr_routes_degrade_to_503_without_tesseract():
+    # CI has no tesseract binary -> the OCR endpoints surface 503 (graceful), not 500.
+    from app.core import ocr
+
+    if ocr.tesseract_available():
+        return  # environment has OCR; degradation path N/A
+    r1 = client.post("/d/expense/ocr-receipt", files={"file": ("r.png", b"x", "image/png")})
+    assert r1.status_code == 503
+    r2 = client.post(
+        "/d/vault/ocr-ingest",
+        files={"file": ("s.png", b"x", "image/png")},
+        data={"upload_date": "2026-05-10"},
+    )
+    assert r2.status_code == 503
+
+
 def test_payslip_unknown_employee_404():
     assert client.get("/d/payroll/99999/payslip", params={"period": "2026-06"}).status_code == 404
 

@@ -13,6 +13,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core import ocr
 from app.core.domain import BaseDomainService
 from app.db.models.expense import ExpenseClaim
 from app.domains.expense import expense_calc
@@ -100,6 +101,11 @@ class ExpenseService(BaseDomainService):
 
     def parse_receipt(self, ocr_text: str) -> dict[str, Any]:
         return expense_calc.parse_receipt(ocr_text)
+
+    def ocr_capture(self, image_bytes: bytes) -> dict[str, Any]:
+        """Photo/scan of a receipt → OCR text → parsed fields. Raises ``OcrUnavailable`` when
+        Tesseract isn't installed (the caller surfaces a 503)."""
+        return expense_calc.parse_receipt(ocr.image_to_text(image_bytes))
 
     # ---- Mahsa contract -------------------------------------------------------------
 

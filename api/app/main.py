@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, Form, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -27,6 +27,7 @@ from app.core.email.channel import EmailChannel
 from app.core.email.transport import SmtpTransport
 from app.core.mahsa_client import MahsaClient, MahsaError
 from app.core.money import Paise
+from app.core.ocr import OcrUnavailable
 from app.core.overview import collect_kpis, upcoming_deadlines
 from app.core.strategy import cap_table as cfo_cap_table
 from app.core.strategy import investor_update, run_scenario
@@ -278,6 +279,32 @@ def create_app() -> FastAPI:
             media_type="text/plain",
             headers={"Content-Disposition": f'attachment; filename="ecr-{period}.txt"'},
         )
+
+    from app.domains.expense.service import ExpenseService
+    from app.domains.vault.service import VaultService
+
+    @app.post("/d/expense/ocr-receipt")
+    async def expense_ocr_route(file: UploadFile = File(...)) -> dict[str, Any]:
+        try:
+            return ExpenseService().ocr_capture(await file.read())
+        except OcrUnavailable as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    @app.post("/d/vault/ocr-ingest")
+    async def vault_ocr_route(
+        file: UploadFile = File(...),
+        upload_date: str = Form(...),
+        db: Session = Depends(get_session),
+    ) -> dict[str, Any]:
+        try:
+            result = VaultService().ingest_image(
+                db, file_name=file.filename or "scan", image_bytes=await file.read(),
+                upload_date=upload_date,
+            )
+            db.commit()
+            return result
+        except OcrUnavailable as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     @app.get("/d/gst/gstr1.json")
     async def gstr1_json_route(period: str, db: Session = Depends(get_session)) -> Response:

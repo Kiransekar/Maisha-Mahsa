@@ -406,3 +406,14 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
   `GET /d/payroll/ecr.txt?period=` → text/plain download. Manifest `ecr` flipped ⬜→✅. Tested
   (EPS/diff split at ceiling, 11-field line, build, service, API download). **`make verify` green:
   Rust 52, Python 351, eval 13/13.** 24 deferred features done.
+- 2026-06-24: **Deferred features — Tesseract OCR (expense ocr_capture + vault ocr_pipeline).**
+  Researched: Tesseract is a SYSTEM binary, so `app/core/ocr.py` degrades — `tesseract_available()`
+  + `image_to_text` raise `OcrUnavailable` (callers → HTTP 503) if the binary or optional libs are
+  missing; CI (no binary) exercises the degradation path. Optional extra `api[ocr]`
+  (pytesseract+pillow); api Dockerfile now installs `tesseract-ocr` + `.[ocr]`. Wiring: image→text
+  feeds the existing deterministic parsers — `ExpenseService.ocr_capture` (→ parse_receipt),
+  `VaultService.ingest_image` (→ ingest as searchable content). Routes `POST /d/expense/ocr-receipt`
+  & `POST /d/vault/ocr-ingest` (multipart). 2 manifests flipped ⬜→✅. TRACKED SKIP:
+  `test_real_ocr_roundtrip_when_available` is skipif(not tesseract_available()) — runs only where
+  the binary is installed (reason recorded). **`make verify` green: Rust 52, Python 356 (+1 tracked
+  skip), eval 13/13.** 26 deferred features done.
