@@ -141,3 +141,12 @@ def test_cfo_investor_send_degrades_without_smtp():
     assert resp.status_code == 200
     # MailHog isn't running in tests -> surfaced, not raised
     assert "Could not send" in resp.text or "sent to" in resp.text
+
+
+def test_audit_page_renders_and_verifies_chain():
+    resp = client.get("/audit")
+    assert resp.status_code == 200
+    body = resp.text
+    assert "Audit &amp; Trace" in body
+    assert "CHAIN INTACT" in body  # empty/clean chain verifies
+    assert "LLM trace" in body

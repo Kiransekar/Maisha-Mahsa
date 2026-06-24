@@ -278,3 +278,10 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
   investor-update preview w/ Send (EmailChannel→SMTP, guarded → toast) + upcoming compliance.
   Nav link added. **`make verify` green: Rust 52, Python 249, eval 13/13.** Remaining: F6
   audit/trace viewer · F7 polish.
+- 2026-06-24: **Frontend F6 — audit & trace viewer.** `/audit` page renders the hash-chained
+  audit log (newest-first) with an in-browser chain-integrity check (`verify_chain`) shown as a
+  CHAIN INTACT/BROKEN badge, plus the LLM trace table (model, attempts, verified, requires-
+  approval, latency, claim hash) via new `trace_store.recent`. Reads only; renders without
+  Mahsa/LLM. Nav link added. **`make verify` green: Rust 52, Python 252, eval 13/13.** This
+  surfaces the trust story the harness writes to. Remaining frontend: F7 polish (charts,
+  skeletons, a11y, mobile).

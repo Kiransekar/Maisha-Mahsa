@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Audit & Trace · {{ settings.app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Audit &amp; Trace</h1>
+  {% if chain_intact %}
+    <span class="pill pill--green">CHAIN INTACT ✓</span>
+  {% else %}
+    <span class="pill pill--red">CHAIN BROKEN ✗</span>
+  {% endif %}
+</div>
+<p class="muted" style="margin-bottom:var(--sp-5)">
+  The audit log is append-only and hash-chained: each entry seals the previous hash, so any
+  tampering breaks every later hash. Verified in the browser, no secrets needed.
+</p>
+
+<div class="section-title">Audit log ({{ entries|length }})</div>
+{% if entries %}
+<table class="dtable">
+  <thead><tr><th>Time</th><th>Action</th><th>Domain</th><th>Status</th><th>Hash</th></tr></thead>
+  <tbody>
+    {% for e in entries %}
+    <tr>
+      <td class="mono">{{ e.timestamp }}</td>
+      <td>{{ e.action }}</td>
+      <td style="text-transform:capitalize">{{ e.domain }}</td>
+      <td>{{ e.validation_status }}</td>
+      <td class="mono" title="{{ e.this_hash }}">{{ e.this_hash[:12] }}…</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No audit entries yet. Decisions and validated loop runs are recorded here.</p>
+{% endif %}
+
+<div class="section-title">LLM trace ({{ traces|length }})</div>
+<p class="muted" style="margin-bottom:var(--sp-3)">Drafting-layer observability — hashes only, no raw prompts.</p>
+{% if traces %}
+<table class="dtable">
+  <thead><tr><th>Time</th><th>Domain</th><th>Model</th><th>Attempts</th><th>Verified</th><th>Approval</th><th>Latency</th><th>Claim</th></tr></thead>
+  <tbody>
+    {% for t in traces %}
+    <tr>
+      <td class="mono">{{ t.timestamp }}</td>
+      <td style="text-transform:capitalize">{{ t.domain }}</td>
+      <td>{{ t.model_label }}</td>
+      <td>{{ t.attempts }}</td>
+      <td>{% if t.verified %}<span class="vmark vmark--ok">✓</span>{% else %}<span class="vmark vmark--warn">⚠</span>{% endif %}</td>
+      <td>{{ "yes" if t.requires_approval else "no" }}</td>
+      <td class="mono">{{ t.latency_ms }} ms</td>
+      <td class="mono" title="{{ t.claim_sha256 }}">{{ (t.claim_sha256 or "—")[:12] }}{% if t.claim_sha256 %}…{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="muted">No LLM drafts yet (the model runs when MAISHA_LLM_PROVIDER is enabled).</p>
+{% endif %}
+{% endblock %}

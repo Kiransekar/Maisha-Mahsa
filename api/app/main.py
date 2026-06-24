@@ -15,8 +15,11 @@ from sqlalchemy.orm import Session
 
 from app.cfo_router import router as cfo_router
 from app.config import get_settings
+from app.core import trace_store
 from app.core.approvals import pending_approvals, record_decision
 from app.core.ask import answer_query
+from app.core.audit import verify_chain
+from app.core.audit_store import load_chain
 from app.core.cfo import DomainHealth, collect_health
 from app.core.domain import BaseDomainService
 from app.core.email.channel import EmailChannel
@@ -371,6 +374,21 @@ def create_app() -> FastAPI:
             message = "Could not send — email transport (SMTP) unavailable."
         return templates.TemplateResponse(
             request, "partials/inline_toast.html", {"message": message}
+        )
+
+    @app.get("/audit", response_class=HTMLResponse)
+    async def audit_page(request: Request, db: Session = Depends(get_session)) -> HTMLResponse:
+        entries = load_chain(db)
+        return templates.TemplateResponse(
+            request,
+            "audit.html",
+            {
+                "entries": list(reversed(entries)),  # newest first for reading
+                "chain_intact": verify_chain(entries),
+                "traces": trace_store.recent(db),
+                "settings": settings,
+                "nav_active": "audit",
+            },
         )
 
     return app

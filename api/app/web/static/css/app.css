@@ -180,3 +180,11 @@ h1, h2, h3 { line-height: var(--lh-tight); margin: 0; letter-spacing: -0.01em; }
 .captable__bar { background: var(--c-border); border-radius: 999px; height: 10px; overflow: hidden; }
 .captable__bar span { display: block; height: 100%; background: var(--c-brand); }
 .captable__pct { font-size: var(--fs-sm); font-variant-numeric: tabular-nums; text-align: right; }
+
+/* ── F6 additions: audit/trace tables ────────────────────────────────────────────── */
+.dtable { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); background: var(--c-surface);
+  border: 1px solid var(--c-border); border-radius: var(--radius-md); overflow: hidden; }
+.dtable th, .dtable td { text-align: left; padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--c-border); }
+.dtable th { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.04em; color: var(--c-text-muted); background: var(--c-bg); }
+.dtable tr:last-child td { border-bottom: none; }
+.dtable .mono { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--c-text-muted); }

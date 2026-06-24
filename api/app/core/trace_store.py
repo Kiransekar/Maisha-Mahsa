@@ -8,6 +8,7 @@ import hashlib
 import json
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models.shared import LlmTrace
@@ -55,3 +56,10 @@ def append(
     session.add(row)
     session.flush()
     return row
+
+
+def recent(session: Session, *, limit: int = 50) -> list[LlmTrace]:
+    """Most-recent LLM traces first (for the /audit observability view)."""
+    return list(
+        session.scalars(select(LlmTrace).order_by(LlmTrace.id.desc()).limit(limit)).all()
+    )
