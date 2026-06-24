@@ -342,3 +342,10 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
   `dividend_distribution` (s.123 out-of-profits check + per-share). Each unit-tested; 6 manifests
   flipped ⬜→✅. **`make verify` green: Rust 52, Python 309, eval 13/13.** 12 deferred features now
   done across 2 batches; remaining are external-dep (OCR/PDF/ECR/ITR) or larger workflows.
+- 2026-06-24: **Deferred per-domain features — batch 3 (5 more, calc-shaped).** revenue
+  `deferred_revenue_schedule` (straight-line recognition, final period absorbs rounding), forecast
+  `rolling_reforecast` (actuals + remaining budget), tax `tax_holiday_deduction` (s.80-IAC 3-of-10),
+  gst `hsn_rate` (HSN master lookup + well-formedness), treasury `sweep_suggestion`/`treasury_policy`
+  (idle cash beyond a runway buffer → FD ladder). Each unit-tested; 5 manifests flipped ⬜→✅.
+  **`make verify` green: Rust 52, Python 322, eval 13/13.** 17 deferred features done across 3
+  batches; remaining are external-dep (OCR/PDF/ECR/ITR) or larger cross-module workflows.

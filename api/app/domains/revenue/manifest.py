@@ -18,7 +18,7 @@ MANIFEST = DomainManifest(
         Feature("dunning", "Dunning reminder schedule (T-7/T-3/T-1/T+1/T+7)", D),
         Feature("credit_notes", "Credit notes + s.34 timeliness", D),
         Feature("gstr1_bridge", "Outward-supply feed into GST GSTR-1", D),
-        Feature("revenue_recognition", "Accrual revenue recognition / deferred revenue", N),
+        Feature("revenue_recognition", "Accrual revenue recognition / deferred revenue", D),
         Feature("irn", "e-Invoice IRN generation + QR", N),
         Feature("export_invoicing", "LUT / IGST refund / FEMA export invoicing", N),
         Feature("dunning_send", "Automated reminder email dispatch", N),

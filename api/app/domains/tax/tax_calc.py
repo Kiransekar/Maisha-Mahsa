@@ -90,6 +90,21 @@ def late_fee_234e(days_late: int, tds_amount: int) -> int:
     return min(int(_234E_PER_DAY) * int(days_late), int(tds_amount))
 
 
+def tax_holiday_deduction(profit: int, *, claimed_years: int, eligible: bool) -> dict[str, Any]:
+    """s.80-IAC: an eligible DPIIT-recognised startup may deduct 100% of profits for any 3
+    consecutive AYs out of its first 10. ``claimed_years`` is how many of the 3 are already
+    used. Grants the deduction this year only if eligible, profit is positive, and the 3-year
+    allowance isn't exhausted."""
+    available = eligible and profit > 0 and claimed_years < 3
+    deduction = int(profit) if available else 0
+    return {
+        "eligible": available,
+        "deduction": deduction,
+        "taxable_after_holiday": int(profit) - deduction,
+        "holiday_years_remaining": max(0, 3 - claimed_years - (1 if available else 0)),
+    }
+
+
 def reconcile_26as(books: list[dict], as_26as: list[dict]) -> dict[str, Any]:
     """Reconcile TDS credits in the books against Form 26AS (the department's record). Entries
     are aggregated by deductor TAN: {tan, amount}. Flags mismatches and one-sided entries."""

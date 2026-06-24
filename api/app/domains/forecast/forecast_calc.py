@@ -74,6 +74,23 @@ def unit_economics(
     return {"cac": cac, "ltv": ltv, "payback_months": payback_months, "ltv_cac_ratio": ltv_cac}
 
 
+def rolling_reforecast(actuals: list[int], budget: list[int]) -> dict[str, Any]:
+    """Quarterly re-forecast: replace the elapsed periods of the budget with actuals and keep
+    the original budget for the remaining periods. Returns the blended series and the variance
+    against the original plan."""
+    elapsed = len(actuals)
+    reforecast = list(actuals) + list(budget[elapsed:])
+    reforecast_total = sum(int(x) for x in reforecast)
+    original_total = sum(int(x) for x in budget)
+    return {
+        "reforecast": reforecast,
+        "reforecast_total": reforecast_total,
+        "original_total": original_total,
+        "variance": reforecast_total - original_total,
+        "periods_actualised": elapsed,
+    }
+
+
 def headcount_forecast(roles: list[dict], *, months: int) -> dict[str, Any]:
     """Headcount plan → payroll cost forecast. Each role: {count, monthly_cost} (paise,
     fully-loaded). Returns total headcount, monthly + annualised cost, and a flat projection."""

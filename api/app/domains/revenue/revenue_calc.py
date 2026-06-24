@@ -99,3 +99,24 @@ def credit_note_deadline(invoice_date: str) -> date:
 
 def is_credit_note_timely(invoice_date: str, cn_date: str) -> bool:
     return date.fromisoformat(cn_date) <= credit_note_deadline(invoice_date)
+
+
+def deferred_revenue_schedule(total: int, *, start: str, months: int, as_of: str) -> dict[str, Any]:
+    """Straight-line revenue recognition for a contract: recognise ``total`` ratably over
+    ``months`` from ``start``. Returns recognised-to-date vs deferred at ``as_of`` (the final
+    period absorbs rounding so recognised never exceeds the total)."""
+    if months <= 0:
+        raise ValueError("months must be positive")
+    s = date.fromisoformat(start)
+    a = date.fromisoformat(as_of)
+    elapsed = (a.year - s.year) * 12 + (a.month - s.month)
+    elapsed = max(0, min(months, elapsed))
+    monthly = _round_paise(Decimal(int(total)) / months)
+    recognized = int(total) if elapsed >= months else min(int(total), monthly * elapsed)
+    return {
+        "total": int(total),
+        "monthly": monthly,
+        "months_elapsed": elapsed,
+        "recognized": recognized,
+        "deferred": int(total) - recognized,
+    }

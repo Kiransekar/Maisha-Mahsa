@@ -88,6 +88,20 @@ def _months_back(anchor: date, months: int) -> date:
     return date(year, month, day)
 
 
+def sweep_suggestion(cash: int, monthly_net_burn: int, *, buffer_months: int = 6) -> dict[str, Any]:
+    """Treasury policy: keep ``buffer_months`` of net burn liquid; cash above that buffer is
+    idle and can be swept into an FD ladder. Pure — exact paise."""
+    buffer_required = max(0, int(monthly_net_burn)) * int(buffer_months)
+    sweepable = max(0, int(cash) - buffer_required)
+    return {
+        "cash": int(cash),
+        "buffer_months": int(buffer_months),
+        "buffer_required": buffer_required,
+        "sweepable": sweepable,
+        "recommend_sweep": sweepable > 0,
+    }
+
+
 class TreasuryService(BaseDomainService):
     domain = "treasury"
     keywords = ("cash", "bank", "runway", "burn", "treasury", "balance", "fd", "deposit")
@@ -228,6 +242,16 @@ class TreasuryService(BaseDomainService):
             "total_debits_paise": total,
             "by_category": dict(sorted(by_category.items(), key=lambda kv: -kv[1])),
         }
+
+    def treasury_policy(
+        self, session: Session, as_of: date, *, buffer_months: int = 6
+    ) -> dict[str, Any]:
+        """Auto-sweep suggestion: idle cash beyond a ``buffer_months`` runway buffer that could
+        be laddered into FDs, computed from current treasury metrics."""
+        m = self.metrics(session, as_of)
+        return sweep_suggestion(
+            m["cash_paise"], m["net_burn_paise"], buffer_months=buffer_months
+        )
 
     def metrics(self, session: Session, as_of: date, months: int = 3) -> dict[str, Any]:
         cash = self.cash_position(session)

@@ -19,7 +19,7 @@ MANIFEST = DomainManifest(
         Feature("interest_234b", "s.234B interest (shortfall < 90%)", D),
         Feature("form_26as", "Form 26AS reconciliation", D),
         Feature("itr", "ITR-5/ITR-6 preparation", N),
-        Feature("tax_holiday", "Section 80-IAC holiday tracking", N),
+        Feature("tax_holiday", "Section 80-IAC holiday tracking", D),
         Feature("transfer_pricing", "Transfer pricing documentation", N),
     ],
 )

@@ -90,6 +90,15 @@ def _round_rupee(paise: int) -> int:
     return int(rupees) * 100
 
 
+def hsn_rate(code: str, master: dict[str, float]) -> dict[str, Any]:
+    """Look up the GST rate for an HSN/SAC code in a rate master. A valid code is 4/6/8 digits
+    (HSN) or 6 digits (SAC); ``found`` is False when the code isn't in the master."""
+    digits = code.strip()
+    well_formed = digits.isdigit() and len(digits) in (4, 6, 8)
+    rate = master.get(digits)
+    return {"hsn": digits, "rate": rate, "found": rate is not None, "well_formed": well_formed}
+
+
 def rcm_liability(supplies: list[dict]) -> dict[str, Any]:
     """Reverse-charge mechanism: on notified inward supplies (e.g. legal, GTA, imports) the
     recipient pays the GST and self-invoices. The same amount is available as ITC when eligible.
