@@ -17,7 +17,7 @@ MANIFEST = DomainManifest(
         Feature("late_fee_interest", "Late fee + s.50 interest", D),
         Feature("itc_recon", "GSTR-2B reconciliation + Rule 36(4) ratio", D),
         Feature("hsn_master", "HSN master + rate mapping", D),
-        Feature("e_invoice", "e-Invoice IRN generation (> ₹5Cr)", N),
+        Feature("e_invoice", "e-Invoice IRN generation (> ₹5Cr)", D),
         Feature("rcm", "Reverse charge mechanism + self-invoice", D),
         Feature("gstr9", "GSTR-9 / 9C annual return", D),
         Feature("composition", "Composition scheme handling", N),

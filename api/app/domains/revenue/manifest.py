@@ -19,7 +19,7 @@ MANIFEST = DomainManifest(
         Feature("credit_notes", "Credit notes + s.34 timeliness", D),
         Feature("gstr1_bridge", "Outward-supply feed into GST GSTR-1", D),
         Feature("revenue_recognition", "Accrual revenue recognition / deferred revenue", D),
-        Feature("irn", "e-Invoice IRN generation + QR", N),
+        Feature("irn", "e-Invoice IRN generation + QR", D),
         Feature("export_invoicing", "LUT / IGST refund / FEMA export invoicing", N),
         Feature("dunning_send", "Automated reminder email dispatch", D),
     ],

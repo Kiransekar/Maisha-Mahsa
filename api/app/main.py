@@ -306,6 +306,18 @@ def create_app() -> FastAPI:
         except OcrUnavailable as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
+    @app.get("/d/gst/einvoice.json")
+    async def einvoice_route(invoice: str, db: Session = Depends(get_session)) -> Response:
+        try:
+            payload = RevenueService().einvoice(db, invoice, seller_gstin=settings.company_gstin)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return Response(
+            content=json.dumps(payload, indent=2),
+            media_type="application/json",
+            headers={"Content-Disposition": f'attachment; filename="einvoice-{invoice}.json"'},
+        )
+
     @app.get("/d/gst/gstr1.json")
     async def gstr1_json_route(period: str, db: Session = Depends(get_session)) -> Response:
         lines = RevenueService().gstr1_lines(db, period)

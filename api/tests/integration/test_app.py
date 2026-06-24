@@ -245,6 +245,17 @@ def test_gstr1_json_export_downloads():
     assert payload["fp"] == "052026"
     assert payload["b2b"][0]["ctin"] == "27AAPFU0939F1ZV"
 
+    # the same invoice can be turned into an e-invoice (IRN + NIC payload)
+    einv = client.get("/d/gst/einvoice.json", params={"invoice": "JEXP-1"})
+    assert einv.status_code == 200
+    ep = einv.json()
+    assert len(ep["Irn"]) == 64 and ep["DocDtls"]["No"] == "JEXP-1"
+    assert ep["QrData"]["Irn"] == ep["Irn"]
+
+
+def test_einvoice_unknown_invoice_404():
+    assert client.get("/d/gst/einvoice.json", params={"invoice": "NOPE-1"}).status_code == 404
+
 
 def test_audit_page_renders_and_verifies_chain():
     resp = client.get("/audit")

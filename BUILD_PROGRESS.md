@@ -417,3 +417,13 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
   `test_real_ocr_roundtrip_when_available` is skipif(not tesseract_available()) — runs only where
   the binary is installed (reason recorded). **`make verify` green: Rust 52, Python 356 (+1 tracked
   skip), eval 13/13.** 26 deferred features done.
+- 2026-06-24: **Deferred features — e-invoice IRN (gst e_invoice + revenue irn).** Researched the
+  NIC algorithm: IRN = SHA-256(SupplierGSTIN + FY[YYYY-YY] + DocType + DocNo), deterministic &
+  locally verifiable. `gst_calc.compute_irn` + `einvoice_payload` (NIC schema v1.1: TranDtls/
+  DocDtls/SellerDtls/BuyerDtls/ItemList/ValDtls + the IRN + QR data block; rupee decimals,
+  DD/MM/YYYY, FY from doc date; B2B vs B2C by buyer GSTIN). `RevenueService.einvoice` builds it
+  from a stored invoice; route `GET /d/gst/einvoice.json?invoice=` → JSON download. The IRP
+  *signing* of the QR is the external boundary (needs IRP/GSP creds) — out of scope; we emit the
+  deterministic IRN + canonical payload + QR data. 2 manifests flipped ⬜→✅. Tested (IRN matches
+  spec hash, FY boundary, schema/QR, B2C, API download + 404). **`make verify` green: Rust 52,
+  Python 361 (+1 tracked OCR skip), eval 13/13.** 28 deferred features done.

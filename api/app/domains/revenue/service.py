@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.domain import BaseDomainService
 from app.db.models.revenue import Customer, Invoice, InvoiceItem
 from app.db.models.shared import Company
+from app.domains.gst import gst_calc
 from app.domains.revenue import revenue_calc
 from app.domains.revenue.manifest import MANIFEST
 
@@ -222,6 +223,32 @@ class RevenueService(BaseDomainService):
                 }
             )
         return lines
+
+    def einvoice(
+        self, session: Session, invoice_number: str, *, seller_gstin: str
+    ) -> dict[str, Any]:
+        """Build the e-invoice (IRN + NIC-schema payload + QR data) for an issued invoice."""
+        inv = session.scalars(
+            select(Invoice).where(Invoice.invoice_number == invoice_number)
+        ).first()
+        if inv is None:
+            raise ValueError(f"invoice {invoice_number} not found")
+        customer = session.get(Customer, inv.customer_id)
+        first_item = session.scalars(
+            select(InvoiceItem).where(InvoiceItem.invoice_id == inv.id)
+        ).first()
+        return gst_calc.einvoice_payload(
+            seller_gstin=seller_gstin,
+            buyer_gstin=customer.gstin if customer else None,
+            doc_no=inv.invoice_number,
+            doc_date=inv.invoice_date,
+            taxable=int(inv.subtotal),
+            igst=int(inv.igst_amount),
+            cgst=int(inv.cgst_amount),
+            sgst=int(inv.sgst_amount),
+            total=int(inv.total_amount),
+            hsn=first_item.hsn_code if first_item else None,
+        )
 
     # ---- Mahsa contract -------------------------------------------------------------
 

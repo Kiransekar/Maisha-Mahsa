@@ -9,6 +9,7 @@ Re-verify rates/caps against the current Finance Act (see skills/indian-fin-rule
 
 from __future__ import annotations
 
+import hashlib
 import re
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
@@ -211,6 +212,76 @@ def build_gstr1(lines: list[dict], *, filing_period: str) -> dict[str, Any]:
         "totals": totals,
         "errors": errors,
     }
+
+
+# ---- e-Invoice IRN + NIC schema -------------------------------------------------------
+
+
+def _einvoice_fy(iso_date: str) -> str:
+    """Financial year (YYYY-YY) for a document date (Apr–Mar)."""
+    y, m, _ = (int(x) for x in iso_date.split("-"))
+    start = y if m >= 4 else y - 1
+    return f"{start}-{str(start + 1)[2:]}"
+
+
+def compute_irn(seller_gstin: str, *, doc_no: str, doc_date: str, doc_type: str = "INV") -> str:
+    """The 64-char IRN = SHA-256 of SupplierGSTIN + FY + DocType + DocNo (NIC algorithm).
+    Deterministic and independently verifiable — the same as the IRP computes."""
+    fy = _einvoice_fy(doc_date)
+    payload = f"{seller_gstin.upper()}{fy}{doc_type.upper()}{doc_no}"
+    return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def einvoice_payload(
+    *,
+    seller_gstin: str,
+    buyer_gstin: str | None,
+    doc_no: str,
+    doc_date: str,
+    taxable: int,
+    igst: int,
+    cgst: int,
+    sgst: int,
+    total: int,
+    hsn: str | None = None,
+    item_count: int = 1,
+    doc_type: str = "INV",
+) -> dict[str, Any]:
+    """Build the e-invoice in the NIC schema (Version 1.1) plus the computed IRN and the QR data
+    block. The IRP signs the QR at registration — that external call is out of scope here; this
+    is the deterministic, locally-verifiable part (IRN + canonical payload)."""
+    irn = compute_irn(seller_gstin, doc_no=doc_no, doc_date=doc_date, doc_type=doc_type)
+    dt = _to_ddmmyyyy(doc_date).replace("-", "/")  # NIC wants DD/MM/YYYY
+    sup_typ = "B2B" if buyer_gstin else "B2C"
+    payload = {
+        "Version": "1.1",
+        "Irn": irn,
+        "TranDtls": {"TaxSch": "GST", "SupTyp": sup_typ, "RegRev": "N"},
+        "DocDtls": {"Typ": doc_type, "No": doc_no, "Dt": dt},
+        "SellerDtls": {"Gstin": seller_gstin.upper()},
+        "BuyerDtls": {"Gstin": (buyer_gstin or "URP").upper()},
+        "ItemList": [
+            {
+                "SlNo": "1", "HsnCd": hsn or "", "Qty": item_count,
+                "AssAmt": _to_rupees(taxable), "GstRt": _gst_rate(taxable, igst, cgst, sgst),
+                "IgstAmt": _to_rupees(igst), "CgstAmt": _to_rupees(cgst),
+                "SgstAmt": _to_rupees(sgst), "TotItemVal": _to_rupees(total),
+            }
+        ],
+        "ValDtls": {
+            "AssVal": _to_rupees(taxable), "IgstVal": _to_rupees(igst),
+            "CgstVal": _to_rupees(cgst), "SgstVal": _to_rupees(sgst),
+            "TotInvVal": _to_rupees(total),
+        },
+        # The data the signed QR encodes (the IRP returns a JWT-signed version of this).
+        "QrData": {
+            "SellerGstin": seller_gstin.upper(), "BuyerGstin": buyer_gstin or "URP",
+            "DocNo": doc_no, "DocTyp": doc_type, "DocDt": dt,
+            "TotInvVal": _to_rupees(total), "ItemCnt": item_count,
+            "MainHsnCode": hsn or "", "Irn": irn,
+        },
+    }
+    return payload
 
 
 # ---- GSTR-1 JSON export (GSTN offline-utility schema) ---------------------------------
