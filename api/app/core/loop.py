@@ -7,6 +7,7 @@ has been recomputed and validated by Mahsa and recorded in the audit chain.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from datetime import date
 from typing import Any
@@ -61,8 +62,10 @@ async def run_loop(
     claim: ActionClaim | None = None
     claim_verified: bool | None = None
     attempts = 0
+    latency_ms = 0
     requires_approval = fold.shape.requires_approval
     if generator is not None and query:
+        started = time.perf_counter()
         draft = await generate_verified(
             generator,
             snapshot=snapshot,
@@ -71,6 +74,7 @@ async def run_loop(
             fold=fold,
             max_retries=max_retries,
         )
+        latency_ms = int((time.perf_counter() - started) * 1000)
         claim = draft.claim
         claim_verified = draft.verified
         attempts = draft.attempts
@@ -106,6 +110,7 @@ async def run_loop(
             attempts=attempts,
             verified=bool(claim_verified),
             requires_approval=requires_approval,
+            latency_ms=latency_ms,
         )
 
     session.commit()

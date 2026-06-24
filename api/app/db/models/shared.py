@@ -76,6 +76,7 @@ class LlmTrace(Base):
     attempts: Mapped[int] = mapped_column(Integer, default=1)
     verified: Mapped[int] = mapped_column(Integer, default=0)  # 1 = every number fact-backed
     requires_approval: Mapped[int] = mapped_column(Integer, default=0)
+    latency_ms: Mapped[int] = mapped_column(Integer, default=0)  # wall-clock of the draft step
 
 
 class ComplianceCalendar(Base):

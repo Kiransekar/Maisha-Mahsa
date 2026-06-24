@@ -107,6 +107,7 @@ async def test_run_loop_writes_llm_trace(session: Session) -> None:
     assert trace.verified == 1
     assert trace.attempts == 1
     assert len(trace.input_sha256) == 64 and trace.claim_sha256 is not None
+    assert trace.latency_ms >= 0  # wall-clock of the draft step captured
 
 
 @pytest.mark.asyncio

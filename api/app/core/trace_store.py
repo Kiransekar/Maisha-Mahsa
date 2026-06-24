@@ -38,6 +38,7 @@ def append(
     attempts: int,
     verified: bool,
     requires_approval: bool,
+    latency_ms: int = 0,
 ) -> LlmTrace:
     row = LlmTrace(
         timestamp=timestamp,
@@ -49,6 +50,7 @@ def append(
         attempts=attempts,
         verified=1 if verified else 0,
         requires_approval=1 if requires_approval else 0,
+        latency_ms=latency_ms,
     )
     session.add(row)
     session.flush()

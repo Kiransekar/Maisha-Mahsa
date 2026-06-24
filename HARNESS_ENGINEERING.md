@@ -153,6 +153,25 @@ financial dispatch is worse than none.
 
 ---
 
+## 3a. Implementation status (2026-06-24)
+
+| Item | Status |
+|---|---|
+| P0-① golden eval harness (paise-exact + pass^k, `make eval`) | ✅ done |
+| P0-①b eval cases — all 12 domains (13 cases) | ✅ done |
+| P0-② Maisha LLM generator (Ollama/Claude constrained decode, calc-wrapping tools) | ✅ done |
+| P0-③ evaluator-optimizer retry loop (fact-fidelity, bounded retry, fallback) | ✅ done |
+| P1-4 input guardrails (injection block + cloud PII redaction) | ✅ done |
+| P1-5 tracing — `llm_trace` table (hashes, model, attempts, verified, latency) | ✅ done (token counts deferred) |
+| P1-6 determinism hygiene (temp 0, pinned model label, repro hashes) | ✅ done |
+| P2-9 eval-gated model routing (`routing.py`) + latency capture | ✅ done |
+| P2-7 DSPy-style prompt compilation | ⏸ scaffolding-only — needs a live model + the eval set to optimize against |
+| P2-8 MCP tool servers | ⏸ deferred — needs the `mcp` dependency; tools already centralized in `llm/tools.py` for a clean lift |
+
+Everything ✅ is covered by `make verify` (Rust + Python + `make eval`). The ⏸ items are
+gated on a running Ollama/Claude (DSPy optimizes prompts *against measured eval scores*, which
+requires a live model) or a new dependency (MCP); both are low-risk lifts when that's available.
+
 ## 4. One-line summary
 
 Maisha-Mahsa already nailed the principle every harness paper converges on — *a

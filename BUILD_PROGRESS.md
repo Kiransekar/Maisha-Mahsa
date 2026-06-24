@@ -228,3 +228,12 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
   token-count capture in trace (needs usage plumbing from clients); persisting guard findings
   (currently logged). Next: P2 (DSPy-style prompt compilation, MCP tool servers, eval-gated
   Ollama→Claude routing).
+- 2026-06-24: **Harness layer P2 (testable slice) — eval-gated model routing + latency trace.**
+  `app/llm/routing.py`: `decide_routes` (pure) maps each domain to the local model only where it
+  scored perfectly on the golden eval (threshold default 1.0 — zero-error bar), else the cloud
+  fallback; `RoutedGenerator` (a ClaimProducer) dispatches each draft to the chosen provider.
+  `LlmTrace.latency_ms` + `time.perf_counter` capture around the draft step in run_loop.
+  **`make verify` green: Rust 52, Python 219 (+4), eval 13/13.** DSPy-style prompt compilation
+  (P2-7) and MCP tool servers (P2-8) are scaffolding-deferred — they need a live Ollama/Claude
+  (DSPy optimizes against measured eval scores) or the `mcp` dep; tools already centralized in
+  `llm/tools.py` for a clean lift. See HARNESS_ENGINEERING.md §3a for the status matrix.
