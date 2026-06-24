@@ -119,3 +119,25 @@ def test_approvals_decide_degrades_without_mahsa():
     resp = client.post("/approvals/gst/decide", data={"decision": "approved"})
     assert resp.status_code == 200
     assert "Mahsa offline" in resp.text  # decision not recorded, surfaced honestly
+
+
+def test_cfo_page_renders():
+    resp = client.get("/cfo")
+    assert resp.status_code == 200
+    body = resp.text
+    assert "CFO Strategy" in body
+    assert "Scenario engine" in body
+    assert "Cap table" in body
+
+
+def test_cfo_scenario_returns_result():
+    resp = client.post("/cfo/scenario", data={"revenue_mult": "1.2", "extra_cost": "0"})
+    assert resp.status_code == 200
+    assert "Runway" in resp.text
+
+
+def test_cfo_investor_send_degrades_without_smtp():
+    resp = client.post("/cfo/investor/send", data={})
+    assert resp.status_code == 200
+    # MailHog isn't running in tests -> surfaced, not raised
+    assert "Could not send" in resp.text or "sent to" in resp.text

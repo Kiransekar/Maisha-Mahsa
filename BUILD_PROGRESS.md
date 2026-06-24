@@ -271,3 +271,10 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
   (snapshot hash) change, then it resurfaces. Nav + dashboard link to /approvals. **`make verify`
   green: Rust 52, Python 241, eval 13/13** (incl. audit-chain still verifies after a decision).
   Remaining: F5 CFO panel · F6 audit/trace viewer · F7 polish.
+- 2026-06-24: **Frontend F5 — CFO Strategy panel.** `app/core/strategy.py` (deterministic, no
+  Mahsa/LLM): `run_scenario` (revenue multiplier + extra cost → monthly net change / min cash /
+  runway via forecast_calc), `cap_table`, `investor_update` (compose_investor_update from KPIs +
+  cap table). `/cfo` page: KPI strip + scenario engine (HTMX form → result) + cap-table bars +
+  investor-update preview w/ Send (EmailChannel→SMTP, guarded → toast) + upcoming compliance.
+  Nav link added. **`make verify` green: Rust 52, Python 249, eval 13/13.** Remaining: F6
+  audit/trace viewer · F7 polish.

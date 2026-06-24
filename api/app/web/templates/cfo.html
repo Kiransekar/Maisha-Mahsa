@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}CFO Strategy · {{ settings.app_name }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>CFO Strategy</h1></div>
+
+<div class="kpis">
+  <div class="kpi"><div class="kpi__label">Cash</div><div class="kpi__value">{{ kpis.cash_fmt }}</div></div>
+  <div class="kpi"><div class="kpi__label">Net Burn / mo</div><div class="kpi__value">{{ kpis.net_burn_fmt }}</div></div>
+  <div class="kpi"><div class="kpi__label">Runway</div><div class="kpi__value">{{ kpis.runway_fmt }}</div></div>
+  <div class="kpi"><div class="kpi__label">AR</div><div class="kpi__value">{{ kpis.ar_fmt }}</div></div>
+  <div class="kpi"><div class="kpi__label">AP</div><div class="kpi__value">{{ kpis.ap_fmt }}</div></div>
+</div>
+
+<div class="section-title">Scenario engine</div>
+<p class="muted">Model a revenue change and extra spend against today's figures — see the runway impact.</p>
+<form class="scenario-form" hx-post="/cfo/scenario" hx-target="#scenario-result" hx-swap="innerHTML">
+  <label class="field">
+    <span class="field__label">Revenue</span>
+    <select name="revenue_mult">
+      <option value="0.8">−20%</option>
+      <option value="1.0" selected>Base</option>
+      <option value="1.2">+20%</option>
+      <option value="1.5">+50%</option>
+    </select>
+  </label>
+  <label class="field">
+    <span class="field__label">Extra monthly cost (₹)</span>
+    <input type="number" name="extra_cost" value="0" min="0">
+  </label>
+  <button class="btn btn--primary" type="submit">Run scenario</button>
+</form>
+<div id="scenario-result">{% include "partials/scenario_result.html" %}</div>
+
+<div class="section-title">Cap table</div>
+{% if cap.total_shares %}
+<div class="captable">
+  {% for cat, shares in cap.by_category.items() %}
+  <div class="captable__row">
+    <span class="captable__cat" style="text-transform:capitalize">{{ cat }}</span>
+    <span class="captable__bar"><span style="width: {{ (cap.pct[cat] * 100) | round(1) }}%"></span></span>
+    <span class="captable__pct">{{ (cap.pct[cat] * 100) | round(1) }}% · {{ "{:,}".format(shares) }}</span>
+  </div>
+  {% endfor %}
+</div>
+<p class="muted">Total shares: {{ "{:,}".format(cap.total_shares) }}</p>
+{% else %}
+<p class="muted">No shareholders on record. Add them under <a href="/d/equity">Equity</a>.</p>
+{% endif %}
+
+<div class="section-title">Investor update · {{ investor.period }}</div>
+<div class="answer">
+  <div class="figrows">
+    <div class="figrow"><span class="figrow__label">Cash</span><span class="figrow__val">{{ kpis.cash_fmt }}</span></div>
+    <div class="figrow"><span class="figrow__label">Net burn / mo</span><span class="figrow__val">{{ kpis.net_burn_fmt }}</span></div>
+    <div class="figrow"><span class="figrow__label">Runway</span><span class="figrow__val">{{ kpis.runway_fmt }}</span></div>
+    <div class="figrow"><span class="figrow__label">AR</span><span class="figrow__val">{{ kpis.ar_fmt }}</span></div>
+  </div>
+  <form hx-post="/cfo/investor/send" hx-target="#cfo-toast" hx-swap="innerHTML" style="margin-top:var(--sp-3)">
+    <button class="btn btn--primary" type="submit">Send investor update</button>
+  </form>
+  <div id="cfo-toast"></div>
+</div>
+
+<div class="section-title">Upcoming compliance</div>
+{% if calendar %}
+<div class="cards">
+  {% for c in calendar %}
+  <div class="card">
+    <div class="card__title" style="text-transform:none">{{ c.form_name }}
+      {% if c.label == "OVERDUE" %}<span class="pill pill--red">OVERDUE</span>
+      {% else %}<span class="pill pill--amber">{{ c.label }}</span>{% endif %}
+    </div>
+    <div class="card__meta">Due {{ c.due_date }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="muted">No filings due in the alert window.</p>
+{% endif %}
+{% endblock %}

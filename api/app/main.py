@@ -19,8 +19,13 @@ from app.core.approvals import pending_approvals, record_decision
 from app.core.ask import answer_query
 from app.core.cfo import DomainHealth, collect_health
 from app.core.domain import BaseDomainService
+from app.core.email.channel import EmailChannel
+from app.core.email.transport import SmtpTransport
 from app.core.mahsa_client import MahsaClient, MahsaError
+from app.core.money import Paise
 from app.core.overview import collect_kpis, upcoming_deadlines
+from app.core.strategy import cap_table as cfo_cap_table
+from app.core.strategy import investor_update, run_scenario
 from app.db import models as _models  # noqa: F401  registers all models on Base.metadata
 from app.db.base import Base
 from app.db.session import get_session, session_factory
@@ -301,6 +306,71 @@ def create_app() -> FastAPI:
             request,
             "partials/approvals_list.html",
             {"items": items, "mahsa_up": mahsa_up, "toast": toast, "settings": settings},
+        )
+
+    def _scenario_view(s: Any) -> dict[str, str]:
+        runway = "∞ (cash-flow positive)" if s.runway_months is None else f"{s.runway_months:g} mo"
+        return {
+            "net_fmt": Paise(s.monthly_net_change_paise).format_inr(),
+            "min_cash_fmt": Paise(s.min_cash_paise).format_inr(),
+            "runway_fmt": runway,
+        }
+
+    @app.get("/cfo", response_class=HTMLResponse)
+    async def cfo_page(request: Request, db: Session = Depends(get_session)) -> HTMLResponse:
+        today = datetime.now(UTC).date()
+        scenario = run_scenario(db, today)
+        return templates.TemplateResponse(
+            request,
+            "cfo.html",
+            {
+                "kpis": collect_kpis(db, today),
+                "cap": cfo_cap_table(db),
+                "investor": investor_update(db, today),
+                "calendar": upcoming_deadlines(db, today),
+                "s": _scenario_view(scenario),
+                "settings": settings,
+                "nav_active": "cfo",
+            },
+        )
+
+    @app.post("/cfo/scenario", response_class=HTMLResponse)
+    async def cfo_scenario(
+        request: Request,
+        revenue_mult: float = Form(1.0),
+        extra_cost: float = Form(0.0),
+        db: Session = Depends(get_session),
+    ) -> HTMLResponse:
+        today = datetime.now(UTC).date()
+        scenario = run_scenario(
+            db,
+            today,
+            revenue_mult=revenue_mult,
+            extra_cost_paise=int(Paise.from_rupees(extra_cost)),
+        )
+        return templates.TemplateResponse(
+            request, "partials/scenario_result.html", {"s": _scenario_view(scenario)}
+        )
+
+    @app.post("/cfo/investor/send", response_class=HTMLResponse)
+    async def cfo_investor_send(
+        request: Request, db: Session = Depends(get_session)
+    ) -> HTMLResponse:
+        today = datetime.now(UTC).date()
+        ctx = investor_update(db, today)
+        channel = EmailChannel(
+            SmtpTransport(host=settings.smtp_host, port=settings.smtp_port),
+            sender=settings.email_sender,
+        )
+        try:
+            await channel.send_investor_update(
+                to=settings.cfo_email, ctx=ctx, company_name=settings.app_name
+            )
+            message = f"Investor update ({ctx['period']}) sent to {settings.cfo_email}."
+        except Exception:  # noqa: BLE001 - SMTP/transport failure is surfaced, not raised
+            message = "Could not send — email transport (SMTP) unavailable."
+        return templates.TemplateResponse(
+            request, "partials/inline_toast.html", {"message": message}
         )
 
     return app

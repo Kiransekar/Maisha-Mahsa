@@ -169,3 +169,14 @@ h1, h2, h3 { line-height: var(--lh-tight); margin: 0; letter-spacing: -0.01em; }
 /* ── F4 additions: approvals ─────────────────────────────────────────────────────── */
 .approve-row { display: flex; gap: var(--sp-2); margin-top: var(--sp-3); align-items: center; }
 .approve-row form { margin: 0; }
+
+/* ── F5 additions: CFO strategy ──────────────────────────────────────────────────── */
+.scenario-form { display: flex; flex-wrap: wrap; gap: var(--sp-3); align-items: flex-end; margin-bottom: var(--sp-4); }
+.scenario-form .field { margin-bottom: 0; }
+.scenario-out { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-3); }
+.captable { display: flex; flex-direction: column; gap: var(--sp-2); max-width: 640px; }
+.captable__row { display: grid; grid-template-columns: 120px 1fr 160px; align-items: center; gap: var(--sp-3); }
+.captable__cat { font-size: var(--fs-sm); color: var(--c-text-muted); }
+.captable__bar { background: var(--c-border); border-radius: 999px; height: 10px; overflow: hidden; }
+.captable__bar span { display: block; height: 100%; background: var(--c-brand); }
+.captable__pct { font-size: var(--fs-sm); font-variant-numeric: tabular-nums; text-align: right; }
