@@ -44,6 +44,11 @@ class Settings(BaseSettings):
     llm_timeout_s: float = 30.0
     llm_max_retries: int = 2  # bounded regenerate-on-unbacked-number before template fallback
 
+    # Scheduler (PRD Layer 6): the daily CFO brief + snapshot capture run at this local time.
+    brief_hour: int = 20  # 8pm
+    brief_minute: int = 0
+    brief_tz: str = "Asia/Kolkata"
+
 
 @lru_cache
 def get_settings() -> Settings:

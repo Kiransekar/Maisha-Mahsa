@@ -304,3 +304,13 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
   with history; `POST /history/capture` (button on CFO page; cron-ready) records a capture.
   **`make verify` green: Rust 52, Python 274, eval 13/13.** Real charts unlocked without
   inventing data; richer chart types can layer on the same series later.
+- 2026-06-24: **Layer 6 — scheduled jobs (snapshot capture + 8pm CFO brief) wired to cron.**
+  `app/scheduler.py` (pure `next_run`/`seconds_until_next`, tz-aware via zoneinfo+tzdata, clock
+  injected) + `app/jobs.py`: `run_capture` (history_store.capture), `run_brief` (collect_health →
+  compose_brief → EmailChannel.send_daily_brief), `run_once` (self-creates schema; catches
+  errors so a tick never crashes), `serve` (sleep-until-next loop). CLI `python -m app.jobs
+  capture|brief|all|serve` — cron-friendly AND a long-lived service. Config `MAISHA_BRIEF_HOUR/
+  MINUTE/TZ` (default 20:00 Asia/Kolkata). Added a `scheduler` service to docker-compose (runs
+  `serve`) + Makefile `capture`/`brief`/`scheduler` targets. `tzdata` added to deps. **`make
+  verify` green: Rust 52, Python 279, eval 13/13** (scheduler math + capture/brief jobs tested;
+  CLI capture verified standalone = 90 metrics). Daily 8pm brief + trend capture now automated.

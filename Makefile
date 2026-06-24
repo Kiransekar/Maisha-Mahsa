@@ -6,7 +6,7 @@ PIP := api/.venv/bin/pip
 # Prefer a rustup-installed cargo; fall back to PATH.
 CARGO := $(shell [ -x "$$HOME/.cargo/bin/cargo" ] && echo "$$HOME/.cargo/bin/cargo" || echo cargo)
 
-.PHONY: help verify test test-rust test-py eval eval-real lint fmt venv dev clean
+.PHONY: help verify test test-rust test-py eval eval-real capture brief scheduler lint fmt venv dev clean
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n",$$1,$$2}'
@@ -26,6 +26,15 @@ eval: ## Golden-eval gate for the Maisha LLM layer (stub producer — the CI gat
 
 eval-real: ## Run the golden eval against a live model (MAISHA_LLM_PROVIDER, e.g. ollama)
 	cd api && .venv/bin/python -m evals.harness --all --provider ollama --report text
+
+capture: ## Run the snapshot-capture job once (records metrics for trend charts)
+	cd api && .venv/bin/python -m app.jobs capture
+
+brief: ## Send the daily CFO brief once (needs Mahsa + SMTP/MailHog up)
+	cd api && .venv/bin/python -m app.jobs brief
+
+scheduler: ## Run the long-lived scheduler loop (daily capture + 8pm brief)
+	cd api && .venv/bin/python -m app.jobs serve
 
 test-rust: ## cargo test for the Mahsa DIF core
 	cd dif && $(CARGO) test

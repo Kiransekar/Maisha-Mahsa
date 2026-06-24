@@ -28,6 +28,26 @@ services:
       - redis
     restart: unless-stopped
 
+  # Scheduler (PRD Layer 6): runs the daily snapshot capture + 8pm CFO brief in-process.
+  scheduler:
+    build:
+      context: ../api
+      dockerfile: Dockerfile
+    command: ["python", "-m", "app.jobs", "serve"]
+    environment:
+      MAISHA_MAHSA_URL: "http://dif:8088"
+      MAISHA_DATABASE_URL: "sqlite:////data/maisha.db"
+      MAISHA_SMTP_HOST: "mailhog"
+      MAISHA_SMTP_PORT: "1025"
+      MAISHA_BRIEF_HOUR: "${MAISHA_BRIEF_HOUR:-20}"
+      MAISHA_BRIEF_TZ: "${MAISHA_BRIEF_TZ:-Asia/Kolkata}"
+    volumes:
+      - maisha_data:/data
+    depends_on:
+      - dif
+      - mailhog
+    restart: unless-stopped
+
   redis:
     image: redis:7-alpine
     command: ["redis-server", "--save", "60", "1"]

@@ -17,6 +17,7 @@ dependencies = [
     "pydantic>=2.6",
     "pydantic-settings>=2.2",
     "aiosmtplib>=3.0",
+    "tzdata>=2024.1",
 ]
 
 [project.optional-dependencies]
