@@ -63,6 +63,30 @@ class LedgerService(BaseDomainService):
         session.flush()
         return acct.id
 
+    def auto_post(
+        self,
+        session: Session,
+        *,
+        source: str,
+        entry_date: str,
+        description: str,
+        lines: list[dict],
+        reference: str | None = None,
+    ) -> dict[str, Any]:
+        """Post a system-generated entry from another module (payroll/gst/revenue). Tags the
+        entry with its ``source`` (which flags ``is_auto_generated``); use ``ledger_calc``'s
+        ``payroll_journal`` / ``sales_journal`` / ``gst_payment_journal`` to build the lines."""
+        if source == "manual":
+            raise ValueError("auto_post requires a non-manual source (e.g. payroll/gst/revenue)")
+        return self.post_journal_entry(
+            session,
+            entry_date=entry_date,
+            description=description,
+            lines=lines,
+            source=source,
+            reference=reference,
+        )
+
     # ---- journal --------------------------------------------------------------------
 
     def post_journal_entry(

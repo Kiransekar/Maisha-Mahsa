@@ -20,6 +20,6 @@ MANIFEST = DomainManifest(
         Feature("general_ledger", "Account-wise general ledger view", D),
         Feature("cash_flow", "Cash flow statement (direct/indirect)", D),
         Feature("bank_recon", "Bank reconciliation", D),
-        Feature("auto_posting", "Auto journal posting from payroll/GST/revenue", N),
+        Feature("auto_posting", "Auto journal posting from payroll/GST/revenue", D),
     ],
 )

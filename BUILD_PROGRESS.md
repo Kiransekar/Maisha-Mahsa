@@ -349,3 +349,11 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
   (idle cash beyond a runway buffer → FD ladder). Each unit-tested; 5 manifests flipped ⬜→✅.
   **`make verify` green: Rust 52, Python 322, eval 13/13.** 17 deferred features done across 3
   batches; remaining are external-dep (OCR/PDF/ECR/ITR) or larger cross-module workflows.
+- 2026-06-24: **Deferred feature — ledger auto_posting (cross-module workflow).** `ledger_calc`
+  balanced-entry builders for source events: `payroll_journal` (Dr salary / Cr bank+statutory,
+  enforces net+statutory=gross), `sales_journal` (Dr AR / Cr sales+GST-output), `gst_payment_journal`
+  (Dr GST payable / Cr bank). `LedgerService.auto_post` posts them tagged with a non-manual
+  `source` (sets is_auto_generated), reusing the balance-guarded post_journal_entry; rejects
+  source="manual". Lets payroll/GST/revenue auto-generate audit-tagged journal entries that keep
+  the trial balance tied. Unit-tested; manifest flipped ⬜→✅. **`make verify` green: Rust 52,
+  Python 327, eval 13/13.** 18 deferred features done.

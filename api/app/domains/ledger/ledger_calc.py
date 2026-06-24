@@ -102,3 +102,49 @@ def bank_reconciliation(
         "difference": difference,
         "reconciled": difference == 0,
     }
+
+
+# ── auto-posting: balanced journal-line builders for cross-module source events ──────
+# Each returns lines for ``post_journal_entry`` and is internally balanced by construction.
+
+def payroll_journal(
+    *, salary_expense_account: int, bank_account: int, statutory_payable_account: int,
+    gross: int, net: int, statutory: int,
+) -> list[dict]:
+    """Dr salary expense (gross); Cr bank (net pay); Cr statutory payable (PF/ESI/TDS withheld).
+    Requires net + statutory == gross."""
+    if int(net) + int(statutory) != int(gross):
+        raise ValueError("payroll journal: net + statutory must equal gross")
+    return [
+        {"account_id": salary_expense_account, "debit": int(gross), "credit": 0,
+         "description": "Payroll — gross salary"},
+        {"account_id": bank_account, "debit": 0, "credit": int(net),
+         "description": "Payroll — net pay"},
+        {"account_id": statutory_payable_account, "debit": 0, "credit": int(statutory),
+         "description": "Payroll — statutory payable"},
+    ]
+
+
+def sales_journal(
+    *, receivable_account: int, sales_account: int, gst_output_account: int,
+    taxable: int, tax: int,
+) -> list[dict]:
+    """Dr receivable (taxable + tax); Cr sales (taxable); Cr GST output (tax)."""
+    return [
+        {"account_id": receivable_account, "debit": int(taxable) + int(tax), "credit": 0,
+         "description": "Invoice — receivable"},
+        {"account_id": sales_account, "debit": 0, "credit": int(taxable),
+         "description": "Invoice — sales"},
+        {"account_id": gst_output_account, "debit": 0, "credit": int(tax),
+         "description": "Invoice — GST output"},
+    ]
+
+
+def gst_payment_journal(*, gst_payable_account: int, bank_account: int, amount: int) -> list[dict]:
+    """Dr GST payable; Cr bank — settling the net GST liability."""
+    return [
+        {"account_id": gst_payable_account, "debit": int(amount), "credit": 0,
+         "description": "GST payment"},
+        {"account_id": bank_account, "debit": 0, "credit": int(amount),
+         "description": "GST payment — bank"},
+    ]
