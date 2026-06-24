@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -41,6 +41,7 @@ from app.domains.gst.router import router as gst_router
 from app.domains.ledger.router import router as ledger_router
 from app.domains.payables.router import router as payables_router
 from app.domains.payroll.router import router as payroll_router
+from app.domains.payroll.service import PayrollService
 from app.domains.revenue.router import router as revenue_router
 from app.domains.tax.router import router as tax_router
 from app.domains.treasury.router import router as treasury_router
@@ -234,6 +235,37 @@ def create_app() -> FastAPI:
             "partials/action_success.html",
             {"message": message, "figures": _domain_figures(db, service), "settings": settings},
         )
+
+    def _pdf(content: bytes, filename: str) -> Response:
+        return Response(
+            content=content,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="{filename}"'},
+        )
+
+    @app.get("/d/payroll/{employee_id}/payslip")
+    async def payslip_pdf_route(
+        employee_id: int, period: str, db: Session = Depends(get_session)
+    ) -> Response:
+        try:
+            content = PayrollService().payslip(
+                db, employee_id, period=period, company=settings.app_name
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return _pdf(content, f"payslip-{employee_id}-{period}.pdf")
+
+    @app.get("/d/payroll/{employee_id}/form16")
+    async def form16_pdf_route(
+        employee_id: int, fy: str, db: Session = Depends(get_session)
+    ) -> Response:
+        try:
+            content = PayrollService().form16(
+                db, employee_id, financial_year=fy, company=settings.app_name
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return _pdf(content, f"form16-{employee_id}-{fy}.pdf")
 
     @app.get("/ask", response_class=HTMLResponse)
     async def ask_page(

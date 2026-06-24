@@ -11,6 +11,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core import pdf
 from app.core.domain import BaseDomainService
 from app.db.models.payroll import Employee, PayrollEntry, PayrollRun, SalaryStructure
 from app.domains.payroll import statutory
@@ -202,6 +203,87 @@ class PayrollService(BaseDomainService):
             "total_esi_employer": totals["esi_employer"],
             "min_net_pay": 0 if min_net is None else min_net,
         }
+
+    # ---- statutory documents (payslip / Form 16) ------------------------------------
+
+    def _breakdown(self, session: Session, employee_id: int, *, period: str) -> tuple:
+        emp = session.get(Employee, employee_id)
+        if emp is None:
+            raise ValueError(f"employee {employee_id} not found")
+        structure = self._latest_structure(session, employee_id, f"{period}-28")
+        if structure is None:
+            raise ValueError(f"no salary structure for employee {employee_id} as of {period}")
+        comp = compute_components(
+            basic=structure.basic,
+            hra=structure.hra,
+            lta=structure.lta,
+            special_allowance=structure.special_allowance,
+            state=emp.state,
+            month=int(period[5:7]),
+        )
+        return emp, comp
+
+    def payslip(
+        self, session: Session, employee_id: int, *, period: str, company: str = "Maisha-Mahsa"
+    ) -> bytes:
+        """Monthly payslip PDF for ``period`` (YYYY-MM). Figures come from the payroll engine."""
+        emp, comp = self._breakdown(session, employee_id, period=period)
+        return pdf.payslip_pdf(
+            {
+                "company": company,
+                "employee_name": emp.name,
+                "employee_code": emp.employee_code,
+                "period": period,
+                "earnings": [
+                    ("Basic", comp["basic"]),
+                    ("HRA", comp["hra"]),
+                    ("Special allowance", comp["special_allowance"]),
+                    ("LTA", comp["lta"]),
+                ],
+                "deductions": [
+                    ("PF (employee)", comp["employee_pf"]),
+                    ("ESI (employee)", comp["employee_esi"]),
+                    ("Professional tax", comp["professional_tax"]),
+                    ("TDS", comp["tds_monthly"]),
+                ],
+                "gross": comp["gross_salary"],
+                "total_deductions": comp["employee_deductions"],
+                "net": comp["net_salary"],
+            }
+        )
+
+    def form16(
+        self,
+        session: Session,
+        employee_id: int,
+        *,
+        financial_year: str,
+        company: str = "Maisha-Mahsa",
+        tan: str | None = None,
+    ) -> bytes:
+        """Form 16 Part B PDF for ``financial_year`` (YYYY-YY). Annualises the monthly salary
+        and applies the ₹75,000 standard deduction (new-regime FY25-26)."""
+        start = int(financial_year[:4])
+        emp, comp = self._breakdown(session, employee_id, period=f"{start}-06")
+        gross_annual = int(comp["gross_salary"]) * 12
+        standard_deduction = 7_500_000  # ₹75,000 in paise (s.16(ia), new regime)
+        taxable = max(0, gross_annual - standard_deduction)
+        return pdf.form16_pdf(
+            {
+                "company": company,
+                "tan": tan,
+                "employee_name": emp.name,
+                "pan": emp.pan,
+                "financial_year": financial_year,
+                "assessment_year": f"{start + 1}-{str(start + 2)[2:]}",
+                "rows": [
+                    ("Gross salary (annual)", gross_annual),
+                    ("Less: Standard deduction u/s 16(ia)", standard_deduction),
+                    ("Total taxable income", taxable),
+                ],
+                "total_tax_deducted": int(comp["tds_monthly"]) * 12,
+            }
+        )
 
     # ---- Mahsa contract -------------------------------------------------------------
 

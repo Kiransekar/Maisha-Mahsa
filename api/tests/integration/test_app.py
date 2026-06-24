@@ -167,6 +167,36 @@ def test_cfo_investor_send_degrades_without_smtp():
     assert "Could not send" in resp.text or "sent to" in resp.text
 
 
+def test_payslip_and_form16_pdf_download():
+    # seed an employee + salary structure via the API, then download the statutory PDFs
+    emp = client.post(
+        "/api/payroll/employees",
+        json={"employee_code": "PSE1", "name": "Asha", "date_of_joining": "2021-04-01",
+              "state": "MH", "pan": "ABCDE1234F"},
+    )
+    assert emp.status_code in (200, 201)
+    eid = emp.json()["employee_id"] if "employee_id" in emp.json() else emp.json().get("id")
+    salary = client.post(
+        f"/api/payroll/employees/{eid}/salary",
+        json={"effective_from": "2026-04-01", "basic": 5000000, "hra": 2000000,
+              "special_allowance": 3000000},
+    )
+    assert salary.status_code in (200, 201)
+
+    payslip = client.get(f"/d/payroll/{eid}/payslip", params={"period": "2026-06"})
+    assert payslip.status_code == 200
+    assert payslip.headers["content-type"] == "application/pdf"
+    assert payslip.content[:5] == b"%PDF-"
+
+    form16 = client.get(f"/d/payroll/{eid}/form16", params={"fy": "2026-27"})
+    assert form16.status_code == 200
+    assert form16.content[:5] == b"%PDF-"
+
+
+def test_payslip_unknown_employee_404():
+    assert client.get("/d/payroll/99999/payslip", params={"period": "2026-06"}).status_code == 404
+
+
 def test_audit_page_renders_and_verifies_chain():
     resp = client.get("/audit")
     assert resp.status_code == 200

@@ -21,8 +21,8 @@ MANIFEST = DomainManifest(
         Feature("bonus", "Statutory bonus provision (8.33%)", D),
         Feature("lwf", "Labour Welfare Fund (state calendars)", N),
         Feature("ecr", "EPFO ECR text-file generation", N),
-        Feature("payslip", "Payslip PDF generation", N),
-        Feature("form16", "Form 16 / 16A generation", N),
+        Feature("payslip", "Payslip PDF generation", D),
+        Feature("form16", "Form 16 / 16A generation", D),
         Feature("leave", "Leave & attendance integration", N),
     ],
 )

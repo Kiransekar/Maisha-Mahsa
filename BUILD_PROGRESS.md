@@ -379,3 +379,12 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
   highlights, send degrades without SMTP, strategy highlights). Manifest flipped ⬜→✅. **`make
   verify` green: Rust 52, Python 336, eval 13/13.** 21 deferred features done; reuses the existing
   investor-update composer + email template.
+- 2026-06-24: **Deferred features — payroll payslip + Form-16 PDF (researched dependency choice).**
+  Research → ReportLab (BSD, pure-Python, no system deps; WeasyPrint ruled out for needing Pango/
+  cairo, fpdf2's LGPL avoided for a commercial product) — added as a dep. Form-16 is a statutory
+  must (Income-tax Act s.203 / Rule 31(1)(a), due 15 Jun). `app/core/pdf.py` pure builders
+  `payslip_pdf`/`form16_pdf` (render exact-paise data, never compute). `PayrollService.payslip`
+  (monthly, from compute_components) + `form16` (Part B, annualised + ₹75k std deduction). Routes
+  `GET /d/payroll/{id}/payslip?period=` and `/form16?fy=` return `application/pdf`. 2 manifest rows
+  flipped ⬜→✅. Tested (pure builders %PDF, service methods, API-seeded download, 404). **`make
+  verify` green: Rust 52, Python 343, eval 13/13.** 23 deferred features done.
