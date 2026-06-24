@@ -32,3 +32,40 @@ def test_dashboard_renders_all_domain_cards():
     # KPI strip + panels render (degrades without Mahsa)
     assert "Compliance Calendar" in body
     assert "Approvals Pending" in body
+    # the Ask Maisha bar is present on every page
+    assert 'id="ask-input"' in body
+
+
+def test_domain_page_renders():
+    resp = client.get("/d/gst")
+    assert resp.status_code == 200
+    body = resp.text
+    assert "Figures" in body
+    assert "gst" in body.lower()
+
+
+def test_unknown_domain_404():
+    assert client.get("/d/not-a-domain").status_code == 404
+
+
+def test_ask_page_empty_shows_suggestions():
+    resp = client.get("/ask")
+    assert resp.status_code == 200
+    assert "Try asking" in resp.text
+
+
+def test_ask_page_with_query_degrades_to_facts():
+    # No Mahsa, LLM off -> deterministic figures, flagged offline.
+    resp = client.get("/ask", params={"q": "what's our runway?"})
+    assert resp.status_code == 200
+    body = resp.text
+    assert "deterministic figures" in body
+    assert "treasury" in body.lower()
+
+
+def test_ask_post_returns_answer_card():
+    resp = client.post("/ask", data={"q": "any MSME payments overdue?"})
+    assert resp.status_code == 200
+    body = resp.text
+    assert "answer__prov" in body  # the answer-card partial rendered
+    assert "payables" in body.lower()

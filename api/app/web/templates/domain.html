@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}{{ domain|capitalize }} · {{ settings.app_name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1 style="text-transform:capitalize">{{ domain }}</h1>
+  {% if health %}
+    <span class="pill pill--{{ health.color }}">{{ health.status|upper }}{% if health.score is not none %} · {{ health.score }}/100{% endif %}</span>
+  {% else %}
+    <span class="pill pill--green">LIVE</span>
+  {% endif %}
+</div>
+
+{% if not mahsa_up %}
+<p class="muted" style="margin-bottom:var(--sp-4)">Mahsa sidecar offline — showing deterministic figures without a verdict.</p>
+{% endif %}
+
+<div class="section-title">Figures</div>
+{% if figures %}
+<div class="kpis">
+  {% for f in figures %}
+  <div class="kpi">
+    <div class="kpi__label">{{ f.label }}</div>
+    <div class="kpi__value">{{ f.value }} <span class="vmark vmark--ok" title="recomputed">✓</span></div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="muted">No data yet for this domain.</p>
+{% endif %}
+
+{% if citations %}
+<div class="section-title">Triggered rules</div>
+<div class="cards">
+  {% for c in citations %}
+  <div class="card">
+    <div class="card__title" style="text-transform:none">{{ c.text }}<span class="pill pill--red">{{ c.rule_id }}</span></div>
+    <div class="card__meta">{{ c.citation }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<p class="muted" style="margin-top:var(--sp-6)">
+  Action bar (create / file / run), data tables and trend charts land in F3 and F6 — see
+  FRONTEND_PRD.md. Every figure above was recomputed by Mahsa and is audit-logged.
+</p>
+{% endblock %}

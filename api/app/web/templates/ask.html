@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Ask Maisha · {{ settings.app_name }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Ask Maisha</h1></div>
+<p class="muted" style="margin-bottom:var(--sp-5)">
+  Ask anything about your finances. Every figure is recomputed and validated before you see it —
+  a number the engines can't back is flagged, never shown as fact.
+</p>
+
+{% if answer %}
+  {% include "partials/answer_card.html" %}
+{% else %}
+<div class="suggest">
+  <div class="suggest__title">Try asking</div>
+  {% for s in ["What's our runway?", "Is our GSTR-3B filing on time?", "Any MSME payments overdue?", "What's the minimum net pay?"] %}
+  <button class="chip" type="button"
+          hx-post="/ask" hx-vals='{"q": "{{ s }}"}' hx-target="#ask-result" hx-swap="innerHTML">{{ s }}</button>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

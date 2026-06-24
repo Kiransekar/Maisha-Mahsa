@@ -1,0 +1,43 @@
+{# The Maisha answer card — renders the harness pipeline: figures with verified marks,
+   statutory citations, the Mahsa verdict, and provenance. Reused by /ask (page) and the
+   appbar (HTMX swap into #ask-result). #}
+<div class="answer">
+  <div class="answer__prov">{{ answer.provenance }}</div>
+  {% if answer.query %}<div class="answer__q">“{{ answer.query }}”</div>{% endif %}
+  {% if answer.narrative %}<p class="answer__narrative">{{ answer.narrative }}</p>{% endif %}
+  {% if answer.abstained and not answer.figures %}
+    <p class="muted">Not enough data to answer confidently — add the underlying records first.</p>
+  {% endif %}
+
+  {% if answer.figures %}
+  <div class="figrows">
+    {% for f in answer.figures %}
+    <div class="figrow">
+      <span class="figrow__label">{{ f.label }}</span>
+      <span class="figrow__val">{{ f.value }}</span>
+      {% if f.verified %}
+        <span class="vmark vmark--ok" title="recomputed by a deterministic engine">✓</span>
+      {% else %}
+        <span class="vmark vmark--warn" title="not backed by a verified figure — pending review">⚠</span>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if answer.citations %}
+  <div class="answer__cites">
+    {% for c in answer.citations %}
+    <span class="chip chip--red" title="{{ c.text }}">{{ c.rule_id }} · {{ c.citation }}</span>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if answer.status %}
+  <div class="answer__verdict">
+    {% set colour = {"green": "green", "yellow": "amber", "red": "red"}.get(answer.status, "green") %}
+    <span class="pill pill--{{ colour }}">{{ answer.status|upper }}</span>
+    {% if answer.requires_approval %}<span class="muted">· requires approval</span>{% endif %}
+  </div>
+  {% endif %}
+</div>

@@ -237,3 +237,16 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
   (P2-7) and MCP tool servers (P2-8) are scaffolding-deferred — they need a live Ollama/Claude
   (DSPy optimizes against measured eval scores) or the `mcp` dep; tools already centralized in
   `llm/tools.py` for a clean lift. See HARNESS_ENGINEERING.md §3a for the status matrix.
+- 2026-06-24: **Frontend F1+F2 — navigation + domain workspaces + Ask Maisha (spine).** Wrote
+  FRONTEND_PRD.md (PM spec: thesis "make trust visible", IA, hero wireframes, F1–F7 roadmap).
+  F1: real `/d/{domain}` pages (reusable `domain.html`) showing deterministic facts + Mahsa
+  health/score + triggered-rule citations; fixed the dead sidebar (now links to real pages);
+  `app/web/format.py` (money/humanize formatting). F2: **Ask Maisha** — `app/core/ask.py`
+  orchestrator (classify → snapshot → enrich facts → optional Mahsa fold → optional LLM draft →
+  one `Answer` view-model), `/ask` page + `POST /ask` HTMX partial + appbar command bar (`/`
+  or ⌘K to focus); `answer_card.html` renders the harness pipeline (figures with ✓ verified
+  marks, citation chips, Mahsa verdict, provenance). Degrades cleanly: no LLM → deterministic
+  figures; Mahsa offline → no verdict; an unbacked number is flagged ⚠, never shown as fact.
+  CSS on existing tokens, HTMX-driven, no build step. **`make verify` green: Rust 52, Python
+  227 (+8: ask orchestrator unit + app route tests), eval 13/13.** Remaining: F3 action
+  forms · F4 approvals flow · F5 CFO panel · F6 audit/trace viewer · F7 polish.

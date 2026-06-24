@@ -6,7 +6,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.cfo_router import router as cfo_router
 from app.config import get_settings
+from app.core.ask import answer_query
 from app.core.cfo import DomainHealth, collect_health
 from app.core.mahsa_client import MahsaClient, MahsaError
 from app.core.overview import collect_kpis, upcoming_deadlines
@@ -33,6 +34,8 @@ from app.domains.revenue.router import router as revenue_router
 from app.domains.tax.router import router as tax_router
 from app.domains.treasury.router import router as treasury_router
 from app.domains.vault.router import router as vault_router
+from app.llm.tools import enrich
+from app.web.format import fact_rows
 
 _WEB = Path(__file__).parent / "web"
 templates = Jinja2Templates(directory=str(_WEB / "templates"))
@@ -110,7 +113,91 @@ def create_app() -> FastAPI:
                 "kpis": kpis,
                 "calendar": calendar,
                 "approvals": approvals,
+                "nav_active": "dashboard",
             },
+        )
+
+    @app.get("/d/{domain}", response_class=HTMLResponse)
+    async def domain_page(
+        domain: str, request: Request, db: Session = Depends(get_session)
+    ) -> HTMLResponse:
+        service = registry.get(domain)
+        if service is None:
+            raise HTTPException(status_code=404, detail=f"unknown domain '{domain}'")
+        today = datetime.now(UTC).date()
+        try:
+            snapshot = service.build_snapshot(db, today)  # type: ignore[call-arg]
+        except TypeError:
+            snapshot = service.build_snapshot(db)
+        figures = fact_rows(enrich(snapshot))
+
+        health = None
+        citations: list[dict[str, str]] = []
+        mahsa_up = True
+        try:
+            fold = await MahsaClient(settings.mahsa_url).fold(snapshot, domain=domain)
+            shape = fold.shape
+            score = shape.domain_score if shape.domain_score is not None else shape.global_score
+            colour = {"green": "green", "yellow": "amber", "red": "red"}.get(
+                fold.validation.status, "green"
+            )
+            health = {
+                "status": fold.validation.status,
+                "score": round(score, 1) if score is not None else None,
+                "color": colour,
+            }
+            citations = [
+                {"rule_id": t.id, "text": t.description, "citation": f"{t.statute} / {t.section}"}
+                for t in fold.validation.triggered
+            ]
+        except MahsaError:
+            mahsa_up = False
+
+        return templates.TemplateResponse(
+            request,
+            "domain.html",
+            {
+                "domain": domain,
+                "figures": figures,
+                "health": health,
+                "citations": citations,
+                "mahsa_up": mahsa_up,
+                "settings": settings,
+                "nav_active": domain,
+            },
+        )
+
+    @app.get("/ask", response_class=HTMLResponse)
+    async def ask_page(
+        request: Request, q: str | None = None, db: Session = Depends(get_session)
+    ) -> HTMLResponse:
+        today = datetime.now(UTC).date()
+        answer = (
+            await answer_query(db, query=q, registry=registry, settings=settings, as_of=today)
+            if q
+            else None
+        )
+        return templates.TemplateResponse(
+            request,
+            "ask.html",
+            {
+                "answer": answer,
+                "settings": settings,
+                "mahsa_up": answer.mahsa_up if answer else True,
+                "nav_active": "ask",
+            },
+        )
+
+    @app.post("/ask", response_class=HTMLResponse)
+    async def ask_partial(
+        request: Request, q: str = Form(...), db: Session = Depends(get_session)
+    ) -> HTMLResponse:
+        today = datetime.now(UTC).date()
+        answer = await answer_query(
+            db, query=q, registry=registry, settings=settings, as_of=today
+        )
+        return templates.TemplateResponse(
+            request, "partials/answer_card.html", {"answer": answer, "settings": settings}
         )
 
     return app
