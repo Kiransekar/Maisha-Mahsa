@@ -18,7 +18,7 @@ MANIFEST = DomainManifest(
         Feature("msme_45day", "MSME 45-day compliance (s.43B(h))", D),
         Feature("itc_bridge", "Input-tax-credit feed into GST", D),
         Feature("recurring", "Recurring payables (SaaS) auto-categorisation", N),
-        Feature("early_pay", "Early-payment discount capture", N),
+        Feature("early_pay", "Early-payment discount capture", D),
         Feature("payment_run", "Payment batch / disbursement", N),
     ],
 )

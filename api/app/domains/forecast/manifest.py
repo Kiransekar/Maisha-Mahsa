@@ -16,7 +16,7 @@ MANIFEST = DomainManifest(
         Feature("scenario", "Scenario engine (base/optimistic/pessimistic/hire)", D),
         Feature("burn_multiple", "Burn multiple (net burn / net new ARR)", D),
         Feature("unit_economics", "Unit economics (CAC/LTV/payback)", D),
-        Feature("headcount", "Headcount planning → payroll forecast", N),
+        Feature("headcount", "Headcount planning → payroll forecast", D),
         Feature("rolling_reforecast", "Quarterly re-forecast workflow", N),
         Feature("rev_recognition_forecast", "Contract-to-revenue timing", N),
     ],

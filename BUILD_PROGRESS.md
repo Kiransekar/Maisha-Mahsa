@@ -324,3 +324,13 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
   data DB: active 2026-06-24 → 2026-07-24, day-1 capture = 90 metrics; readiness HOLD until daily
   observations accrue.** Daily ritual: scheduler captures Maisha nightly; founder records their
   figures; cut over on GO.
+- 2026-06-24: **Deferred per-domain features — batch 1 (6 features, pure-calc, exact paise).**
+  tax `interest_234b` (s.234B 1%/mo on shortfall, ₹100 round-down), payables `early_payment_discount`
+  (2/10-net-30 capture), forecast `headcount_forecast` (headcount→payroll cost), equity
+  `convertible_note_value` (simple + monthly-compound accrual), ledger `general_ledger` (account-wise
+  running balance), treasury `burn_attribution` (debits by category over a window). Each unit-tested;
+  6 manifest rows flipped ⬜→✅. No new Mahsa rules needed (computations/reports, not validations).
+  **`make verify` green: Rust 52, Python 298, eval 13/13.** Remaining deferred features (~44) are
+  mostly external-dep/integration (OCR images, PDF payslip/Form-16, ECR, MCA forms, ITR) or larger
+  workflows — next batches can take the calc-shaped ones (e.g. ledger cash_flow/bank_recon, gst rcm,
+  tax 234B done, equity convertible done).

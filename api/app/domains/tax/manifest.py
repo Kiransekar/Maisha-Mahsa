@@ -16,7 +16,7 @@ MANIFEST = DomainManifest(
         Feature("tds_aggregation", "TDS aggregation from payroll + payables", D),
         Feature("audit_44ab", "s.44AB tax-audit trigger", D),
         Feature("mat", "MAT (s.115JB) computation", D),
-        Feature("interest_234b", "s.234B interest (shortfall < 90%)", N),
+        Feature("interest_234b", "s.234B interest (shortfall < 90%)", D),
         Feature("form_26as", "Form 26AS reconciliation", N),
         Feature("itr", "ITR-5/ITR-6 preparation", N),
         Feature("tax_holiday", "Section 80-IAC holiday tracking", N),

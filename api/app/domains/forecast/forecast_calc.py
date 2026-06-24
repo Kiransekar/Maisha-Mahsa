@@ -72,3 +72,16 @@ def unit_economics(
     payback_months = round(float(Decimal(cac) / contribution), 2) if contribution > 0 else None
     ltv_cac = round(ltv / cac, 2) if cac > 0 else None
     return {"cac": cac, "ltv": ltv, "payback_months": payback_months, "ltv_cac_ratio": ltv_cac}
+
+
+def headcount_forecast(roles: list[dict], *, months: int) -> dict[str, Any]:
+    """Headcount plan → payroll cost forecast. Each role: {count, monthly_cost} (paise,
+    fully-loaded). Returns total headcount, monthly + annualised cost, and a flat projection."""
+    headcount = sum(int(r["count"]) for r in roles)
+    monthly_cost = sum(int(r["count"]) * int(r["monthly_cost"]) for r in roles)
+    return {
+        "headcount": headcount,
+        "monthly_cost": monthly_cost,
+        "annualised_cost": monthly_cost * 12,
+        "projection": [monthly_cost] * max(0, months),
+    }

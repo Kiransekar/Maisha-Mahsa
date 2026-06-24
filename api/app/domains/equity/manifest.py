@@ -16,7 +16,7 @@ MANIFEST = DomainManifest(
         Feature("safe_notes", "SAFE conversion (valuation cap vs discount)", D),
         Feature("dilution", "Round dilution modelling", D),
         Feature("cap_table_snapshot", "Cap table snapshot persistence", D),
-        Feature("convertible_notes", "Convertible notes (interest accrual)", N),
+        Feature("convertible_notes", "Convertible notes (interest accrual)", D),
         Feature("investor_reporting", "Quarterly investor update generator", N),
         Feature("dividend", "Dividend distribution (s.123)", N),
         Feature("share_certificates", "Share certificate / demat tracking", N),

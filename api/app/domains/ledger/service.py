@@ -131,6 +131,40 @@ class LedgerService(BaseDomainService):
     def balance_sheet(self, session: Session) -> dict[str, Any]:
         return ledger_calc.balance_sheet(self._typed_lines(session))
 
+    def general_ledger(self, session: Session, account_id: int) -> dict[str, Any]:
+        """Account-wise general ledger: every posting to the account in date order with a
+        running balance (opening + cumulative debit − credit)."""
+        acct = session.get(ChartOfAccounts, account_id)
+        if acct is None:
+            raise ValueError(f"account {account_id} not found")
+        rows = session.execute(
+            select(JournalLine, JournalEntry.entry_date)
+            .join(JournalEntry, JournalLine.journal_entry_id == JournalEntry.id)
+            .where(JournalLine.account_id == account_id)
+            .order_by(JournalEntry.entry_date.asc(), JournalLine.id.asc())
+        ).all()
+        balance = int(acct.opening_balance)
+        lines: list[dict[str, Any]] = []
+        for jl, entry_date in rows:
+            balance += int(jl.debit) - int(jl.credit)
+            lines.append(
+                {
+                    "date": entry_date,
+                    "description": jl.description,
+                    "debit": int(jl.debit),
+                    "credit": int(jl.credit),
+                    "balance": balance,
+                }
+            )
+        return {
+            "account_id": account_id,
+            "code": acct.code,
+            "name": acct.name,
+            "opening_balance": int(acct.opening_balance),
+            "lines": lines,
+            "closing_balance": balance,
+        }
+
     # ---- depreciation ---------------------------------------------------------------
 
     def annual_depreciation(self, session: Session, asset_id: int) -> int:

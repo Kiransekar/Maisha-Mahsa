@@ -69,6 +69,20 @@ def interest_234c(total_liability: int, cumulative_paid: list[int]) -> dict[str,
     return {"total_234c": total, "by_installment": per_installment}
 
 
+def interest_234b(assessed_tax: int, advance_paid: int, *, months: int) -> dict[str, Any]:
+    """s.234B interest: when advance tax paid is below 90% of assessed tax, 1%/month (simple)
+    on the shortfall — assessed tax rounded down to the nearest ₹100 (s.288A) — from 1 Apr of
+    the assessment year to the date of payment (``months``)."""
+    if assessed_tax <= 0 or months <= 0:
+        return {"applicable": False, "shortfall": 0, "interest": 0, "months": months}
+    if Decimal(advance_paid) >= Decimal(assessed_tax) * Decimal("0.9"):
+        return {"applicable": False, "shortfall": 0, "interest": 0, "months": months}
+    shortfall = max(0, assessed_tax - advance_paid)
+    shortfall = (shortfall // 10000) * 10000  # round down to nearest ₹100 (10,000 paise)
+    interest = _round_rupee(Decimal(shortfall) * _MONTHLY_INTEREST * months)
+    return {"applicable": True, "shortfall": shortfall, "interest": interest, "months": months}
+
+
 def late_fee_234e(days_late: int, tds_amount: int) -> int:
     """s.234E late fee for a TDS return: ₹200/day, capped at the TDS amount."""
     if days_late <= 0:

@@ -132,3 +132,21 @@ def ap_aging(payables: list[dict], as_of: date) -> dict[str, Any]:
         buckets[aging_bucket(days)] += outstanding
         total += outstanding
     return {"buckets": buckets, "total_outstanding": total}
+
+
+def early_payment_discount(
+    invoice_amount: int, *, discount_pct: float, discount_days: int, paid_in_days: int
+) -> dict[str, Any]:
+    """Capture an early-payment discount (e.g. "2/10 net 30": 2% off if paid within 10 days).
+    The discount applies only when payment lands within the discount window."""
+    eligible = paid_in_days <= discount_days
+    discount = (
+        _round_rupee(Decimal(invoice_amount) * Decimal(str(discount_pct)) / Decimal(100))
+        if eligible
+        else 0
+    )
+    return {
+        "eligible": eligible,
+        "discount": discount,
+        "net_payable": int(invoice_amount) - discount,
+    }

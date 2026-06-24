@@ -206,6 +206,29 @@ class TreasuryService(BaseDomainService):
             credits += int(t.credit)
         return Paise(debits), Paise(credits)
 
+    def burn_attribution(
+        self, session: Session, as_of: date, months: int = 3
+    ) -> dict[str, Any]:
+        """Trailing-window spend (debits) grouped by transaction category — where the burn
+        actually goes. Uncategorised debits roll into 'uncategorised'."""
+        start = _months_back(as_of, months)
+        txns = session.scalars(select(BankTransaction)).all()
+        by_category: dict[str, int] = {}
+        total = 0
+        for t in txns:
+            d = _parse_date(t.txn_date)
+            if d is None or d <= start or d > as_of or int(t.debit) <= 0:
+                continue
+            category = t.category or "uncategorised"
+            by_category[category] = by_category.get(category, 0) + int(t.debit)
+            total += int(t.debit)
+        return {
+            "as_of": as_of.isoformat(),
+            "window_months": months,
+            "total_debits_paise": total,
+            "by_category": dict(sorted(by_category.items(), key=lambda kv: -kv[1])),
+        }
+
     def metrics(self, session: Session, as_of: date, months: int = 3) -> dict[str, Any]:
         cash = self.cash_position(session)
         debits, credits = self.window_totals(session, as_of, months)

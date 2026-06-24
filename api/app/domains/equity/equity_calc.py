@@ -58,3 +58,26 @@ def post_round_ownership(holder_shares: int, pre_total_shares: int, new_shares: 
     """Ownership fraction of a holder after ``new_shares`` are issued in a round."""
     new_total = int(pre_total_shares) + int(new_shares)
     return round(int(holder_shares) / new_total, 6) if new_total > 0 else 0.0
+
+
+def convertible_note_value(
+    principal: int, *, annual_rate: float, months: int, compounding: str = "simple"
+) -> dict[str, Any]:
+    """Accrued value of a convertible note. ``annual_rate`` is a fraction (e.g. 0.08).
+    ``simple``: principal × rate × months/12. ``monthly``: monthly compounding (exact Decimal)."""
+    p = Decimal(int(principal))
+    rate = Decimal(str(annual_rate))
+    if compounding == "monthly":
+        monthly = rate / Decimal(12)
+        value = p
+        for _ in range(max(0, int(months))):
+            value *= Decimal(1) + monthly
+        interest = value - p
+    else:  # simple
+        interest = p * rate * Decimal(int(months)) / Decimal(12)
+    interest_paise = int(interest.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    return {
+        "principal": int(principal),
+        "interest": interest_paise,
+        "maturity_value": int(principal) + interest_paise,
+    }
