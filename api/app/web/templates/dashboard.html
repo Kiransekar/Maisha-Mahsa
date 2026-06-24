@@ -19,8 +19,8 @@
 {% endif %}
 <div class="cards">
   {% for d in domains %}
-  <div class="card" id="{{ d.key }}">
-    <div class="card__title">
+  <a class="card card--link" id="{{ d.key }}" href="/d/{{ d.key }}">
+    <div class="card__title" style="text-transform:capitalize">
       {{ d.key }}
       {% if d.status %}
         <span class="pill pill--{{ d.color }}">{{ d.status|upper }}</span>
@@ -31,11 +31,12 @@
     <div class="card__meta">
       {% if d.score is not none %}
         <span class="kpi__value" style="font-size:var(--fs-md)">{{ d.score }}<span class="muted" style="font-size:var(--fs-sm)">/100</span></span>
+        <div class="scorebar {{ d.color }}"><span style="width: {{ d.score }}%"></span></div>
       {% else %}
         Module wired — fold loop active.
       {% endif %}
     </div>
-  </div>
+  </a>
   {% endfor %}
 </div>
 

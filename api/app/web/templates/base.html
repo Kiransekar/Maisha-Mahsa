@@ -12,15 +12,20 @@
   <div class="layout">
     <aside class="nav">
       <div class="nav__brand"><span class="dot"></span> Maisha-Mahsa</div>
-      <a class="nav__item {{ 'is-active' if nav_active == 'dashboard' }}" href="/">Dashboard</a>
-      <a class="nav__item {{ 'is-active' if nav_active == 'ask' }}" href="/ask">Ask Maisha</a>
-      <a class="nav__item {{ 'is-active' if nav_active == 'approvals' }}" href="/approvals">Approvals</a>
-      <a class="nav__item {{ 'is-active' if nav_active == 'cfo' }}" href="/cfo">CFO Strategy</a>
-      <a class="nav__item {{ 'is-active' if nav_active == 'audit' }}" href="/audit">Audit &amp; Trace</a>
+      {% macro navitem(key, href, label) %}
+        <a class="nav__item {{ 'is-active' if nav_active == key }}" href="{{ href }}"
+           {% if nav_active == key %}aria-current="page"{% endif %}>{{ label }}</a>
+      {% endmacro %}
+      {{ navitem('dashboard', '/', 'Dashboard') }}
+      {{ navitem('ask', '/ask', 'Ask Maisha') }}
+      {{ navitem('approvals', '/approvals', 'Approvals') }}
+      {{ navitem('cfo', '/cfo', 'CFO Strategy') }}
+      {{ navitem('audit', '/audit', 'Audit & Trace') }}
       <div class="nav__group">Domains</div>
       {% set domain_labels = ["treasury","revenue","payables","expense","payroll","gst","tax","compliance","ledger","forecast","equity","vault"] %}
       {% for d in domain_labels %}
-        <a class="nav__item {{ 'is-active' if nav_active == d }}" href="/d/{{ d }}" style="text-transform:capitalize">{{ d }}</a>
+        <a class="nav__item {{ 'is-active' if nav_active == d }}" href="/d/{{ d }}"
+           {% if nav_active == d %}aria-current="page"{% endif %} style="text-transform:capitalize">{{ d }}</a>
       {% endfor %}
     </aside>
     <main class="main">

@@ -3,6 +3,8 @@ in-memory DB; does not require the Mahsa sidecar."""
 
 import os
 
+import pytest
+
 # Must be set before importing app.main (module instantiates the app at import time).
 os.environ.setdefault("MAISHA_DATABASE_URL", "sqlite://")
 
@@ -150,3 +152,28 @@ def test_audit_page_renders_and_verifies_chain():
     assert "Audit &amp; Trace" in body
     assert "CHAIN INTACT" in body  # empty/clean chain verifies
     assert "LLM trace" in body
+
+
+# ── final coverage sweep: every screen renders ──────────────────────────────────────
+
+ALL_DOMAINS = (
+    "treasury", "revenue", "payables", "expense", "payroll", "gst",
+    "tax", "compliance", "ledger", "forecast", "equity", "vault",
+)
+
+
+@pytest.mark.parametrize("domain", ALL_DOMAINS)
+def test_every_domain_page_renders(domain):
+    resp = client.get(f"/d/{domain}")
+    assert resp.status_code == 200
+    assert "Figures" in resp.text
+    assert "ask-input" in resp.text  # the global Ask bar is on every page
+
+
+@pytest.mark.parametrize("path", ["/", "/ask", "/approvals", "/cfo", "/audit"])
+def test_every_top_level_page_renders(path):
+    resp = client.get(path)
+    assert resp.status_code == 200
+    # the metallic theme + nav chrome are present on every page
+    assert "Maisha-Mahsa" in resp.text
+    assert "/static/css/app.css" in resp.text

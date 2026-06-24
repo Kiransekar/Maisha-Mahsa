@@ -285,3 +285,14 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
   Mahsa/LLM. Nav link added. **`make verify` green: Rust 52, Python 252, eval 13/13.** This
   surfaces the trust story the harness writes to. Remaining frontend: F7 polish (charts,
   skeletons, a11y, mobile).
+- 2026-06-24: **Frontend F7 — Metallic Black polish + full screen/flow audit. FRONTEND DONE.**
+  Redesigned `tokens.css` into a premium metallic-dark theme: brushed-metal gradients
+  (`--metal-bg/surface/rail/accent`), bevelled edges, an SVG fractal-noise grain texture, dark
+  status palette. `app.css` F7 block: metallic surfaces on nav/cards/appbar/buttons/tables,
+  gradient brand wordmark + KPI values, card hover-lift, accent-rail answer card, domain health
+  **score bars**, accessible `:focus-visible` rings, `aria-current` nav, prefers-reduced-motion,
+  HTMX loading states + shimmer skeleton, and a **responsive** layout (rail collapses to a top
+  strip < 880px; tables scroll). Dashboard domain cards are now links to `/d/<domain>`.
+  **Final coverage sweep**: parametrized tests render all 12 domain pages + all 5 top-level
+  screens. **`make verify` green: Rust 52, Python 269, eval 13/13.** All of F1–F7 complete —
+  the frontend is feature-complete and polished.

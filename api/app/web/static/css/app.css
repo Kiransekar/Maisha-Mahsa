@@ -188,3 +188,131 @@ h1, h2, h3 { line-height: var(--lh-tight); margin: 0; letter-spacing: -0.01em; }
 .dtable th { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.04em; color: var(--c-text-muted); background: var(--c-bg); }
 .dtable tr:last-child td { border-bottom: none; }
 .dtable .mono { font-family: var(--font-mono); font-size: var(--fs-xs); color: var(--c-text-muted); }
+
+/* ══ F7 — Metallic Black polish ════════════════════════════════════════════════════
+   Brushed-metal gradients, bevelled edges, a fine grain texture, micro-interactions,
+   accessible focus, skeletons and a responsive layout. Overrides cascade last. */
+
+body {
+  background: var(--metal-bg) fixed;
+  color: var(--c-text);
+}
+/* fine metallic grain over everything (decorative, never captures clicks) */
+body::before {
+  content: "";
+  position: fixed; inset: 0; z-index: 0;
+  background-image: var(--grain);
+  pointer-events: none;
+}
+.layout { position: relative; z-index: 1; }
+
+/* Sidebar rail — brushed metal with a bevelled right edge */
+.nav {
+  background: var(--metal-rail);
+  border-right: 1px solid #000;
+  box-shadow: var(--bevel-top), 1px 0 0 rgba(255,255,255,0.03);
+  backdrop-filter: blur(6px);
+}
+.nav__brand {
+  background: linear-gradient(90deg, #f4f5f7, #aab0bd);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  letter-spacing: -0.02em;
+}
+.nav__brand .dot {
+  background: var(--metal-accent);
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.1), 0 0 12px rgba(129,140,248,0.6);
+}
+.nav__item { border: 1px solid transparent; }
+.nav__item.is-active {
+  background: linear-gradient(90deg, rgba(129,140,248,0.16), transparent);
+  border-color: rgba(129,140,248,0.18);
+  color: #c7cbff;
+  box-shadow: var(--bevel-top);
+}
+.nav__item.is-active::before {
+  content: ""; position: absolute; left: 0; width: 3px; height: 18px; margin-left: -4px;
+  border-radius: 2px; background: var(--metal-accent);
+}
+.nav__item { position: relative; }
+
+/* Bevelled metallic surfaces */
+.kpi, .card, .answer, .drawer__panel, .dtable, .ask input, .field input, .field select {
+  background: var(--metal-surface);
+  box-shadow: var(--bevel-top), var(--shadow-1);
+}
+.kpi, .card { transition: transform var(--transition), border-color var(--transition), box-shadow var(--transition); }
+.card:hover, .kpi:hover {
+  transform: translateY(-2px);
+  border-color: rgba(129,140,248,0.3);
+  box-shadow: var(--bevel-top), var(--shadow-2);
+}
+.kpi__value { background: linear-gradient(90deg, #ffffff, #cfd3db); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+/* Appbar search — inset metallic well */
+.ask input { background: linear-gradient(180deg, #101216, #16181d); }
+.ask input::placeholder { color: var(--c-text-muted); }
+
+/* Buttons — metal face; primary gets the accent sheen */
+.btn { background: var(--metal-surface); box-shadow: var(--bevel-top); }
+.btn:hover { transform: translateY(-1px); }
+.btn--primary, .ask button {
+  background: var(--metal-accent); color: #fff; border-color: rgba(255,255,255,0.12);
+  box-shadow: var(--bevel-top), 0 4px 14px -4px rgba(99,102,241,0.6);
+}
+.btn--primary:hover, .ask button:hover { filter: brightness(1.08); transform: translateY(-1px); }
+.btn:active, .ask button:active { transform: translateY(0); }
+
+/* Answer card — accent rail + glass */
+.answer { border-left: 3px solid transparent; border-image: var(--metal-accent) 1; }
+.vmark--ok { text-shadow: 0 0 8px rgba(52,211,153,0.5); }
+
+/* Status pills get a subtle inner bevel */
+.pill { box-shadow: var(--bevel-edge); }
+
+/* Domain health score bar (dashboard) */
+.scorebar { height: 6px; border-radius: 999px; background: #0c0e12; box-shadow: var(--bevel-edge); overflow: hidden; margin-top: var(--sp-2); }
+.scorebar > span { display: block; height: 100%; border-radius: 999px; }
+.scorebar.green > span { background: linear-gradient(90deg, #059669, #34d399); }
+.scorebar.amber > span { background: linear-gradient(90deg, #b45309, #fbbf24); }
+.scorebar.red > span { background: linear-gradient(90deg, #b91c1c, #f87171); }
+
+/* Accessible focus ring everywhere */
+:focus-visible { outline: 2px solid var(--c-brand); outline-offset: 2px; border-radius: var(--radius-sm); }
+
+/* Loading: pulse the region being swapped + a shimmer skeleton utility */
+.htmx-request.ask input { opacity: 0.7; }
+#ask-result.htmx-request, #scenario-result.htmx-request { opacity: 0.5; transition: opacity var(--transition); }
+.skeleton { position: relative; overflow: hidden; background: var(--c-surface-2); border-radius: var(--radius-sm); min-height: 16px; }
+.skeleton::after { content: ""; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent); animation: shimmer 1.4s infinite; }
+@keyframes shimmer { 100% { transform: translateX(100%); } }
+
+/* Toast — metallic with accent edge */
+.toast { background: var(--metal-surface); color: var(--c-text); border: 1px solid var(--c-border);
+  border-left: 3px solid var(--c-brand); box-shadow: var(--shadow-2), var(--bevel-top); }
+
+/* Section titles — quieter, tracked */
+.section-title { color: var(--c-text-muted); text-transform: uppercase; letter-spacing: 0.06em;
+  font-size: var(--fs-xs); font-weight: 700; margin: var(--sp-6) 0 var(--sp-3); }
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+/* Responsive — collapse the rail to a top strip on narrow screens */
+@media (max-width: 880px) {
+  .layout { grid-template-columns: 1fr; }
+  .nav { position: static; height: auto; display: flex; gap: var(--sp-2); overflow-x: auto;
+    border-right: none; border-bottom: 1px solid #000; padding: var(--sp-3); }
+  .nav__brand { padding: 0 var(--sp-3) 0 0; white-space: nowrap; }
+  .nav__group { display: none; }
+  .nav__item { white-space: nowrap; }
+  .main { padding: var(--sp-4); }
+  .appbar { flex-wrap: wrap; }
+  .dtable { display: block; overflow-x: auto; }
+  .captable__row { grid-template-columns: 90px 1fr 120px; }
+}
+
+.card--link { display: block; color: inherit; text-decoration: none; }
+.card--link:hover { color: inherit; }
