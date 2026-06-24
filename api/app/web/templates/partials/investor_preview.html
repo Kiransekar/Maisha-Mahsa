@@ -1,0 +1,32 @@
+{# Composed investor update: headline KPIs, cap-table ownership, and highlights. #}
+<div class="answer">
+  <div class="answer__prov">Investor update · {{ upd.period }}</div>
+  <div class="figrows">
+    <div class="figrow"><span class="figrow__label">Cash</span><span class="figrow__val">{{ upd.cash | rupees }}</span></div>
+    <div class="figrow"><span class="figrow__label">Net burn / mo</span><span class="figrow__val">{{ upd.net_burn | rupees }}</span></div>
+    <div class="figrow"><span class="figrow__label">Runway</span><span class="figrow__val">{{ upd.runway_fmt }}</span></div>
+    <div class="figrow"><span class="figrow__label">AR</span><span class="figrow__val">{{ upd.ar | rupees }}</span></div>
+  </div>
+
+  {% if upd.cap_table.ownership %}
+  <div class="section-title">Ownership</div>
+  <div class="captable">
+    {% for cat, pct in upd.cap_table.ownership.items() %}
+    <div class="captable__row">
+      <span class="captable__cat" style="text-transform:capitalize">{{ cat }}</span>
+      <span class="captable__bar"><span style="width: {{ (pct * 100) | round(1) }}%"></span></span>
+      <span class="captable__pct">{{ (pct * 100) | round(1) }}%</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if upd.highlights %}
+  <div class="section-title">Highlights</div>
+  <ul style="margin:0;padding-left:20px;">
+    {% for h in upd.highlights %}<li>{{ h }}</li>{% endfor %}
+  </ul>
+  {% else %}
+  <p class="muted" style="margin-top:var(--sp-3)">No highlights yet — add a few lines above and preview.</p>
+  {% endif %}
+</div>

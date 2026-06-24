@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Investor Update · {{ settings.app_name }}{% endblock %}
+{% block content %}
+<div class="page-head"><h1>Investor Update</h1></div>
+<p class="muted" style="margin-bottom:var(--sp-5)">
+  Generate the quarterly update from live figures. Add highlights, preview, then send — the
+  KPIs and cap table are pulled straight from the books (no re-keying).
+</p>
+
+<form hx-post="/investor/preview" hx-target="#investor-preview" hx-swap="innerHTML">
+  <label class="field" style="max-width:560px">
+    <span class="field__label">Highlights (one per line)</span>
+    <textarea name="highlights" rows="4" placeholder="Closed 3 enterprise logos&#10;Burn multiple improved to 1.4"
+              style="padding:var(--sp-2) var(--sp-3);font-family:inherit;font-size:var(--fs-base);
+                     color:var(--c-text);background:var(--c-bg);border:1px solid var(--c-border);
+                     border-radius:var(--radius-sm);"></textarea>
+  </label>
+  <div class="actionbar">
+    <button class="btn" type="submit">Preview</button>
+    <button class="btn btn--primary" type="submit"
+            hx-post="/investor/send" hx-target="#investor-toast" hx-swap="innerHTML">Send to investors</button>
+  </div>
+</form>
+<div id="investor-toast"></div>
+
+<div id="investor-preview">{% include "partials/investor_preview.html" %}</div>
+{% endblock %}

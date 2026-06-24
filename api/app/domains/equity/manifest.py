@@ -17,7 +17,7 @@ MANIFEST = DomainManifest(
         Feature("dilution", "Round dilution modelling", D),
         Feature("cap_table_snapshot", "Cap table snapshot persistence", D),
         Feature("convertible_notes", "Convertible notes (interest accrual)", D),
-        Feature("investor_reporting", "Quarterly investor update generator", N),
+        Feature("investor_reporting", "Quarterly investor update generator", D),
         Feature("dividend", "Dividend distribution (s.123)", D),
         Feature("share_certificates", "Share certificate / demat tracking", N),
         Feature("rights_buyback", "Rights issue / buyback compliance", N),

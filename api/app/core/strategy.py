@@ -59,8 +59,12 @@ def cap_table(session: Session) -> dict[str, Any]:
     return EquityService().cap_table(session)
 
 
-def investor_update(session: Session, as_of: date) -> dict[str, Any]:
-    """Compose the quarterly investor update payload (KPIs + cap table)."""
+def investor_update(
+    session: Session, as_of: date, *, highlights: list[str] | None = None
+) -> dict[str, Any]:
+    """Compose the quarterly investor update payload (KPIs + cap table + optional highlights)."""
     kpis = collect_kpis(session, as_of)
     quarter = (as_of.month - 1) // 3 + 1
-    return compose_investor_update(f"{as_of.year}-Q{quarter}", kpis, cap_table(session))
+    return compose_investor_update(
+        f"{as_of.year}-Q{quarter}", kpis, cap_table(session), highlights=highlights
+    )

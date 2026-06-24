@@ -371,3 +371,11 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
   daily `all`/`serve` pass; `make dunning` for one-off. Tested via InMemoryTransport (dispatch +
   skip-no-email + schedule firing). Manifest flipped ⬜→✅. **`make verify` green: Rust 52, Python
   332, eval 13/13.** 20 deferred features done; reuses the existing dunning schedule + email channel.
+- 2026-06-24: **Deferred feature — equity investor_reporting (Investor Update UI).** Dedicated
+  `/investor` page: live KPIs + cap-table ownership bars + editable highlights (textarea) with
+  HTMX live `/investor/preview` and one-click `/investor/send` (EmailChannel→SMTP, guarded → toast).
+  `strategy.investor_update` gained a `highlights` param; registered the `rupees` Jinja filter on
+  the web templates env (was email-only). Nav link added. Tested (page render, preview includes
+  highlights, send degrades without SMTP, strategy highlights). Manifest flipped ⬜→✅. **`make
+  verify` green: Rust 52, Python 336, eval 13/13.** 21 deferred features done; reuses the existing
+  investor-update composer + email template.

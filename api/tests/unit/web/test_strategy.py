@@ -60,5 +60,11 @@ def test_investor_update_payload(session: Session) -> None:
     assert "cap_table" in upd
 
 
+def test_investor_update_includes_highlights(session: Session) -> None:
+    _seed_treasury(session)
+    upd = investor_update(session, _AS_OF, highlights=["Closed 3 logos", "Burn multiple 1.4"])
+    assert upd["highlights"] == ["Closed 3 logos", "Burn multiple 1.4"]
+
+
 def test_cap_table_empty_is_safe(session: Session) -> None:
     assert cap_table(session)["total_shares"] == 0

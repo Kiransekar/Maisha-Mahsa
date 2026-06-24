@@ -52,6 +52,8 @@ from app.web.format import fact_rows, humanize
 
 _WEB = Path(__file__).parent / "web"
 templates = Jinja2Templates(directory=str(_WEB / "templates"))
+# `{{ amount_paise | rupees }}` -> Indian-grouped ₹ string (mirrors the email renderer).
+templates.env.filters["rupees"] = lambda paise: Paise(int(paise)).format_inr()
 
 
 def create_app() -> FastAPI:
@@ -362,6 +364,49 @@ def create_app() -> FastAPI:
         )
         return templates.TemplateResponse(
             request, "partials/scenario_result.html", {"s": _scenario_view(scenario)}
+        )
+
+    def _parse_highlights(raw: str) -> list[str]:
+        return [line.strip() for line in raw.splitlines() if line.strip()]
+
+    @app.get("/investor", response_class=HTMLResponse)
+    async def investor_page(request: Request, db: Session = Depends(get_session)) -> HTMLResponse:
+        today = datetime.now(UTC).date()
+        return templates.TemplateResponse(
+            request,
+            "investor.html",
+            {"upd": investor_update(db, today), "settings": settings, "nav_active": "investor"},
+        )
+
+    @app.post("/investor/preview", response_class=HTMLResponse)
+    async def investor_preview(
+        request: Request, highlights: str = Form(""), db: Session = Depends(get_session)
+    ) -> HTMLResponse:
+        today = datetime.now(UTC).date()
+        upd = investor_update(db, today, highlights=_parse_highlights(highlights))
+        return templates.TemplateResponse(
+            request, "partials/investor_preview.html", {"upd": upd, "settings": settings}
+        )
+
+    @app.post("/investor/send", response_class=HTMLResponse)
+    async def investor_send(
+        request: Request, highlights: str = Form(""), db: Session = Depends(get_session)
+    ) -> HTMLResponse:
+        today = datetime.now(UTC).date()
+        ctx = investor_update(db, today, highlights=_parse_highlights(highlights))
+        channel = EmailChannel(
+            SmtpTransport(host=settings.smtp_host, port=settings.smtp_port),
+            sender=settings.email_sender,
+        )
+        try:
+            await channel.send_investor_update(
+                to=settings.cfo_email, ctx=ctx, company_name=settings.app_name
+            )
+            message = f"Investor update ({ctx['period']}) sent to {settings.cfo_email}."
+        except Exception:  # noqa: BLE001 - SMTP failure surfaced, not raised
+            message = "Could not send — email transport (SMTP) unavailable."
+        return templates.TemplateResponse(
+            request, "partials/inline_toast.html", {"message": message}
         )
 
     @app.post("/cfo/investor/send", response_class=HTMLResponse)

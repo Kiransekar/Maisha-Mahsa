@@ -138,6 +138,28 @@ def test_cfo_scenario_returns_result():
     assert "Runway" in resp.text
 
 
+def test_investor_page_renders():
+    resp = client.get("/investor")
+    assert resp.status_code == 200
+    assert "Investor Update" in resp.text
+    assert "Highlights" in resp.text
+
+
+def test_investor_preview_includes_highlights():
+    resp = client.post(
+        "/investor/preview", data={"highlights": "Closed 3 logos\nBurn multiple 1.4"}
+    )
+    assert resp.status_code == 200
+    body = resp.text
+    assert "Closed 3 logos" in body and "Burn multiple 1.4" in body
+
+
+def test_investor_send_degrades_without_smtp():
+    resp = client.post("/investor/send", data={"highlights": "x"})
+    assert resp.status_code == 200
+    assert "Could not send" in resp.text or "sent to" in resp.text
+
+
 def test_cfo_investor_send_degrades_without_smtp():
     resp = client.post("/cfo/investor/send", data={})
     assert resp.status_code == 200
