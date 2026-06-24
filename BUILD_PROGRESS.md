@@ -363,3 +363,11 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
   tax, ITC availed, cash paid, and the **GSTR-1-vs-3B differential** (>0 = under-declared in 3B /
   additional liability) with a reconciled flag. Pure, exact paise; unit-tested; manifest flipped
   ⬜→✅. **`make verify` green: Rust 52, Python 329, eval 13/13.** 19 deferred features done.
+- 2026-06-24: **Deferred feature — revenue dunning_send (automated reminders).** `RevenueService.
+  pending_dunning` (open invoices whose T-7/T-3/T-1/T+1/T+7 schedule fires today, with customer +
+  outstanding) + async `dunning_run` (dispatches via EmailChannel, skips invoices with no email).
+  New `compose_dunning` (tone per stage), `dunning_reminder.html` email template, `EmailChannel.
+  send_dunning`. Wired into the scheduler: `app.jobs` gains a `dunning` command and runs it in the
+  daily `all`/`serve` pass; `make dunning` for one-off. Tested via InMemoryTransport (dispatch +
+  skip-no-email + schedule firing). Manifest flipped ⬜→✅. **`make verify` green: Rust 52, Python
+  332, eval 13/13.** 20 deferred features done; reuses the existing dunning schedule + email channel.

@@ -44,3 +44,10 @@ class EmailChannel:
         html = render("investor_update.html", ctx=ctx, company_name=company_name)
         subject = f"{company_name} — Investor Update · {ctx['period']}"
         return await self._send(to=to, subject=subject, html=html)
+
+    async def send_dunning(
+        self, *, to: str, ctx: dict[str, Any], company_name: str = "Maisha-Mahsa"
+    ) -> str:
+        html = render("dunning_reminder.html", ctx=ctx, company_name=company_name)
+        subject = f"Payment reminder · Invoice {ctx['invoice_number']} ({ctx['stage']})"
+        return await self._send(to=to, subject=subject, html=html)

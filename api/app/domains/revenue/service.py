@@ -134,6 +134,54 @@ class RevenueService(BaseDomainService):
                 out.append({"invoice_number": i.invoice_number, "reminder": label})
         return out
 
+    def pending_dunning(self, session: Session, as_of: date) -> list[dict[str, Any]]:
+        """Open invoices whose dunning schedule fires on ``as_of`` — with the customer + amount
+        needed to send a reminder. ``stage`` is the schedule label (T-7 … T+7)."""
+        out: list[dict[str, Any]] = []
+        for inv in self._open_receivables(session):
+            labels = revenue_calc.dunning_due(inv.due_date, as_of)
+            if not labels:
+                continue
+            customer = session.get(Customer, inv.customer_id)
+            out.append(
+                {
+                    "invoice_number": inv.invoice_number,
+                    "customer_name": customer.name if customer else "",
+                    "customer_email": customer.email if customer else None,
+                    "outstanding": int(inv.net_receivable) - int(inv.paid_amount),
+                    "due_date": inv.due_date,
+                    "stage": labels[0],
+                }
+            )
+        return out
+
+    async def dunning_run(
+        self, session: Session, as_of: date, channel: Any, *, company_name: str = "Maisha-Mahsa"
+    ) -> dict[str, Any]:
+        """Dispatch a dunning reminder for each invoice due on ``as_of``. Invoices without a
+        customer email are skipped (reported, not sent). ``channel`` is an ``EmailChannel``."""
+        from app.core.email.compose import compose_dunning
+
+        pending = self.pending_dunning(session, as_of)
+        sent = 0
+        skipped: list[str] = []
+        for item in pending:
+            if not item["customer_email"]:
+                skipped.append(item["invoice_number"])
+                continue
+            await channel.send_dunning(
+                to=item["customer_email"],
+                ctx=compose_dunning(item, as_of.isoformat()),
+                company_name=company_name,
+            )
+            sent += 1
+        return {
+            "as_of": as_of.isoformat(),
+            "pending": len(pending),
+            "sent": sent,
+            "skipped_no_email": skipped,
+        }
+
     def customer_concentration(self, session: Session) -> dict[str, Any]:
         by_customer: dict[int, int] = {}
         for i in self._open_receivables(session):

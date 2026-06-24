@@ -21,6 +21,6 @@ MANIFEST = DomainManifest(
         Feature("revenue_recognition", "Accrual revenue recognition / deferred revenue", D),
         Feature("irn", "e-Invoice IRN generation + QR", N),
         Feature("export_invoicing", "LUT / IGST refund / FEMA export invoicing", N),
-        Feature("dunning_send", "Automated reminder email dispatch", N),
+        Feature("dunning_send", "Automated reminder email dispatch", D),
     ],
 )

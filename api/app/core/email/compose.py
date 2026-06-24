@@ -5,6 +5,31 @@ from __future__ import annotations
 
 from typing import Any
 
+_DUNNING_TONE = {
+    "T-7": "a friendly heads-up — your invoice is due in a week",
+    "T-3": "a reminder — your invoice is due in 3 days",
+    "T-1": "your invoice is due tomorrow",
+    "T+1": "your invoice is now overdue",
+    "T+7": "your invoice is 7 days overdue — please arrange payment",
+}
+
+
+def compose_dunning(item: dict, as_of: str) -> dict[str, Any]:
+    """Dunning-reminder email context for one outstanding invoice. ``item`` comes from
+    ``RevenueService.pending_dunning`` ({invoice_number, customer_name, outstanding, due_date,
+    stage})."""
+    stage = item["stage"]
+    return {
+        "as_of": as_of,
+        "invoice_number": item["invoice_number"],
+        "customer_name": item["customer_name"],
+        "outstanding": int(item["outstanding"]),
+        "due_date": item["due_date"],
+        "stage": stage,
+        "message": _DUNNING_TONE.get(stage, "your invoice payment is due"),
+        "overdue": stage.startswith("T+"),
+    }
+
 
 def compose_compliance_alert(alerts: list[dict], as_of: str) -> dict[str, Any]:
     """Split compliance-calendar alerts into overdue vs upcoming for the alert email."""

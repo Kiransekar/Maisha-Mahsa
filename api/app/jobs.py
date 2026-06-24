@@ -32,6 +32,7 @@ from app.core.router import DomainRouter
 from app.db.base import Base
 from app.db.session import session_factory
 from app.domains import build_registry
+from app.domains.revenue.service import RevenueService
 from app.scheduler import seconds_until_next
 
 _log = logging.getLogger("maisha.jobs")
@@ -106,6 +107,19 @@ async def run_once(command: str, *, settings: Settings, now_utc: datetime) -> di
             except (MahsaError, OSError) as exc:
                 _log.warning("brief job skipped: %s", exc)
                 results.append({"job": "brief", "error": str(exc)})
+        if command in ("dunning", "all"):
+            channel = EmailChannel(
+                SmtpTransport(host=settings.smtp_host, port=settings.smtp_port),
+                sender=settings.email_sender,
+            )
+            try:
+                summary = await RevenueService().dunning_run(
+                    session, today, channel, company_name=settings.app_name
+                )
+                results.append({"job": "dunning", **summary})
+            except OSError as exc:
+                _log.warning("dunning job skipped: %s", exc)
+                results.append({"job": "dunning", "error": str(exc)})
     finally:
         session.close()
     return {"ran": command, "at": now_utc.isoformat(), "results": results}
@@ -134,7 +148,7 @@ async def serve(settings: Settings) -> None:  # pragma: no cover - long-running 
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser(prog="app.jobs", description="Maisha scheduled jobs")
-    parser.add_argument("command", choices=["capture", "brief", "all", "serve"])
+    parser.add_argument("command", choices=["capture", "brief", "dunning", "all", "serve"])
     args = parser.parse_args(argv)
     settings = get_settings()
     if args.command == "serve":
