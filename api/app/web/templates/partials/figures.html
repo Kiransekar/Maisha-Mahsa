@@ -1,0 +1,14 @@
+{# The domain figure grid. Rendered inside #figures on the domain page and re-rendered
+   (out-of-band) after an action so the page reflects the new state immediately. #}
+{% if figures %}
+<div class="kpis">
+  {% for f in figures %}
+  <div class="kpi">
+    <div class="kpi__label">{{ f.label }}</div>
+    <div class="kpi__value">{{ f.value }} <span class="vmark vmark--ok" title="recomputed">✓</span></div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="muted">No data yet for this domain.</p>
+{% endif %}

@@ -69,3 +69,39 @@ def test_ask_post_returns_answer_card():
     body = resp.text
     assert "answer__prov" in body  # the answer-card partial rendered
     assert "payables" in body.lower()
+
+
+def test_action_bar_appears_on_domain_with_actions():
+    body = client.get("/d/ledger").text
+    assert "Create account" in body  # action bar rendered
+
+
+def test_action_form_renders():
+    resp = client.get("/d/ledger/action/create-account/form")
+    assert resp.status_code == 200
+    assert 'name="code"' in resp.text
+
+
+def test_action_submit_persists_and_refreshes():
+    resp = client.post(
+        "/d/vault/action/ingest",
+        data={"file_name": "msa.pdf", "content": "acme agreement", "upload_date": "2026-05-10"},
+    )
+    assert resp.status_code == 200
+    body = resp.text
+    assert "ingested" in body  # success message / toast
+    assert 'id="figures"' in body  # out-of-band figures refresh included
+
+
+def test_action_submit_bad_input_re_renders_form_with_error():
+    # shares_held must be an int; a non-numeric value should re-render the form with an error.
+    resp = client.post(
+        "/d/equity/action/add-shareholder",
+        data={"name": "X", "category": "founder", "shares_held": "not-a-number"},
+    )
+    assert resp.status_code == 200
+    assert "drawer__err" in resp.text
+
+
+def test_unknown_action_404():
+    assert client.get("/d/ledger/action/nope/form").status_code == 404

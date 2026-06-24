@@ -1,0 +1,8 @@
+{# Returned after a successful action: confirmation in the drawer, plus an out-of-band refresh
+   of the figure grid and a toast — all from one response (HTMX OOB swaps). #}
+<div class="drawer__panel">
+  <div class="drawer__ok">✓ {{ message }}</div>
+  <button class="btn" type="button" onclick="document.getElementById('drawer').innerHTML=''">Close</button>
+</div>
+<div id="figures" hx-swap-oob="true">{% include "partials/figures.html" %}</div>
+<div id="toast" class="toast toast--show" hx-swap-oob="true" aria-live="polite">{{ message }}</div>

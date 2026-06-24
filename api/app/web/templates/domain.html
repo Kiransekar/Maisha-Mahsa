@@ -14,19 +14,20 @@
 <p class="muted" style="margin-bottom:var(--sp-4)">Mahsa sidecar offline — showing deterministic figures without a verdict.</p>
 {% endif %}
 
-<div class="section-title">Figures</div>
-{% if figures %}
-<div class="kpis">
-  {% for f in figures %}
-  <div class="kpi">
-    <div class="kpi__label">{{ f.label }}</div>
-    <div class="kpi__value">{{ f.value }} <span class="vmark vmark--ok" title="recomputed">✓</span></div>
-  </div>
+{% if actions %}
+<div class="actionbar">
+  {% for a in actions %}
+  <button class="btn" type="button"
+          hx-get="/d/{{ domain }}/action/{{ a.key }}/form" hx-target="#drawer" hx-swap="innerHTML">
+    {{ a.label }}
+  </button>
   {% endfor %}
 </div>
-{% else %}
-<p class="muted">No data yet for this domain.</p>
 {% endif %}
+<div id="drawer"></div>
+
+<div class="section-title">Figures</div>
+<div id="figures">{% include "partials/figures.html" %}</div>
 
 {% if citations %}
 <div class="section-title">Triggered rules</div>

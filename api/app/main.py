@@ -5,6 +5,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse
@@ -16,6 +17,7 @@ from app.cfo_router import router as cfo_router
 from app.config import get_settings
 from app.core.ask import answer_query
 from app.core.cfo import DomainHealth, collect_health
+from app.core.domain import BaseDomainService
 from app.core.mahsa_client import MahsaClient, MahsaError
 from app.core.overview import collect_kpis, upcoming_deadlines
 from app.db import models as _models  # noqa: F401  registers all models on Base.metadata
@@ -35,6 +37,7 @@ from app.domains.tax.router import router as tax_router
 from app.domains.treasury.router import router as treasury_router
 from app.domains.vault.router import router as vault_router
 from app.llm.tools import enrich
+from app.web.actions import actions_for, find_action
 from app.web.format import fact_rows
 
 _WEB = Path(__file__).parent / "web"
@@ -163,8 +166,53 @@ def create_app() -> FastAPI:
                 "citations": citations,
                 "mahsa_up": mahsa_up,
                 "settings": settings,
+                "actions": actions_for(domain),
                 "nav_active": domain,
             },
+        )
+
+    def _domain_figures(db: Session, service: BaseDomainService) -> list[Any]:
+        today = datetime.now(UTC).date()
+        try:
+            snapshot = service.build_snapshot(db, today)  # type: ignore[call-arg]
+        except TypeError:
+            snapshot = service.build_snapshot(db)
+        return fact_rows(enrich(snapshot))
+
+    @app.get("/d/{domain}/action/{key}/form", response_class=HTMLResponse)
+    async def action_form(domain: str, key: str, request: Request) -> HTMLResponse:
+        action = find_action(domain, key)
+        if action is None:
+            raise HTTPException(status_code=404, detail="unknown action")
+        return templates.TemplateResponse(
+            request, "partials/drawer_form.html", {"action": action, "settings": settings}
+        )
+
+    @app.post("/d/{domain}/action/{key}", response_class=HTMLResponse)
+    async def action_submit(
+        domain: str, key: str, request: Request, db: Session = Depends(get_session)
+    ) -> HTMLResponse:
+        action = find_action(domain, key)
+        if action is None:
+            raise HTTPException(status_code=404, detail="unknown action")
+        service = registry.get(domain)
+        assert service is not None
+        form = await request.form()
+        data = {k: str(v) for k, v in form.items()}
+        try:
+            message = action.handler(db, data)
+            db.commit()
+        except (ValueError, KeyError, TypeError) as exc:
+            db.rollback()
+            return templates.TemplateResponse(
+                request,
+                "partials/drawer_form.html",
+                {"action": action, "error": str(exc) or "Invalid input", "settings": settings},
+            )
+        return templates.TemplateResponse(
+            request,
+            "partials/action_success.html",
+            {"message": message, "figures": _domain_figures(db, service), "settings": settings},
         )
 
     @app.get("/ask", response_class=HTMLResponse)

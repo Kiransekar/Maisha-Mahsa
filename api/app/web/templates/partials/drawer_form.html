@@ -1,0 +1,26 @@
+{# Drawer form for one domain action. GET renders it; on validation error it re-renders with
+   the message. Submits to the action endpoint, targeting #drawer. #}
+<div class="drawer__panel">
+  <div class="drawer__head">
+    <strong>{{ action.label }}</strong>
+    <button class="drawer__x" type="button" aria-label="Close"
+            onclick="document.getElementById('drawer').innerHTML=''">✕</button>
+  </div>
+  {% if error %}<div class="drawer__err">{{ error }}</div>{% endif %}
+  <form hx-post="/d/{{ action.domain }}/action/{{ action.key }}" hx-target="#drawer" hx-swap="innerHTML">
+    {% for f in action.fields %}
+    <label class="field">
+      <span class="field__label">{{ f.label }}{% if not f.required %} <em>(optional)</em>{% endif %}</span>
+      {% if f.type == "select" %}
+        <select name="{{ f.name }}">
+          {% for o in f.options %}<option value="{{ o }}">{{ o }}</option>{% endfor %}
+        </select>
+      {% else %}
+        <input type="{{ f.type }}" name="{{ f.name }}" placeholder="{{ f.placeholder }}"
+               {% if f.required %}required{% endif %}>
+      {% endif %}
+    </label>
+    {% endfor %}
+    <button class="btn btn--primary" type="submit">Save</button>
+  </form>
+</div>

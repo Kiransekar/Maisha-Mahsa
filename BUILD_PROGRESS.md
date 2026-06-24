@@ -250,3 +250,15 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
   CSS on existing tokens, HTMX-driven, no build step. **`make verify` green: Rust 52, Python
   227 (+8: ask orchestrator unit + app route tests), eval 13/13.** Remaining: F3 action
   forms · F4 approvals flow · F5 CFO panel · F6 audit/trace viewer · F7 polish.
+- 2026-06-24: **Frontend F3 — action bar + drawer forms (domains become operational).** New
+  `app/web/actions.py`: a declarative action registry (Field/Action + handlers) — handlers call
+  existing domain services directly (JSON `/api/*` routes untouched) and money is entered in
+  rupees → exact paise at the edge. Wired actions for ledger (create account), compliance (add
+  deadline), equity (add shareholder), expense (submit claim), vault (ingest) — the pattern;
+  remaining domains are config repeats. Routes: `GET /d/{domain}/action/{key}/form` (drawer
+  form) + `POST /d/{domain}/action/{key}` (run handler → commit → OOB-refresh #figures + toast;
+  bad input re-renders the form with an error). Templates: `partials/{figures,drawer_form,
+  action_success}.html`; domain page gains the action bar + drawer + global toast. HTMX-driven,
+  no build step. **`make verify` green: Rust 52, Python 235 (+8: action handlers unit + route
+  tests incl. validation error), eval 13/13.** Remaining: F4 approvals · F5 CFO · F6 audit/trace
+  · F7 polish.
