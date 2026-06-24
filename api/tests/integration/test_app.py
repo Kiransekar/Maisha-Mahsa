@@ -192,6 +192,11 @@ def test_payslip_and_form16_pdf_download():
     assert form16.status_code == 200
     assert form16.content[:5] == b"%PDF-"
 
+    ecr = client.get("/d/payroll/ecr.txt", params={"period": "2026-06"})
+    assert ecr.status_code == 200
+    assert ecr.headers["content-type"].startswith("text/plain")
+    assert "#~#" in ecr.text  # EPFO ECR delimiter
+
 
 def test_payslip_unknown_employee_404():
     assert client.get("/d/payroll/99999/payslip", params={"period": "2026-06"}).status_code == 404

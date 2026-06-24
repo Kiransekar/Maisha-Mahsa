@@ -397,3 +397,12 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
   setting `MAISHA_COMPANY_GSTIN`. Enhances the already-done `gstr1` feature (no new manifest row).
   Tested (pure builder b2b/b2cs/hsn + conversions, API-seeded download). **`make verify` green:
   Rust 52, Python 347, eval 13/13.**
+- 2026-06-24: **Deferred feature — payroll EPFO ECR text file (researched format).** Research
+  confirmed the unified-portal ECR: plain text, `#~#` delimiter, 11 member columns (UAN, name,
+  gross/EPF/EPS/EDLI wages, EPF/EPS/EPF-EPS-diff remitted, NCP days, refund), whole rupees, no
+  header line (wage month/rate entered on the portal). statutory `EPS_RATE` + `eps_employer`
+  (8.33%) + `epf_employer_diff` (3.67%). `app/domains/payroll/ecr.py` (pure EcrMember + build_ecr).
+  `PayrollService.ecr_text(period)` builds member lines from the tested PF math. Route
+  `GET /d/payroll/ecr.txt?period=` → text/plain download. Manifest `ecr` flipped ⬜→✅. Tested
+  (EPS/diff split at ceiling, 11-field line, build, service, API download). **`make verify` green:
+  Rust 52, Python 351, eval 13/13.** 24 deferred features done.

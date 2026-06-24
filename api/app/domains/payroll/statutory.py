@@ -19,6 +19,7 @@ from app.core.money import Paise
 
 PF_WAGE_CEILING = Paise.from_rupees(15000)  # monthly PF wage ceiling
 PF_RATE = Decimal("0.12")
+EPS_RATE = Decimal("0.0833")  # employer EPS share (8.33% of EPS wage)
 
 ESI_WAGE_CEILING = Paise.from_rupees(21000)  # monthly gross; > ceiling => ESI not applicable
 ESI_EMPLOYEE_RATE = Decimal("0.0075")
@@ -84,6 +85,16 @@ def pf_employee(basic_monthly: int) -> Paise:
 def pf_employer(basic_monthly: int) -> Paise:
     # Aggregate employer share 12% (EPS 8.33% on ceiling + EPF 3.67%); modelled as 12% of PF wage.
     return Paise(_round_rupee(int(Decimal(pf_wage(basic_monthly)) * PF_RATE)))
+
+
+def eps_employer(basic_monthly: int) -> Paise:
+    """Employer's EPS share = 8.33% of EPS wage (PF wage capped at ₹15,000 → max ₹1,250)."""
+    return Paise(_round_rupee(int(Decimal(pf_wage(basic_monthly)) * EPS_RATE)))
+
+
+def epf_employer_diff(basic_monthly: int) -> Paise:
+    """Employer's EPF share = total employer 12% − EPS 8.33% (the 3.67% remitted to EPF)."""
+    return Paise(int(pf_employer(basic_monthly)) - int(eps_employer(basic_monthly)))
 
 
 # ---- ESI ------------------------------------------------------------------------------

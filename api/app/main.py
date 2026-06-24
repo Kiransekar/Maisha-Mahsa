@@ -270,6 +270,15 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         return _pdf(content, f"form16-{employee_id}-{fy}.pdf")
 
+    @app.get("/d/payroll/ecr.txt")
+    async def payroll_ecr_route(period: str, db: Session = Depends(get_session)) -> Response:
+        text = PayrollService().ecr_text(db, period=period)
+        return Response(
+            content=text,
+            media_type="text/plain",
+            headers={"Content-Disposition": f'attachment; filename="ecr-{period}.txt"'},
+        )
+
     @app.get("/d/gst/gstr1.json")
     async def gstr1_json_route(period: str, db: Session = Depends(get_session)) -> Response:
         lines = RevenueService().gstr1_lines(db, period)

@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.core import pdf
 from app.core.domain import BaseDomainService
 from app.db.models.payroll import Employee, PayrollEntry, PayrollRun, SalaryStructure
-from app.domains.payroll import statutory
+from app.domains.payroll import ecr, statutory
 from app.domains.payroll.manifest import MANIFEST
 
 
@@ -284,6 +284,40 @@ class PayrollService(BaseDomainService):
                 "total_tax_deducted": int(comp["tds_monthly"]) * 12,
             }
         )
+
+    def ecr_text(self, session: Session, *, period: str) -> str:
+        """Build the EPFO ECR upload file for ``period`` (YYYY-MM) — one #~#-delimited line per
+        active member, whole rupees, from the tested statutory PF math."""
+        def _r(paise: int) -> int:
+            return round(int(paise) / 100)
+
+        anchor = f"{period}-28"
+        members: list[ecr.EcrMember] = []
+        for emp in session.scalars(select(Employee).where(Employee.status == "active")).all():
+            structure = self._latest_structure(session, emp.id, anchor)
+            if structure is None:
+                continue
+            basic = structure.basic
+            comp = compute_components(
+                basic=structure.basic, hra=structure.hra, lta=structure.lta,
+                special_allowance=structure.special_allowance, state=emp.state,
+                month=int(period[5:7]),
+            )
+            pf_wage = statutory.pf_wage(basic)
+            members.append(
+                ecr.EcrMember(
+                    uan=emp.uan or "",
+                    member_name=emp.name,
+                    gross_wages=_r(comp["gross_salary"]),
+                    epf_wages=_r(pf_wage),
+                    eps_wages=_r(pf_wage),
+                    edli_wages=_r(pf_wage),
+                    epf_contri_remitted=_r(statutory.pf_employee(basic)),
+                    eps_contri_remitted=_r(statutory.eps_employer(basic)),
+                    epf_eps_diff_remitted=_r(statutory.epf_employer_diff(basic)),
+                )
+            )
+        return ecr.build_ecr(members)
 
     # ---- Mahsa contract -------------------------------------------------------------
 
