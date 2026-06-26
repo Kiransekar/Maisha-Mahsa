@@ -361,3 +361,11 @@ body.login {
 }
 .nav__logout { margin-top: var(--sp-4); }
 .nav__item--logout { width: 100%; background: none; border: 0; cursor: pointer; text-align: left; font-family: inherit; }
+
+/* ── Banner (P6-AUDITVERIFY alert) ───────────────────────────────────────── */
+.banner {
+  padding: var(--sp-3) var(--sp-4); border-radius: var(--radius-sm);
+  margin-bottom: var(--sp-4); font-size: var(--fs-sm);
+}
+.banner--red { background: #2a1416; border: 1px solid #5b2630; color: #ffb4bd; }
+.banner a { text-decoration: underline; }

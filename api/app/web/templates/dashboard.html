@@ -5,6 +5,13 @@
   <span class="muted">v{{ settings.version }}</span>
 </div>
 
+{% if audit_intact is defined and not audit_intact %}
+<div class="banner banner--red" role="alert">
+  ⚠ Audit chain integrity check FAILED — the tamper-evident log may have been altered.
+  <a href="/audit">Review audit trail →</a>
+</div>
+{% endif %}
+
 <div class="kpis">
   <div class="kpi"><div class="kpi__label">Cash</div><div class="kpi__value" id="kpi-cash">{{ kpis.cash_fmt }}</div></div>
   <div class="kpi"><div class="kpi__label">Net Burn / mo</div><div class="kpi__value" id="kpi-burn">{{ kpis.net_burn_fmt }}</div></div>

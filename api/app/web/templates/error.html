@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ code }} · {{ settings.app_name }}</title>
+  <link rel="stylesheet" href="/static/css/app.css">
+</head>
+<body class="login">
+  <main class="login__card">
+    <div class="login__brand"><span class="dot"></span> {{ settings.app_name }}</div>
+    <h1 style="margin:var(--sp-4) 0 var(--sp-2); font-size:var(--fs-lg)">{{ code }}</h1>
+    <p class="login__sub">{{ message }}</p>
+    <a href="/" class="nav__item" style="display:inline-block">← Back to dashboard</a>
+  </main>
+</body>
+</html>

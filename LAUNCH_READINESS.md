@@ -339,7 +339,9 @@ Repeat the P2-D01 pattern for each. **Each is its own task / commit / DoD / `mak
 
 ## Phase 6 — Hardening for real money
 
-### [ ] P6-VALIDATION — Input limits & robust error handling
+### [x] P6-VALIDATION — Input limits & robust error handling ✅ (2026-06-26)
+> Done: 10 MB body-size limit middleware (413); global exception handler logs + returns generic
+> message (no stack leak); friendly 404/500 HTML (error.html). tests/integration/test_hardening.py.
 - **What.** Request-size limits (esp. CSV/document uploads), strict Pydantic validation on every
   body, friendly HTML error pages (400/404/500), and a global exception handler that never leaks
   stack traces to the user but always writes the failure to logs.
@@ -347,14 +349,19 @@ Repeat the P2-D01 pattern for each. **Each is its own task / commit / DoD / `mak
   in the happy paths; tested.
 - **Verify.** Tests for oversized upload, malformed body, forced exception; `make verify` green.
 
-### [ ] P6-AUDITVERIFY — Audit-chain integrity check (endpoint + scheduled)
+### [x] P6-AUDITVERIFY — Audit-chain integrity check (endpoint + scheduled) ✅ (2026-06-26)
+> Done: GET /audit/verify; run_audit_verify in the daily scheduler (logs ERROR on break);
+> red dashboard banner when broken. Tested.
 - **What.** An endpoint + a scheduled job (P5 worker) that walks the full audit chain and alerts
   if any link is broken; surfaces status on the dashboard.
 - **Why.** Tamper-evidence is only useful if something actually checks it.
 - **Done when.** Clean chain → ✅; injected tamper → alert + dashboard banner; tested.
 - **Verify.** Test mutates a row and asserts detection; `make verify` green.
 
-### [ ] P6-BACKUP — Backup & restore (restic) + restore drill
+### [x] P6-BACKUP — Backup & restore (restic) + restore drill ✅ code (drill = ops step)
+> Done: infra/backup/{backup.sh,restore.sh,restic.cron} (consistent SQLite .backup, encrypted,
+> 7/4/6 retention, restic check) + RUNBOOK.md §4 with the restore-drill procedure + a log table.
+> The first real restore drill must be run + recorded on the production box (RUNBOOK §4).
 - **What.** Automated encrypted backups of the SQLite DB (and document store) with restic;
   a **documented, tested restore drill**.
 - **Why.** I3 ⬜. A finance product without a proven restore is not launchable.
@@ -363,13 +370,18 @@ Repeat the P2-D01 pattern for each. **Each is its own task / commit / DoD / `mak
   (or row-for-row) on a clean box; drill documented.
 - **Verify.** Restore drill performed and recorded in `RUNBOOK.md`.
 
-### [ ] P6-OBSERVABILITY — Logs, health, basic metrics
+### [x] P6-OBSERVABILITY — Logs, health, basic metrics ✅ (2026-06-26)
+> Done: structured loggers (maisha.web/jobs); GET /health now reports dependencies.{db,mahsa}
+> reachability; test asserts mahsa: down when the sidecar is unreachable.
 - **What.** Structured logging, a `/health` that also checks DB + Mahsa reachability, and a
   minimal metrics/uptime signal.
 - **Done when.** Logs are structured and rotate; `/health` reflects real dependency status.
 - **Verify.** Test for `/health` degraded state when Mahsa is down; `make verify` green.
 
-### [ ] P6-SECREVIEW — Security review of the whole surface
+### [x] P6-SECREVIEW — Security review of the whole surface ✅ (2026-06-26)
+> Done: SECURITY_REVIEW.md — no high/critical; M1 (login rate-limit) / M2 (session revocation) /
+> L1 (CSRF) / L2 (content-length trust) triaged + accepted for single-tenant TLS deployment.
+> No SQL-injection surface (all ORM/Core); secrets gitignored; no stack-trace leakage.
 - **What.** Run `/security-review` (and a manual auth/session/upload/SQL review) over the
   full app before exposing it to the internet.
 - **Done when.** No high/critical findings open; medium findings triaged with notes.

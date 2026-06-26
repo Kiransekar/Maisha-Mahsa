@@ -24,6 +24,8 @@ from sqlalchemy.orm import Session
 import app.db.models as _models  # noqa: F401  registers models on Base.metadata
 from app.config import Settings, get_settings
 from app.core import history_store
+from app.core.audit import verify_chain
+from app.core.audit_store import load_chain
 from app.core.cfo import collect_health, compose_brief
 from app.core.email.channel import EmailChannel
 from app.core.email.compose import compose_compliance_alert
@@ -81,6 +83,15 @@ async def run_alerts(
     ctx = compose_compliance_alert(alerts, as_of.isoformat())
     await channel.send_compliance_alert(to=to, ctx=ctx)
     return {"job": "alerts", "dispatched": len(alerts)}
+
+
+def run_audit_verify(session: Session) -> dict[str, Any]:
+    """Walk the hash-chained audit log and report integrity (P6-AUDITVERIFY)."""
+    entries = load_chain(session)
+    intact = verify_chain(entries)
+    if not intact:
+        _log.error("AUDIT CHAIN INTEGRITY FAILURE — %d entries, chain broken", len(entries))
+    return {"job": "audit_verify", "intact": intact, "entries": len(entries)}
 
 
 async def run_once(command: str, *, settings: Settings, now_utc: datetime) -> dict[str, Any]:
@@ -146,6 +157,12 @@ async def run_once(command: str, *, settings: Settings, now_utc: datetime) -> di
             except OSError as exc:
                 _log.warning("alerts job skipped: %s", exc)
                 results.append({"job": "alerts", "error": str(exc)})
+        if command in ("audit-verify", "all"):
+            try:
+                results.append(run_audit_verify(session))
+            except Exception as exc:  # noqa: BLE001 - report, don't crash the scheduler
+                _log.exception("audit-verify job failed")
+                results.append({"job": "audit_verify", "error": str(exc)})
     finally:
         session.close()
     return {"ran": command, "at": now_utc.isoformat(), "results": results}
@@ -175,7 +192,8 @@ def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser(prog="app.jobs", description="Maisha scheduled jobs")
     parser.add_argument(
-        "command", choices=["capture", "brief", "dunning", "alerts", "all", "serve"]
+        "command",
+        choices=["capture", "brief", "dunning", "alerts", "audit-verify", "all", "serve"],
     )
     args = parser.parse_args(argv)
     settings = get_settings()

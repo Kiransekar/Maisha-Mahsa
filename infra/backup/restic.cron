@@ -1,0 +1,4 @@
+# Maisha-Mahsa restic backup — daily at 02:30 server time (P6-BACKUP).
+# Install:  cp this into /etc/cron.d/maisha-backup  (and chmod 600), or `crontab -e`.
+# Secrets come from /etc/maisha/backup.env (RESTIC_REPOSITORY, RESTIC_PASSWORD, ...).
+30 2 * * *  root  set -a; . /etc/maisha/backup.env; /opt/maisha/infra/backup/backup.sh >> /var/log/maisha-backup.log 2>&1

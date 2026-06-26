@@ -4,15 +4,18 @@ static/template assets. Creates the schema on startup for local/dev use."""
 from __future__ import annotations
 
 import json
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from sqlalchemy import text
 from sqlalchemy.orm import Session
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.cfo_router import router as cfo_router
 from app.config import get_settings
@@ -59,6 +62,15 @@ _WEB = Path(__file__).parent / "web"
 templates = Jinja2Templates(directory=str(_WEB / "templates"))
 # `{{ amount_paise | rupees }}` -> Indian-grouped ₹ string (mirrors the email renderer).
 templates.env.filters["rupees"] = lambda paise: Paise(int(paise)).format_inr()
+
+_log = logging.getLogger("maisha.web")
+
+# Reject request bodies larger than this (P6-VALIDATION) — guards CSV/document uploads.
+MAX_BODY_BYTES = 10 * 1024 * 1024  # 10 MB
+
+
+def _wants_html(request: Request) -> bool:
+    return "text/html" in request.headers.get("accept", "")
 
 
 def create_app() -> FastAPI:
@@ -120,6 +132,36 @@ def create_app() -> FastAPI:
         resp.delete_cookie(auth.COOKIE_NAME)
         return resp
 
+    # P6-VALIDATION: reject oversized request bodies before they're read into memory.
+    @app.middleware("http")
+    async def _limit_body_size(request: Request, call_next):
+        length = request.headers.get("content-length")
+        if length is not None and length.isdigit() and int(length) > MAX_BODY_BYTES:
+            return PlainTextResponse("Request entity too large.", status_code=413)
+        return await call_next(request)
+
+    # P6-VALIDATION: friendly errors that never leak a stack trace to the user.
+    @app.exception_handler(StarletteHTTPException)
+    async def _http_error(request: Request, exc: StarletteHTTPException) -> Response:
+        if exc.status_code == 404 and _wants_html(request):
+            return templates.TemplateResponse(
+                request, "error.html",
+                {"settings": settings, "code": 404, "message": "Page not found."},
+                status_code=404,
+            )
+        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+
+    @app.exception_handler(Exception)
+    async def _unhandled_error(request: Request, exc: Exception) -> Response:
+        _log.exception("unhandled error on %s: %s", request.url.path, exc)
+        if _wants_html(request):
+            return templates.TemplateResponse(
+                request, "error.html",
+                {"settings": settings, "code": 500, "message": "Something went wrong."},
+                status_code=500,
+            )
+        return JSONResponse({"detail": "internal server error"}, status_code=500)
+
     app.mount("/static", StaticFiles(directory=str(_WEB / "static")), name="static")
     app.include_router(treasury_router)
     app.include_router(payroll_router)
@@ -138,8 +180,23 @@ def create_app() -> FastAPI:
     registry = build_registry()
 
     @app.get("/health")
-    async def health() -> dict[str, str]:
-        return {"status": "ok", "service": settings.app_name, "version": settings.version}
+    async def health(db: Session = Depends(get_session)) -> dict[str, Any]:
+        # P6-OBSERVABILITY: liveness stays "ok"; dependency reachability is reported alongside.
+        deps = {"db": "ok", "mahsa": "ok"}
+        try:
+            db.execute(text("SELECT 1"))
+        except Exception:  # noqa: BLE001 - health probe must not raise
+            deps["db"] = "down"
+        try:
+            await MahsaClient(settings.mahsa_url).health()
+        except Exception:  # noqa: BLE001 - sidecar down is a reported state, not a crash
+            deps["mahsa"] = "down"
+        return {
+            "status": "ok",
+            "service": settings.app_name,
+            "version": settings.version,
+            "dependencies": deps,
+        }
 
     @app.get("/", response_class=HTMLResponse)
     async def dashboard(request: Request, db: Session = Depends(get_session)) -> HTMLResponse:
@@ -185,6 +242,7 @@ def create_app() -> FastAPI:
                 "kpis": kpis,
                 "calendar": calendar,
                 "approvals": approvals,
+                "audit_intact": verify_chain(load_chain(db)),  # P6-AUDITVERIFY banner
                 "nav_active": "dashboard",
             },
         )
@@ -627,6 +685,13 @@ def create_app() -> FastAPI:
         return templates.TemplateResponse(
             request, "partials/recon.html", {"recs": parallel.reconcile(db, run)}
         )
+
+    @app.get("/audit/verify")
+    async def audit_verify(db: Session = Depends(get_session)) -> dict[str, Any]:
+        # P6-AUDITVERIFY: walk the hash chain and report integrity (used by the scheduled job
+        # and the dashboard banner).
+        entries = load_chain(db)
+        return {"intact": verify_chain(entries), "entries": len(entries)}
 
     @app.get("/audit", response_class=HTMLResponse)
     async def audit_page(request: Request, db: Session = Depends(get_session)) -> HTMLResponse:
