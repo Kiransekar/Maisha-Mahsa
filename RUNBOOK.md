@@ -107,6 +107,24 @@ docker compose -f infra/docker-compose.yml start api scheduler
 | Disk filling | restic cache / logs | check retention; `restic prune` |
 | Audit banner red | tamper or corruption | §5 |
 
+## 6b. Rotating secrets
+
+- **App password:** change `MAISHA_APP_PASSWORD` in `.env`, `docker compose ... up -d api`.
+- **Session secret:** change `MAISHA_SESSION_SECRET` (this logs out every device immediately).
+- **SMTP / cloud creds:** update `MAISHA_SMTP_*` / `MAISHA_CLAUDE_API_KEY`, restart `api` +
+  `scheduler`. Secrets live only in `.env` (gitignored) and the restic password file — never in VCS.
+
+## 6c. Updating statutory constants (do this every Finance Act / rate change)
+
+Rates and slabs are **data**, not code, so updates are localised:
+
+- **Direct/indirect tax, PF/ESI/PT/LWF, bonus/gratuity:** edit the data tables in
+  `api/app/domains/<domain>/{statutory,*_calc}.py` (each carries a "re-verify annually" comment).
+- **Mahsa rules:** edit `dif/rules/rules.yaml` and bump its `version`; keep the Python
+  `domains/*/rules.py` IDs in sync (the cross-check test enforces the bijection).
+- After any change: `make verify` must be green, then note the change in `BUILD_PROGRESS.md`.
+  See `skills/indian-fin-rules` for the per-statute matrix.
+
 ## 7. Upgrades
 
 1. Pull new images / code. 2. `make migrate` (Alembic forward-only). 3. Restart `api` +
