@@ -51,6 +51,16 @@ def is_petty_cash_eligible(amount: int) -> bool:
     return int(amount) <= int(PETTY_CASH_THRESHOLD)
 
 
+def mileage_claim(distance_km: int, *, rate_per_km: int) -> int:
+    """Mileage reimbursement = distance × rate-per-km (rate and result in paise)."""
+    return int(distance_km) * int(rate_per_km)
+
+
+def per_diem(days: int, *, rate_per_day: int) -> int:
+    """Per-diem travel allowance = days × daily rate (paise)."""
+    return int(days) * int(rate_per_day)
+
+
 def category_spend(claims: list[dict]) -> dict[str, int]:
     """Total claimed amount by category (paise)."""
     totals: dict[str, int] = {}

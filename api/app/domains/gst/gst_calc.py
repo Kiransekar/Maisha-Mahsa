@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
@@ -212,6 +213,47 @@ def build_gstr1(lines: list[dict], *, filing_period: str) -> dict[str, Any]:
         "totals": totals,
         "errors": errors,
     }
+
+
+# ---- Composition scheme + LUT (exports) -----------------------------------------------
+
+# Composition levy rates (CGST+SGST combined) by business category.
+_COMPOSITION_RATES = {
+    "trader": Decimal("0.01"), "manufacturer": Decimal("0.01"),
+    "restaurant": Decimal("0.05"), "service": Decimal("0.06"),
+}
+
+
+def composition_tax(turnover: int, *, category: str) -> dict[str, Any]:
+    """Composition-scheme tax = turnover × the category levy rate (s.10). 1% trader/manufacturer,
+    5% restaurant, 6% other services."""
+    rate = _COMPOSITION_RATES.get(category)
+    if rate is None:
+        raise ValueError(f"unknown composition category: {category}")
+    return {
+        "category": category,
+        "rate_pct": float(rate * 100),
+        "turnover": int(turnover),
+        "tax": _round_rupee(int(Decimal(int(turnover)) * rate)),
+    }
+
+
+def lut_export(taxable: int) -> dict[str, Any]:
+    """Export under a Letter of Undertaking is zero-rated — no IGST is charged and input ITC is
+    refundable (CGST Act s.16, IGST Act s.16)."""
+    return {
+        "taxable": int(taxable),
+        "igst": 0,
+        "zero_rated": True,
+        "note": "Export under LUT — zero-rated, no IGST charged; claim ITC refund.",
+    }
+
+
+def lut_validity(issue_date: str) -> str:
+    """A LUT is valid for the financial year of issue → expires 31 March of that FY."""
+    d = date.fromisoformat(issue_date)
+    end_year = d.year + 1 if d.month >= 4 else d.year
+    return f"{end_year}-03-31"
 
 
 # ---- e-Invoice IRN + NIC schema -------------------------------------------------------

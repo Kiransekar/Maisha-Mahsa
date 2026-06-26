@@ -18,6 +18,6 @@ MANIFEST = DomainManifest(
         Feature("receipt_parse", "Receipt parsing from OCR text (GSTIN/amount/date)", D),
         Feature("ocr_capture", "Photo → OCR (Tesseract) image pipeline", D),
         Feature("card_recon", "Corporate card reconciliation", N),
-        Feature("mileage", "Mileage / per-diem travel", N),
+        Feature("mileage", "Mileage / per-diem travel", D),
     ],
 )

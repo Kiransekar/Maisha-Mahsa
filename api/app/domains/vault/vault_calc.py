@@ -62,6 +62,16 @@ def retention_until(upload_date: str, doc_type: str) -> str | None:
         return d.replace(year=d.year + years, day=28).isoformat()
 
 
+def to_archive(documents: list[dict], as_of: str) -> list[str]:
+    """Document ids eligible for auto-archive: their ``retention_until`` has passed. Permanent
+    records (``retention_until`` is None) are never archived."""
+    return [
+        d["id"]
+        for d in documents
+        if d.get("retention_until") and d["retention_until"] <= as_of
+    ]
+
+
 def search(documents: list[dict], query: str) -> list[dict]:
     """Case-insensitive substring search over file name, OCR text and tags."""
     q = query.lower()

@@ -88,6 +88,40 @@ def _months_back(anchor: date, months: int) -> date:
     return date(year, month, day)
 
 
+def upi_reconcile(bank_refs: list[dict], upi_refs: list[dict]) -> dict[str, Any]:
+    """Reconcile a UPI statement against bank transactions by (reference, amount). Each entry:
+    {reference, amount}. Reports matched references and what's unmatched on each side."""
+    bank_keys = {(b["reference"], int(b["amount"])) for b in bank_refs}
+    upi_keys = {(u["reference"], int(u["amount"])) for u in upi_refs}
+    matched = [u["reference"] for u in upi_refs if (u["reference"], int(u["amount"])) in bank_keys]
+    unmatched_upi = [
+        u["reference"] for u in upi_refs if (u["reference"], int(u["amount"])) not in bank_keys
+    ]
+    unmatched_bank = [
+        b["reference"] for b in bank_refs if (b["reference"], int(b["amount"])) not in upi_keys
+    ]
+    return {
+        "matched": matched,
+        "unmatched_upi": unmatched_upi,
+        "unmatched_bank": unmatched_bank,
+        "reconciled": not unmatched_upi and not unmatched_bank,
+    }
+
+
+def bank_guarantee_status(
+    expiry_date: str, as_of: date, *, renewal_window_days: int = 30
+) -> dict[str, Any]:
+    """Track a bank guarantee's lifecycle: days to expiry, whether expired, and whether it's
+    inside the renewal window."""
+    days = (date.fromisoformat(expiry_date) - as_of).days
+    return {
+        "expiry_date": expiry_date,
+        "days_to_expiry": days,
+        "expired": days < 0,
+        "renewal_due": 0 <= days <= renewal_window_days,
+    }
+
+
 def sweep_suggestion(cash: int, monthly_net_burn: int, *, buffer_months: int = 6) -> dict[str, Any]:
     """Treasury policy: keep ``buffer_months`` of net burn liquid; cash above that buffer is
     idle and can be swept into an FD ladder. Pure — exact paise."""

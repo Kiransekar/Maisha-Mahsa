@@ -17,7 +17,7 @@ MANIFEST = DomainManifest(
         Feature("runway", "Runway calculator", D),
         Feature("burn_attribution", "Burn attribution by category", D),
         Feature("treasury_policy", "Auto-sweep / FD laddering suggestions", D),
-        Feature("upi_recon", "UPI reconciliation", N),
-        Feature("bg_tracking", "Bank guarantee tracking", N),
+        Feature("upi_recon", "UPI reconciliation", D),
+        Feature("bg_tracking", "Bank guarantee tracking", D),
     ],
 )
