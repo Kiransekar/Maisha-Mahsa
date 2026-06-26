@@ -39,6 +39,9 @@ capture: ## Run the snapshot-capture job once (records metrics for trend charts)
 dunning: ## Send overdue-invoice reminders once (needs SMTP/MailHog up)
 	cd api && .venv/bin/python -m app.jobs dunning
 
+alerts: ## Dispatch statutory compliance alerts (T-7/T-1/T-0/overdue) once (needs SMTP/MailHog)
+	cd api && .venv/bin/python -m app.jobs alerts
+
 brief: ## Send the daily CFO brief once (needs Mahsa + SMTP/MailHog up)
 	cd api && .venv/bin/python -m app.jobs brief
 

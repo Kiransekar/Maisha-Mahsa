@@ -60,3 +60,14 @@ class SmtpTransport:
             password=self.password,
             use_tls=self.use_tls,
         )
+
+
+def smtp_from_settings(settings: object) -> SmtpTransport:
+    """Build an SmtpTransport from app settings (auth + TLS for a production relay)."""
+    return SmtpTransport(
+        host=settings.smtp_host,  # type: ignore[attr-defined]
+        port=settings.smtp_port,  # type: ignore[attr-defined]
+        username=settings.smtp_username or None,  # type: ignore[attr-defined]
+        password=settings.smtp_password or None,  # type: ignore[attr-defined]
+        use_tls=settings.smtp_use_tls,  # type: ignore[attr-defined]
+    )

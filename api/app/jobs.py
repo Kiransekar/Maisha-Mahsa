@@ -26,12 +26,14 @@ from app.config import Settings, get_settings
 from app.core import history_store
 from app.core.cfo import collect_health, compose_brief
 from app.core.email.channel import EmailChannel
-from app.core.email.transport import SmtpTransport
+from app.core.email.compose import compose_compliance_alert
+from app.core.email.transport import smtp_from_settings
 from app.core.mahsa_client import MahsaClient, MahsaError
 from app.core.router import DomainRouter
 from app.db.base import Base
 from app.db.session import session_factory
 from app.domains import build_registry
+from app.domains.compliance.service import ComplianceService
 from app.domains.revenue.service import RevenueService
 from app.scheduler import seconds_until_next
 
@@ -69,6 +71,18 @@ async def run_brief(
     }
 
 
+async def run_alerts(
+    session: Session, channel: EmailChannel, *, to: str, as_of: date
+) -> dict[str, Any]:
+    """Dispatch statutory compliance alerts (T-7 / T-1 / T-0 / overdue) due as of ``as_of``."""
+    alerts = ComplianceService().alerts(session, as_of)
+    if not alerts:
+        return {"job": "alerts", "dispatched": 0}
+    ctx = compose_compliance_alert(alerts, as_of.isoformat())
+    await channel.send_compliance_alert(to=to, ctx=ctx)
+    return {"job": "alerts", "dispatched": len(alerts)}
+
+
 async def run_once(command: str, *, settings: Settings, now_utc: datetime) -> dict[str, Any]:
     """Run a job once with real wiring. Failures are caught and reported, never raised, so a
     scheduler tick never crashes the loop."""
@@ -89,7 +103,7 @@ async def run_once(command: str, *, settings: Settings, now_utc: datetime) -> di
                 results.append({"job": "capture", "error": str(exc)})
         if command in ("brief", "all"):
             channel = EmailChannel(
-                SmtpTransport(host=settings.smtp_host, port=settings.smtp_port),
+                smtp_from_settings(settings),
                 sender=settings.email_sender,
             )
             try:
@@ -109,7 +123,7 @@ async def run_once(command: str, *, settings: Settings, now_utc: datetime) -> di
                 results.append({"job": "brief", "error": str(exc)})
         if command in ("dunning", "all"):
             channel = EmailChannel(
-                SmtpTransport(host=settings.smtp_host, port=settings.smtp_port),
+                smtp_from_settings(settings),
                 sender=settings.email_sender,
             )
             try:
@@ -120,6 +134,18 @@ async def run_once(command: str, *, settings: Settings, now_utc: datetime) -> di
             except OSError as exc:
                 _log.warning("dunning job skipped: %s", exc)
                 results.append({"job": "dunning", "error": str(exc)})
+        if command in ("alerts", "all"):
+            channel = EmailChannel(
+                smtp_from_settings(settings),
+                sender=settings.email_sender,
+            )
+            try:
+                results.append(
+                    await run_alerts(session, channel, to=settings.cfo_email, as_of=today)
+                )
+            except OSError as exc:
+                _log.warning("alerts job skipped: %s", exc)
+                results.append({"job": "alerts", "error": str(exc)})
     finally:
         session.close()
     return {"ran": command, "at": now_utc.isoformat(), "results": results}
@@ -148,7 +174,9 @@ async def serve(settings: Settings) -> None:  # pragma: no cover - long-running 
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO)
     parser = argparse.ArgumentParser(prog="app.jobs", description="Maisha scheduled jobs")
-    parser.add_argument("command", choices=["capture", "brief", "dunning", "all", "serve"])
+    parser.add_argument(
+        "command", choices=["capture", "brief", "dunning", "alerts", "all", "serve"]
+    )
     args = parser.parse_args(argv)
     settings = get_settings()
     if args.command == "serve":

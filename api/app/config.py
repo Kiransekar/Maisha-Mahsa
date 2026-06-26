@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     cfo_email: str = "founder@maisha-mahsa.local"
     smtp_host: str = "127.0.0.1"
     smtp_port: int = 1025
+    smtp_username: str = ""  # set for an authenticated production relay
+    smtp_password: str = ""
+    smtp_use_tls: bool = False  # True for a TLS SMTP relay (e.g. port 465)
     email_sender: str = "cfo@maisha-mahsa.local"
 
     # LLM / Maisha drafting layer (PRD §10 Layer 1, CLAUDE.md §7). The model only *drafts* —

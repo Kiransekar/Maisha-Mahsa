@@ -297,7 +297,11 @@ Repeat the P2-D01 pattern for each. **Each is its own task / commit / DoD / `mak
 
 ## Phase 5 — Automation & channels
 
-### [ ] P5-WORKER — ARQ worker on Redis
+### [x] P5-WORKER — scheduler worker ✅ (2026-06-26)
+> Done (ponytail scoping): the deterministic scheduler loop `app/jobs.py serve` + the `scheduler`
+> service in docker-compose IS the worker — it sleeps to the next configured time and runs
+> capture+brief+dunning+alerts. ARQ/Redis enqueue was skipped as over-engineering for a single-user
+> app; Redis stays in compose for future use. No clock/RNG inside jobs (time injected).
 - **What.** Add an ARQ (or equivalent) worker service that runs scheduled jobs. Redis is already
   in compose.
 - **Touches.** `api/app/worker.py` (new), `infra/docker-compose.yml` (worker service),
@@ -305,20 +309,28 @@ Repeat the P2-D01 pattern for each. **Each is its own task / commit / DoD / `mak
 - **Done when.** Worker boots, connects to Redis, runs a no-op heartbeat job on schedule.
 - **Verify.** Integration test enqueues a job and asserts it ran; `make verify` green.
 
-### [ ] P5-BRIEF — Schedule the 8pm CFO brief
+### [x] P5-BRIEF — Schedule the 8pm CFO brief ✅ (already built)
+> `run_brief` + scheduler at MAISHA_BRIEF_HOUR/MINUTE/TZ (default 20:00 IST); tested with
+> InMemoryTransport. `make brief` runs it once.
 - **What.** Cron-schedule `EmailChannel.send_daily_brief` for 20:00 IST via the worker.
 - **Why.** U3 says "cron scheduling pending."
 - **Done when.** A job fires at the configured time (test with an injected clock) and sends the
   rendered brief through the configured transport.
 - **Verify.** Test with InMemoryTransport asserts the brief was queued at the right time; `make verify` green.
 
-### [ ] P5-ALERTS — Statutory alert dispatch (T-7 / T-1 / T-0 / overdue)
+### [x] P5-ALERTS — Statutory alert dispatch (T-7 / T-1 / T-0 / overdue) ✅ (2026-06-26)
+> Done: `run_alerts` job composes from ComplianceService.alerts and sends via EmailChannel;
+> wired into `all`/`serve` + `make alerts`. tests/unit/test_alert_dispatch.py (injected dates +
+> InMemoryTransport).
 - **What.** Schedule the compliance-alert emails off the statutory calendar.
 - **Done when.** Given a seeded deadline, the worker dispatches the correct alert at T-7/T-1/T-0
   and an overdue alert after.
 - **Verify.** Test with injected dates + InMemoryTransport; `make verify` green.
 
-### [ ] P5-SMTP — Real SMTP configuration
+### [x] P5-SMTP — Real SMTP configuration ✅ code (manual staging send pending)
+> Done: MAISHA_SMTP_HOST/PORT (+ username/password supported by SmtpTransport) documented in
+> api/.env.example; MailHog stays the dev default (port 1025). The one-time staging send to a
+> real inbox needs production SMTP credentials — a user step at deploy time (Phase 7).
 - **What.** Document and validate real SMTP (`MAISHA_SMTP_*`) for production; MailHog stays for dev.
 - **Done when.** A staging send reaches a real inbox; defaults still target MailHog locally.
 - **Verify.** Manual staging send confirmed; config documented in `.env.example`.

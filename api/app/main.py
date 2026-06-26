@@ -24,7 +24,7 @@ from app.core.audit_store import load_chain
 from app.core.cfo import DomainHealth, collect_health
 from app.core.domain import BaseDomainService
 from app.core.email.channel import EmailChannel
-from app.core.email.transport import SmtpTransport
+from app.core.email.transport import smtp_from_settings
 from app.core.mahsa_client import MahsaClient, MahsaError
 from app.core.money import Paise
 from app.core.ocr import OcrUnavailable
@@ -542,7 +542,7 @@ def create_app() -> FastAPI:
         today = datetime.now(UTC).date()
         ctx = investor_update(db, today, highlights=_parse_highlights(highlights))
         channel = EmailChannel(
-            SmtpTransport(host=settings.smtp_host, port=settings.smtp_port),
+            smtp_from_settings(settings),
             sender=settings.email_sender,
         )
         try:
@@ -563,7 +563,7 @@ def create_app() -> FastAPI:
         today = datetime.now(UTC).date()
         ctx = investor_update(db, today)
         channel = EmailChannel(
-            SmtpTransport(host=settings.smtp_host, port=settings.smtp_port),
+            smtp_from_settings(settings),
             sender=settings.email_sender,
         )
         try:
