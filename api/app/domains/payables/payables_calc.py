@@ -10,7 +10,7 @@ Rates/thresholds are **FY 2025-26** and declared as data — re-verify each Fina
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
@@ -150,3 +150,54 @@ def early_payment_discount(
         "discount": discount,
         "net_payable": int(invoice_amount) - discount,
     }
+
+
+def _median(values: list[int]) -> int:
+    s = sorted(values)
+    return s[len(s) // 2]
+
+
+def detect_recurring(
+    bills: list[dict],
+    *,
+    min_occurrences: int = 3,
+    gap_tolerance_days: int = 7,
+    amount_tolerance_pct: float = 15.0,
+) -> list[dict]:
+    """Flag vendors with a regular (≈monthly) billing cadence as recurring payables (SaaS).
+    Each bill: {vendor_id, vendor_name, bill_date 'YYYY-MM-DD', amount_paise}. A vendor is
+    recurring when it has >= min_occurrences bills, a near-monthly median gap, and amounts
+    within ``amount_tolerance_pct`` of the median. Predicts the next date + amount. Pure."""
+    by_vendor: dict[Any, list[dict]] = {}
+    for b in bills:
+        by_vendor.setdefault(b["vendor_id"], []).append(b)
+
+    out: list[dict] = []
+    for vendor_id, items in by_vendor.items():
+        if len(items) < min_occurrences:
+            continue
+        items = sorted(items, key=lambda x: x["bill_date"])
+        dates = [date.fromisoformat(i["bill_date"]) for i in items]
+        gaps = [(dates[k] - dates[k - 1]).days for k in range(1, len(dates))]
+        median_gap = _median(gaps)
+        if not (28 - gap_tolerance_days <= median_gap <= 31 + gap_tolerance_days):
+            continue
+        amounts = [int(i["amount_paise"]) for i in items]
+        median_amount = _median(amounts)
+        if median_amount <= 0:
+            continue
+        spread_pct = max(abs(a - median_amount) for a in amounts) / median_amount * 100
+        if spread_pct > amount_tolerance_pct:
+            continue
+        out.append(
+            {
+                "vendor_id": vendor_id,
+                "vendor_name": items[-1].get("vendor_name", ""),
+                "occurrences": len(items),
+                "median_gap_days": median_gap,
+                "predicted_amount_paise": median_amount,
+                "predicted_next_date": (dates[-1] + timedelta(days=median_gap)).isoformat(),
+                "category": "saas_recurring",
+            }
+        )
+    return out

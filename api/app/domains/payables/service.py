@@ -172,6 +172,74 @@ class PayablesService(BaseDomainService):
             worst = max(worst, m["max_variance_pct"])
         return worst
 
+    # ---- recurring payables (SaaS auto-categorisation) ------------------------------
+
+    def recurring_payables(self, session: Session) -> list[dict[str, Any]]:
+        """Detect vendors billing on a regular near-monthly cadence (recurring SaaS spend)."""
+        rows = []
+        for b in session.scalars(select(Bill)).all():
+            vendor = session.get(Vendor, b.vendor_id)
+            rows.append(
+                {
+                    "vendor_id": b.vendor_id,
+                    "vendor_name": vendor.name if vendor else "",
+                    "bill_date": b.bill_date,
+                    "amount_paise": int(b.total_amount),
+                }
+            )
+        return payables_calc.detect_recurring(rows)
+
+    # ---- payment run (batch disbursement) -------------------------------------------
+
+    def payment_run(
+        self,
+        session: Session,
+        as_of: date,
+        *,
+        horizon_days: int = 0,
+        execute: bool = False,
+        paid_date: str | None = None,
+    ) -> dict[str, Any]:
+        """Build a disbursement batch of open bills due on/before ``as_of + horizon_days``,
+        prioritising MSME vendors and the most overdue first. When ``execute`` is set, records
+        each payment (marking bills paid). Net of nothing — TDS was withheld at bill creation."""
+        cutoff = as_of + timedelta(days=horizon_days)
+        lines: list[dict[str, Any]] = []
+        for b in self._open_bills(session):
+            due = date.fromisoformat(b.due_date)
+            if due > cutoff:
+                continue
+            vendor = session.get(Vendor, b.vendor_id)
+            lines.append(
+                {
+                    "bill_id": b.id,
+                    "bill_number": b.bill_number,
+                    "vendor_id": b.vendor_id,
+                    "vendor_name": vendor.name if vendor else "",
+                    "bank_account": vendor.bank_account if vendor else None,
+                    "ifsc": vendor.ifsc if vendor else None,
+                    "amount_paise": int(b.total_amount) - int(b.paid_amount),
+                    "due_date": b.due_date,
+                    "is_msme": bool(vendor.msme_status) if vendor else False,
+                    "days_to_due": (due - as_of).days,
+                }
+            )
+        # MSME first, then most overdue (smallest days_to_due) first.
+        lines.sort(key=lambda x: (not x["is_msme"], x["days_to_due"]))
+        total = sum(int(line["amount_paise"]) for line in lines)
+        if execute:
+            pay_date = paid_date or as_of.isoformat()
+            for line in lines:
+                self.record_payment(session, line["bill_id"], line["amount_paise"], pay_date)
+        return {
+            "as_of": as_of.isoformat(),
+            "cutoff": cutoff.isoformat(),
+            "count": len(lines),
+            "total_paise": total,
+            "lines": lines,
+            "executed": execute,
+        }
+
     # ---- GST input-credit bridge ----------------------------------------------------
 
     def input_tax_credit(self, session: Session, filing_period: str) -> dict[str, int]:
