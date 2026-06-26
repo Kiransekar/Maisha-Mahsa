@@ -17,8 +17,8 @@ MANIFEST = DomainManifest(
         Feature("filing_status", "Per-statute filing-status health", D),
         Feature("mark_filed", "Mark a return filed (with acknowledgement)", D),
         Feature("mca_filings", "MCA filings (AOC-4/MGT-7/DIR-3 KYC/DPT-3)", D),
-        Feature("secretarial", "Secretarial compliance (minutes/AGM/resolutions)", N),
-        Feature("audit_support", "Statutory/internal audit support package", N),
-        Feature("dpiit", "DPIIT Startup India reporting", N),
+        Feature("secretarial", "Secretarial compliance (minutes/AGM/resolutions)", D),
+        Feature("audit_support", "Statutory/internal audit support package", D),
+        Feature("dpiit", "DPIIT Startup India reporting", D),
     ],
 )

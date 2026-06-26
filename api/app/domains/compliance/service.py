@@ -111,6 +111,38 @@ class ComplianceService(BaseDomainService):
             for e in session.scalars(select(ComplianceCalendar)).all()
         ]
 
+    # ---- secretarial / audit-support / DPIIT ----------------------------------------
+
+    def secretarial_calendar(self, fy_end: str) -> list[dict[str, Any]]:
+        """Annual secretarial-compliance calendar (AGM, board meetings, registers, minutes)."""
+        return compliance_calc.secretarial_calendar(fy_end)
+
+    def board_meeting_compliance(self, meeting_dates: list[str]) -> dict[str, Any]:
+        """s.173 board-meeting count + 120-day-gap check."""
+        return compliance_calc.board_meeting_compliance(meeting_dates)
+
+    def audit_support_package(
+        self, available: set[str], *, audit_type: str = "statutory"
+    ) -> dict[str, Any]:
+        """Audit readiness checklist (what's ready vs missing)."""
+        return compliance_calc.audit_support_package(available, audit_type=audit_type)
+
+    def dpiit_eligibility(
+        self,
+        *,
+        incorporation_date: str,
+        as_of: str,
+        annual_turnover_paise: int,
+        is_reconstituted: bool = False,
+    ) -> dict[str, Any]:
+        """DPIIT Startup India recognition eligibility check."""
+        return compliance_calc.dpiit_eligibility(
+            incorporation_date=incorporation_date,
+            as_of=as_of,
+            annual_turnover_paise=annual_turnover_paise,
+            is_reconstituted=is_reconstituted,
+        )
+
     def alerts(self, session: Session, as_of: date) -> list[dict[str, Any]]:
         return compliance_calc.alerts(self._entries(session), as_of)
 
