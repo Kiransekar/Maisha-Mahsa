@@ -17,7 +17,7 @@ MANIFEST = DomainManifest(
         Feature("analytics", "Category-wise spend analytics", D),
         Feature("receipt_parse", "Receipt parsing from OCR text (GSTIN/amount/date)", D),
         Feature("ocr_capture", "Photo → OCR (Tesseract) image pipeline", D),
-        Feature("card_recon", "Corporate card reconciliation", N),
+        Feature("card_recon", "Corporate card reconciliation", D),
         Feature("mileage", "Mileage / per-diem travel", D),
     ],
 )

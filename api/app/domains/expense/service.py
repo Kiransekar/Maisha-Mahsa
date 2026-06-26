@@ -107,6 +107,22 @@ class ExpenseService(BaseDomainService):
         Tesseract isn't installed (the caller surfaces a 503)."""
         return expense_calc.parse_receipt(ocr.image_to_text(image_bytes))
 
+    def reconcile_card(
+        self,
+        statement_lines: list[dict],
+        claims: list[dict],
+        *,
+        date_tolerance_days: int = 3,
+        amount_tolerance_paise: int = 0,
+    ) -> dict[str, Any]:
+        """Corporate-card reconciliation: match statement lines to expense claims."""
+        return expense_calc.reconcile_card(
+            statement_lines,
+            claims,
+            date_tolerance_days=date_tolerance_days,
+            amount_tolerance_paise=amount_tolerance_paise,
+        )
+
     # ---- Mahsa contract -------------------------------------------------------------
 
     def build_snapshot(self, session: Session, as_of: date | None = None) -> dict[str, Any]:

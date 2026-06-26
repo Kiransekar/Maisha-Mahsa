@@ -250,6 +250,14 @@ class RevenueService(BaseDomainService):
             hsn=first_item.hsn_code if first_item else None,
         )
 
+    def export_invoice(
+        self, taxable: int, *, with_lut: bool, igst_rate: float = 18.0, invoice_date: str
+    ) -> dict[str, Any]:
+        """Export (zero-rated) invoice: LUT vs IGST-refund route + FEMA realisation deadline."""
+        return revenue_calc.export_invoice(
+            taxable, with_lut=with_lut, igst_rate=igst_rate, invoice_date=invoice_date
+        )
+
     # ---- Mahsa contract -------------------------------------------------------------
 
     def build_snapshot(self, session: Session, as_of: date | None = None) -> dict[str, Any]:

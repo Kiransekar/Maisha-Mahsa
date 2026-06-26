@@ -82,6 +82,14 @@ class ForecastService(BaseDomainService):
         session.flush()
         return {"forecast_id": row.id, **projection}
 
+    def revenue_recognition_forecast(
+        self, contracts: list[dict], *, horizon_months: int, start: str
+    ) -> dict[str, Any]:
+        """Contract-to-revenue timing: straight-line recognition forecast (Ind AS 115)."""
+        return forecast_calc.revenue_recognition_forecast(
+            contracts, horizon_months=horizon_months, start=start
+        )
+
     # ---- Mahsa contract -------------------------------------------------------------
 
     def build_snapshot(self, session: Session, as_of: date | None = None) -> dict[str, Any]:

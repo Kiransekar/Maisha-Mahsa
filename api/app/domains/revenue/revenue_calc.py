@@ -101,6 +101,31 @@ def is_credit_note_timely(invoice_date: str, cn_date: str) -> bool:
     return date.fromisoformat(cn_date) <= credit_note_deadline(invoice_date)
 
 
+def export_invoice(
+    taxable: int, *, with_lut: bool, igst_rate: float = 18.0, invoice_date: str
+) -> dict[str, Any]:
+    """Export invoice — a zero-rated supply (IGST Act s.16). With a LUT/bond, no IGST is
+    charged; without one, IGST is charged and refundable. FEMA requires export proceeds to be
+    realised within 9 months of the invoice date. Money in paise. Pure."""
+    import calendar
+
+    rate = Decimal("0") if with_lut else Decimal(str(igst_rate)) / Decimal(100)
+    igst = _round_paise(Decimal(int(taxable)) * rate)
+    inv = date.fromisoformat(invoice_date)
+    months = inv.month - 1 + 9
+    year = inv.year + months // 12
+    month = months % 12 + 1
+    day = min(inv.day, calendar.monthrange(year, month)[1])
+    return {
+        "zero_rated": True,
+        "with_lut": with_lut,
+        "igst": igst,
+        "total": int(taxable) + igst,
+        "refund_eligible": (not with_lut) and igst > 0,
+        "realization_due_date": date(year, month, day).isoformat(),
+    }
+
+
 def deferred_revenue_schedule(total: int, *, start: str, months: int, as_of: str) -> dict[str, Any]:
     """Straight-line revenue recognition for a contract: recognise ``total`` ratably over
     ``months`` from ``start``. Returns recognised-to-date vs deferred at ``as_of`` (the final

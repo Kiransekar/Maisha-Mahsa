@@ -9,6 +9,39 @@ from decimal import Decimal
 from typing import Any
 
 
+def _year_month_index(year_month: str) -> int:
+    """'YYYY-MM' -> absolute month index for arithmetic."""
+    year, month = year_month.split("-")
+    return int(year) * 12 + (int(month) - 1)
+
+
+def revenue_recognition_forecast(
+    contracts: list[dict], *, horizon_months: int, start: str
+) -> dict[str, Any]:
+    """Straight-line (ratable) revenue-recognition forecast per Ind AS 115. Each contract:
+    {total_paise, start 'YYYY-MM', term_months} — its value is recognised evenly over the
+    term (rounding remainder into the final month). Returns recognised revenue per month for
+    ``horizon_months`` from ``start`` ('YYYY-MM'). Pure & deterministic."""
+    start_idx = _year_month_index(start)
+    monthly = [0] * max(0, int(horizon_months))
+    for c in contracts:
+        total = int(c["total_paise"])
+        term = max(1, int(c["term_months"]))
+        c_start = _year_month_index(c["start"])
+        per_month = total // term
+        remainder = total - per_month * term  # trued up in the last month
+        for k in range(term):
+            idx = c_start + k - start_idx
+            if 0 <= idx < len(monthly):
+                monthly[idx] += per_month + (remainder if k == term - 1 else 0)
+    return {
+        "start": start,
+        "horizon_months": int(horizon_months),
+        "monthly": monthly,
+        "total_recognized": sum(monthly),
+    }
+
+
 def variance(actual: int, budget: int) -> dict[str, Any]:
     """Actual vs budget. Positive amount = over budget (spent more than planned)."""
     amount = int(actual) - int(budget)

@@ -9,9 +9,59 @@ is fully testable.
 from __future__ import annotations
 
 import re
+from datetime import date
 from typing import Any
 
 from app.core.money import Paise
+
+
+def reconcile_card(
+    statement_lines: list[dict],
+    claims: list[dict],
+    *,
+    date_tolerance_days: int = 3,
+    amount_tolerance_paise: int = 0,
+) -> dict[str, Any]:
+    """Corporate-card reconciliation: greedily match card-statement lines to expense claims by
+    amount (within ``amount_tolerance_paise``) and nearest date (within ``date_tolerance_days``).
+    Each line/claim: {id?, date 'YYYY-MM-DD', amount_paise}. One-to-one. Pure & deterministic."""
+    matched: list[dict] = []
+    used_claims: set[int] = set()
+    matched_stmt: set[int] = set()
+    for si, s in enumerate(statement_lines):
+        s_amount = int(s["amount_paise"])
+        s_date = date.fromisoformat(s["date"])
+        best_ci: int | None = None
+        best_gap: int | None = None
+        for ci, c in enumerate(claims):
+            if ci in used_claims:
+                continue
+            if abs(int(c["amount_paise"]) - s_amount) > amount_tolerance_paise:
+                continue
+            gap = abs((date.fromisoformat(c["date"]) - s_date).days)
+            if gap <= date_tolerance_days and (best_gap is None or gap < best_gap):
+                best_ci, best_gap = ci, gap
+        if best_ci is not None:
+            used_claims.add(best_ci)
+            matched_stmt.add(si)
+            matched.append(
+                {
+                    "statement_id": s.get("id", si),
+                    "claim_id": claims[best_ci].get("id", best_ci),
+                    "amount_paise": s_amount,
+                }
+            )
+    return {
+        "matched": matched,
+        "unmatched_statement": [
+            s.get("id", i) for i, s in enumerate(statement_lines) if i not in matched_stmt
+        ],
+        "unmatched_claims": [
+            c.get("id", i) for i, c in enumerate(claims) if i not in used_claims
+        ],
+        "match_rate": round(len(matched) / len(statement_lines), 4) if statement_lines else 1.0,
+    }
+
 
 # Default per-category reimbursement limits (paise). Override per company in future.
 DEFAULT_POLICY: dict[str, int] = {

@@ -18,6 +18,6 @@ MANIFEST = DomainManifest(
         Feature("unit_economics", "Unit economics (CAC/LTV/payback)", D),
         Feature("headcount", "Headcount planning → payroll forecast", D),
         Feature("rolling_reforecast", "Quarterly re-forecast workflow", D),
-        Feature("rev_recognition_forecast", "Contract-to-revenue timing", N),
+        Feature("rev_recognition_forecast", "Contract-to-revenue timing", D),
     ],
 )

@@ -20,7 +20,7 @@ MANIFEST = DomainManifest(
         Feature("gstr1_bridge", "Outward-supply feed into GST GSTR-1", D),
         Feature("revenue_recognition", "Accrual revenue recognition / deferred revenue", D),
         Feature("irn", "e-Invoice IRN generation + QR", D),
-        Feature("export_invoicing", "LUT / IGST refund / FEMA export invoicing", N),
+        Feature("export_invoicing", "LUT / IGST refund / FEMA export invoicing", D),
         Feature("dunning_send", "Automated reminder email dispatch", D),
     ],
 )
