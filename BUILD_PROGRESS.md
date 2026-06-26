@@ -22,7 +22,7 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
 | L1 | Mahsa: HTTP integration tests | ✅ | `/health`, `/fold` |
 | L2 | `schema.sql` — all 40+ tables, indexes, constraints | ✅ | all 12 domains + shared `documents` done |
 | L2 | SQLAlchemy models + session | ✅ | all 12 domains modelled |
-| L2 | Alembic migrations | ⬜ | |
+| L2 | Alembic migrations | ✅ | baseline `0001_baseline` from metadata; `make migrate`; no-drift test (2026-06-26) |
 | L3 | `MahsaClient` (httpx → Rust sidecar) | ✅ | unit + integration tested |
 | L3 | `DomainRouter` (keyword classifier) | ✅ | treasury routed; others registered |
 | L3 | Hash-chained `AuditLog` | ✅ | append-only, tamper-evident, tested |

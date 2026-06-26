@@ -71,8 +71,10 @@ def create_app() -> FastAPI:
     )
     app = FastAPI(title=settings.app_name, version=settings.version)
 
-    # Ensure the schema exists (dev convenience; production uses Alembic migrations).
-    Base.metadata.create_all(bind=session_factory().kw["bind"])
+    # Schema: dev/test auto-create for convenience; production uses Alembic migrations
+    # (`make migrate` / `alembic upgrade head`). P1-MIGRATE.
+    if settings.environment != "production":
+        Base.metadata.create_all(bind=session_factory().kw["bind"])
 
     # P1-AUTH: single-user login guard — every route needs a valid session cookie except
     # the public allowlist (/health, /login, /static).

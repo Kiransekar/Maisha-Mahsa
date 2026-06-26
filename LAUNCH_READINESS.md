@@ -111,7 +111,11 @@ It must print `✅ verify passed`. If it doesn't, the task is not done.
   no cookie; correct password → cookie set, `/` renders; audit entries carry the logged-in user.
 - **Verify.** New `api/tests/integration/test_auth.py` covering all four cases; `make verify` green.
 
-### [ ] P1-MIGRATE — Alembic migrations (stop using create_all)
+### [x] P1-MIGRATE — Alembic migrations (stop using create_all) ✅ (2026-06-26)
+> Done: `api/alembic/` + `alembic.ini`; baseline `0001_baseline` builds the full 41-table
+> schema from `Base.metadata` (can't drift); `main.py` only auto-creates when
+> `MAISHA_ENVIRONMENT != production`; `make migrate`; tests in `test_migrations.py` assert
+> every table is built and `compare_metadata` shows zero drift.
 - **What.** Add Alembic; generate the baseline migration from the current models; switch the app
   to *not* auto-create in production (keep create_all only behind a `MAISHA_DEV=1` flag).
 - **Why.** `CLAUDE.md` §3 L2 lists Alembic as ⬜. `create_all` silently ignores schema drift —

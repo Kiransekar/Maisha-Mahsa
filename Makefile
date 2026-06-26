@@ -6,7 +6,7 @@ PIP := api/.venv/bin/pip
 # Prefer a rustup-installed cargo; fall back to PATH.
 CARGO := $(shell [ -x "$$HOME/.cargo/bin/cargo" ] && echo "$$HOME/.cargo/bin/cargo" || echo cargo)
 
-.PHONY: help verify test test-rust test-py eval eval-real capture brief dunning scheduler lint fmt venv dev clean
+.PHONY: help verify test test-rust test-py eval eval-real capture brief dunning scheduler lint fmt venv dev clean migrate
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n",$$1,$$2}'
@@ -26,6 +26,9 @@ eval: ## Golden-eval gate for the Maisha LLM layer (stub producer — the CI gat
 
 eval-real: ## Run the golden eval against a live model (MAISHA_LLM_PROVIDER, e.g. ollama)
 	cd api && .venv/bin/python -m evals.harness --all --provider ollama --report text
+
+migrate: ## Apply DB schema migrations (alembic upgrade head) — the production schema path
+	cd api && .venv/bin/alembic upgrade head
 
 capture: ## Run the snapshot-capture job once (records metrics for trend charts)
 	cd api && .venv/bin/python -m app.jobs capture
