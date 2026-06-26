@@ -30,6 +30,9 @@ eval-real: ## Run the golden eval against a live model (MAISHA_LLM_PROVIDER, e.g
 migrate: ## Apply DB schema migrations (alembic upgrade head) — the production schema path
 	cd api && .venv/bin/alembic upgrade head
 
+seed: ## Load a realistic sample company (dev only) so screens show real numbers
+	cd api && .venv/bin/python -m app.dev.seed
+
 capture: ## Run the snapshot-capture job once (records metrics for trend charts)
 	cd api && .venv/bin/python -m app.jobs capture
 

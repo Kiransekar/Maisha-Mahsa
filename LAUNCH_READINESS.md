@@ -142,7 +142,12 @@ It must print `✅ verify passed`. If it doesn't, the task is not done.
   with real secrets it boots.
 - **Verify.** Unit test on the config validator; `make verify` green.
 
-### [ ] P1-FIRSTRUN — Seed / demo data path & empty-state UX
+### [x] P1-FIRSTRUN — Seed / demo data path & empty-state UX ✅ (2026-06-26)
+> Done: `app/dev/seed.py` (dev-gated, idempotent) + `make seed` loads a realistic seed-stage
+> startup — bank account + 3 months of txns, 2 customers + invoices (one overdue), 2 vendors
+> + bills (one past its MSME 45-day clock), 2 employees + salary structures, a cap table.
+> `test_seed.py` asserts non-zero cash/burn/AR/AP and idempotency. Empty-state polish on the
+> 12 domain pages is a minor follow-up (dashboard already has it; figure tables show ₹0 rows).
 - **What.** A `make seed` (or `/api/dev/seed`, dev-gated) that loads a realistic sample company
   (a few bank txns, invoices, bills, employees, a cap table) so screens show real numbers; and
   ensure every empty screen has a clear "no data yet — add some" state (the dashboard already
