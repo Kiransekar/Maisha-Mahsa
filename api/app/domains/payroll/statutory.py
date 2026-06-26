@@ -46,14 +46,42 @@ _TDS_SLABS: list[tuple[int, int | None, Decimal]] = [
 ]
 
 # Professional Tax monthly slabs by state. Each entry: (gross_upto_rupees_or_None, paise).
-# Only fully-modelled states are listed; unlisted states return 0 (documented limitation).
+# Only fully-modelled MONTHLY-slab states are listed; unlisted states return 0 (documented
+# limitation — many states levy no PT, and a few, e.g. TN/KL, are half-yearly and not modelled
+# here). Re-verify slabs against each state's PT Act annually (see skills/indian-fin-rules).
 _PT_TABLES: dict[str, list[tuple[int | None, int]]] = {
     # Maharashtra (men): nil <=7500; 175 up to 10000; 200 above (300 in February).
     "MH": [(7500, 0), (10000, Paise.from_rupees(175)), (None, Paise.from_rupees(200))],
     # Karnataka: nil below 25000; 200 at/above 25000.
     "KA": [(24999, 0), (None, Paise.from_rupees(200))],
+    # West Bengal: graded monthly slabs.
+    "WB": [
+        (10000, 0), (15000, Paise.from_rupees(110)), (25000, Paise.from_rupees(130)),
+        (40000, Paise.from_rupees(150)), (None, Paise.from_rupees(200)),
+    ],
+    # Gujarat: nil <=12000; 200 above.
+    "GJ": [(12000, 0), (None, Paise.from_rupees(200))],
+    # Andhra Pradesh: nil <=15000; 150 up to 20000; 200 above.
+    "AP": [(15000, 0), (20000, Paise.from_rupees(150)), (None, Paise.from_rupees(200))],
+    # Telangana: nil <=15000; 150 up to 20000; 200 above.
+    "TS": [(15000, 0), (20000, Paise.from_rupees(150)), (None, Paise.from_rupees(200))],
 }
 _PT_STATES_MODELLED = frozenset(_PT_TABLES)
+
+# Labour Welfare Fund: (employee_paise, employer_paise, due_months). LWF is a PERIODIC
+# remittance (half-yearly/annual), NOT a monthly payslip line — surfaced as a compliance
+# figure, returned only in its due month(s). Amounts/calendars vary by state and change;
+# re-verify against each state's LWF Act/notification annually.
+_LWF_TABLES: dict[str, tuple[int, int, tuple[int, ...]]] = {
+    "MH": (Paise.from_rupees(25), Paise.from_rupees(75), (6, 12)),   # half-yearly: Jun, Dec
+    "KA": (Paise.from_rupees(20), Paise.from_rupees(40), (12,)),     # annual: Dec
+    "TN": (Paise.from_rupees(20), Paise.from_rupees(40), (12,)),     # annual: Dec
+    "GJ": (Paise.from_rupees(6), Paise.from_rupees(12), (6, 12)),    # half-yearly
+    "WB": (Paise.from_rupees(3), Paise.from_rupees(15), (6, 12)),    # half-yearly
+    "AP": (Paise.from_rupees(30), Paise.from_rupees(70), (12,)),     # annual
+    "MP": (Paise.from_rupees(10), Paise.from_rupees(30), (6, 12)),   # half-yearly
+}
+_LWF_STATES_MODELLED = frozenset(_LWF_TABLES)
 
 
 # ---- rounding helpers -----------------------------------------------------------------
@@ -132,6 +160,44 @@ def professional_tax(state: str | None, gross_monthly: int, month: int) -> Paise
     if code == "MH" and month == 2 and amount == int(Paise.from_rupees(200)):
         amount = int(Paise.from_rupees(300))
     return Paise(amount)
+
+
+# ---- Labour Welfare Fund (state calendars) --------------------------------------------
+
+
+def lwf_is_modelled(state: str | None) -> bool:
+    return (state or "").upper() in _LWF_STATES_MODELLED
+
+
+def labour_welfare_fund(state: str | None, month: int) -> tuple[Paise, Paise]:
+    """(employee, employer) LWF contribution for ``month`` (1-12). Non-zero only in the
+    state's due month(s); ₹0 for unmodelled states or non-due months."""
+    entry = _LWF_TABLES.get((state or "").upper())
+    if entry is None:
+        return Paise(0), Paise(0)
+    employee, employer, due_months = entry
+    if int(month) in due_months:
+        return Paise(employee), Paise(employer)
+    return Paise(0), Paise(0)
+
+
+# ---- Leave & attendance (loss-of-pay) -------------------------------------------------
+
+
+def loss_of_pay(monthly_amount: int, lop_days: int, days_in_month: int = 30) -> Paise:
+    """Loss-of-pay deduction = monthly_amount × lop_days / days_in_month (capped at the
+    month). ₹0 when there are no unpaid-leave days. Pure, exact paise."""
+    if int(lop_days) <= 0:
+        return Paise(0)
+    days = max(1, int(days_in_month))
+    lop = min(int(lop_days), days)
+    value = Decimal(int(monthly_amount)) * lop / days
+    return Paise(_round_rupee(int(value.to_integral_value(ROUND_HALF_UP))))
+
+
+def leave_balance(opening_days: float, accrued_days: float, taken_days: float) -> float:
+    """Closing leave balance = opening + accrued − taken, floored at zero."""
+    return max(0.0, float(opening_days) + float(accrued_days) - float(taken_days))
 
 
 # ---- TDS (Income-Tax s.192, new regime) -----------------------------------------------

@@ -19,16 +19,26 @@ from app.domains.payroll.manifest import MANIFEST
 
 
 def compute_components(
-    *, basic: int, hra: int, lta: int, special_allowance: int, state: str | None, month: int
+    *,
+    basic: int,
+    hra: int,
+    lta: int,
+    special_allowance: int,
+    state: str | None,
+    month: int,
+    lop_days: int = 0,
+    days_in_month: int = 30,
 ) -> dict[str, int]:
-    """Derive gross, statutory deductions, net pay and CTC for one month. Pure."""
+    """Derive gross, statutory deductions, net pay and CTC for one month. Pure.
+    ``lop_days`` defaults to 0 (no loss-of-pay → identical to a full month)."""
     gross = int(basic) + int(hra) + int(lta) + int(special_allowance)
     emp_pf = int(statutory.pf_employee(basic))
     empr_pf = int(statutory.pf_employer(basic))
     emp_esi, empr_esi = statutory.esi(gross)
     pt = int(statutory.professional_tax(state, gross, month))
     tds = int(statutory.monthly_tds(gross * 12))
-    employee_deductions = emp_pf + int(emp_esi) + pt + tds
+    lop = int(statutory.loss_of_pay(gross, lop_days, days_in_month))
+    employee_deductions = emp_pf + int(emp_esi) + pt + tds + lop
     net = gross - employee_deductions
     ctc = gross + empr_pf + int(empr_esi)
     return {
@@ -43,6 +53,8 @@ def compute_components(
         "employer_esi": int(empr_esi),
         "professional_tax": pt,
         "tds_monthly": tds,
+        "loss_of_pay": lop,
+        "lop_days": int(lop_days),
         "employee_deductions": employee_deductions,
         "net_salary": net,
         "ctc": ctc,
@@ -131,11 +143,22 @@ class PayrollService(BaseDomainService):
 
     # ---- monthly run ----------------------------------------------------------------
 
-    def run_payroll(self, session: Session, month_year: str, run_date: str) -> dict[str, Any]:
+    def run_payroll(
+        self,
+        session: Session,
+        month_year: str,
+        run_date: str,
+        lop_days: dict[int, int] | None = None,
+    ) -> dict[str, Any]:
         """Run payroll for ``month_year`` ("YYYY-MM"). Recomputes each active employee's
         entry for that month (so PT February specials etc. apply) from their latest
-        effective salary structure."""
+        effective salary structure. ``lop_days`` optionally maps employee_id → unpaid-leave
+        days for the month (loss-of-pay); absent employees are treated as full-month."""
+        import calendar
+
+        lop_days = lop_days or {}
         year, month = (int(p) for p in month_year.split("-"))
+        days_in_month = calendar.monthrange(year, month)[1]
         anchor = f"{year:04d}-{month:02d}-28"
 
         run = PayrollRun(month_year=month_year, run_date=run_date, status="draft")
@@ -158,6 +181,8 @@ class PayrollService(BaseDomainService):
                 special_allowance=structure.special_allowance,
                 state=emp.state,
                 month=month,
+                lop_days=int(lop_days.get(emp.id, 0)),
+                days_in_month=days_in_month,
             )
             session.add(
                 PayrollEntry(
@@ -202,6 +227,33 @@ class PayrollService(BaseDomainService):
             "total_pf_employer": totals["pf_employer"],
             "total_esi_employer": totals["esi_employer"],
             "min_net_pay": 0 if min_net is None else min_net,
+        }
+
+    # ---- Labour Welfare Fund (state calendars) --------------------------------------
+
+    def lwf_due(self, session: Session, *, period: str) -> dict[str, Any]:
+        """LWF remittance due for ``period`` (YYYY-MM): per-state employee + employer totals,
+        non-zero only in each state's due month. Periodic remittance, not a payslip line."""
+        month = int(period[5:7])
+        by_state: dict[str, dict[str, int]] = {}
+        total_emp = total_empr = 0
+        for emp in session.scalars(select(Employee).where(Employee.status == "active")).all():
+            employee_c, employer_c = statutory.labour_welfare_fund(emp.state, month)
+            if int(employee_c) == 0 and int(employer_c) == 0:
+                continue
+            code = (emp.state or "").upper()
+            bucket = by_state.setdefault(code, {"employee": 0, "employer": 0, "members": 0})
+            bucket["employee"] += int(employee_c)
+            bucket["employer"] += int(employer_c)
+            bucket["members"] += 1
+            total_emp += int(employee_c)
+            total_empr += int(employer_c)
+        return {
+            "period": period,
+            "by_state": by_state,
+            "total_employee_paise": total_emp,
+            "total_employer_paise": total_empr,
+            "total_paise": total_emp + total_empr,
         }
 
     # ---- statutory documents (payslip / Form 16) ------------------------------------
@@ -330,6 +382,7 @@ class PayrollService(BaseDomainService):
         total_gross = 0
         total_employer_pf = 0
         bonus_required = 0
+        lwf_due = 0
         min_net: int | None = None
         for emp in employees:
             structure = self._latest_structure(session, emp.id, anchor_iso)
@@ -346,6 +399,8 @@ class PayrollService(BaseDomainService):
             total_gross += comp["gross_salary"]
             total_employer_pf += comp["employer_pf"]
             bonus_required += int(statutory.bonus_provision_monthly(structure.basic))
+            employee_lwf, employer_lwf = statutory.labour_welfare_fund(emp.state, month)
+            lwf_due += int(employee_lwf) + int(employer_lwf)
             min_net = comp["net_salary"] if min_net is None else min(min_net, comp["net_salary"])
 
         # Health signals consumed by dif/src/fold/payroll.rs and the payroll rules. We compute
@@ -365,5 +420,6 @@ class PayrollService(BaseDomainService):
                 "leave_liability": 1.0,
                 "min_net_pay_paise": 0 if min_net is None else min_net,
                 "monthly_bonus_required_paise": bonus_required,
+                "lwf_due_paise": lwf_due,
             },
         }
