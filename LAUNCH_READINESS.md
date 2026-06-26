@@ -231,7 +231,14 @@ Repeat the P2-D01 pattern for each. **Each is its own task / commit / DoD / `mak
 
 ---
 
-## Phase 3 — Domain feature backlog (finish every PRD feature)
+## Phase 3 — Domain feature backlog (finish every PRD feature) ✅ COMPLETE (2026-06-26)
+
+> All 12 domain manifests are now 100% — **116/116 features DONE**. The final 16 were built in
+> 2026-06-26: payroll pt/lwf/leave; payables recurring/payment_run; equity share_certificates/
+> rights_buyback; forecast rev_recognition_forecast; revenue export_invoicing; expense card_recon;
+> vault access_control; compliance secretarial/audit_support/dpiit; tax itr/transfer_pricing.
+> External-system boundaries (ITR e-filing portal upload, IRP/GSP QR-signing) are computed up to
+> the boundary and documented as out-of-scope for the on-prem app.
 
 > Each domain's `manifest.py` still lists `NOT_STARTED` features. Real-world use means these are
 > done, not just the "core." Work **one feature at a time**, Rust fold/rule first (if it needs

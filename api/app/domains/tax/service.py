@@ -164,6 +164,43 @@ class TaxService(BaseDomainService):
             worst = max(worst, late)
         return worst
 
+    # ---- ITR preparation & transfer pricing -----------------------------------------
+
+    def itr_computation(
+        self,
+        *,
+        entity_type: str,
+        gross_total_income: int,
+        deductions: int = 0,
+        book_profit: int | None = None,
+        tds_paid: int = 0,
+        advance_tax_paid: int = 0,
+    ) -> dict[str, Any]:
+        """ITR-5/ITR-6 headline computation (e-filing portal upload is out of scope)."""
+        return tax_calc.itr_computation(
+            entity_type=entity_type,
+            gross_total_income=gross_total_income,
+            deductions=deductions,
+            book_profit=book_profit,
+            tds_paid=tds_paid,
+            advance_tax_paid=advance_tax_paid,
+        )
+
+    def arms_length_check(
+        self, price: int, comparables: list[int], *, tolerance_pct: float = 3.0
+    ) -> dict[str, Any]:
+        """Transfer-pricing arm's-length test against comparable uncontrolled prices."""
+        return tax_calc.arms_length_check(price, comparables, tolerance_pct=tolerance_pct)
+
+    def tp_documentation_required(
+        self, *, intl_transaction_value: int, group_consolidated_revenue: int = 0
+    ) -> dict[str, Any]:
+        """Which transfer-pricing documents are triggered (3CEB / Rule 10D / Master File / CbCR)."""
+        return tax_calc.tp_documentation_required(
+            intl_transaction_value=intl_transaction_value,
+            group_consolidated_revenue=group_consolidated_revenue,
+        )
+
     def build_snapshot(self, session: Session, as_of: date | None = None) -> dict[str, Any]:
         anchor = as_of or date(1970, 1, 1)
         tds_days_overdue = self._tds_days_overdue(session, anchor)

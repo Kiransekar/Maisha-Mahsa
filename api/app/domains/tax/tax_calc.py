@@ -150,6 +150,88 @@ def audit_required(
     return turnover > int(_AUDIT_BUSINESS) and cash_ratio > 0.05
 
 
+_COMPANY_TAX_RATE = Decimal("0.22")  # s.115BAA concessional regime (companies)
+_FIRM_TAX_RATE = Decimal("0.30")  # LLP / firm
+_ONE_CRORE_PAISE = 10**7 * 100
+_RULE_10D_THRESHOLD = _ONE_CRORE_PAISE  # Rs 1 crore aggregate international transactions
+_MASTER_FILE_THRESHOLD = 500 * _ONE_CRORE_PAISE  # Rs 500 crore group revenue
+_CBCR_THRESHOLD = 5500 * _ONE_CRORE_PAISE  # Rs 5500 crore group revenue (s.286)
+
+
+def itr_computation(
+    *,
+    entity_type: str,
+    gross_total_income: int,
+    deductions: int = 0,
+    book_profit: int | None = None,
+    tds_paid: int = 0,
+    advance_tax_paid: int = 0,
+) -> dict[str, Any]:
+    """Prepare the headline ITR computation. ``entity_type`` 'company' → ITR-6 (s.115BAA 22%),
+    'firm'/'llp' → ITR-5 (30%). For companies the normal tax is compared with MAT (s.115JB) and
+    the higher applies; prepaid TDS + advance tax are netted off. The e-filing JSON/portal
+    upload is the external boundary (out of scope). Pure & exact paise."""
+    et = entity_type.lower()
+    total_income = max(0, int(gross_total_income) - int(deductions))
+    if et == "company":
+        form, rate = "ITR-6", _COMPANY_TAX_RATE
+    else:
+        form, rate = "ITR-5", _FIRM_TAX_RATE
+    normal_tax = _round_rupee(Decimal(total_income) * rate * (Decimal(1) + _CESS))
+    mat = mat_liability(int(book_profit)) if (et == "company" and book_profit is not None) else 0
+    tax_payable = max(normal_tax, mat)
+    prepaid = int(tds_paid) + int(advance_tax_paid)
+    return {
+        "form": form,
+        "entity_type": et,
+        "total_income": total_income,
+        "normal_tax": normal_tax,
+        "mat": mat,
+        "tax_payable": tax_payable,
+        "prepaid_taxes": prepaid,
+        "balance_payable": max(0, tax_payable - prepaid),
+        "refund_due": max(0, prepaid - tax_payable),
+    }
+
+
+def arms_length_check(
+    price: int, comparables: list[int], *, tolerance_pct: float = 3.0
+) -> dict[str, Any]:
+    """Arm's-length test for a controlled transaction. The arm's-length price is the arithmetic
+    mean of the uncontrolled comparables (Rule 10CA); a ±``tolerance_pct`` band (3% proviso)
+    defines the acceptable range. Returns whether ``price`` is at arm's length and any TP
+    adjustment to the ALP. Pure."""
+    if not comparables:
+        return {"at_arms_length": None, "reason": "no comparables provided"}
+    mean = sum(int(c) for c in comparables) // len(comparables)
+    band = int(Decimal(mean) * Decimal(str(tolerance_pct)) / Decimal(100))
+    lower, upper = mean - band, mean + band
+    at_arms_length = lower <= int(price) <= upper
+    return {
+        "at_arms_length": at_arms_length,
+        "arms_length_price": mean,
+        "lower": lower,
+        "upper": upper,
+        "adjustment": 0 if at_arms_length else mean - int(price),
+    }
+
+
+def tp_documentation_required(
+    *, intl_transaction_value: int, group_consolidated_revenue: int = 0
+) -> dict[str, Any]:
+    """Transfer-pricing documentation thresholds: Form 3CEB whenever international transactions
+    exist; Rule 10D documentation if their aggregate value exceeds ₹1 crore; Master File if group
+    consolidated revenue exceeds ₹500 crore; CbCR (s.286) above ₹5,500 crore. Money in paise."""
+    intl = int(intl_transaction_value)
+    group = int(group_consolidated_revenue)
+    return {
+        "form_3ceb_required": intl > 0,
+        "rule_10d_documentation": intl > _RULE_10D_THRESHOLD,
+        "master_file_required": group > _MASTER_FILE_THRESHOLD,
+        "cbcr_required": group > _CBCR_THRESHOLD,
+    }
+
+
 def mat_liability(book_profit: int) -> int:
     """Minimum Alternate Tax (s.115JB): 15% of book profit + 4% cess. Surcharge (which
     depends on income slab) is layered on by the caller when applicable."""
