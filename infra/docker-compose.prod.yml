@@ -1,0 +1,83 @@
+# Production stack (P7). Single VPS + Docker + Caddy TLS.
+#   cp ../api/.env.example .env  &&  edit (MAISHA_ENVIRONMENT=production, strong secrets, domain)
+#   docker compose -f docker-compose.prod.yml up -d --build
+# Only Caddy publishes ports (80/443). api/dif/redis are internal-only. Migrations run once
+# before the api starts. No MailHog (real SMTP via .env); Ollama optional (add back if using LLM).
+services:
+  migrate:
+    build: { context: ../api, dockerfile: Dockerfile }
+    command: ["alembic", "upgrade", "head"]
+    env_file: [.env]
+    environment:
+      MAISHA_DATABASE_URL: "sqlite:////data/maisha.db"
+    volumes:
+      - maisha_data:/data
+    restart: "no"
+
+  dif:
+    build: { context: ../dif, dockerfile: Dockerfile }
+    environment:
+      MAHSA_ADDR: "0.0.0.0:8088"
+    expose: ["8088"]
+    restart: unless-stopped
+
+  api:
+    build: { context: ../api, dockerfile: Dockerfile }
+    env_file: [.env]
+    environment:
+      MAISHA_ENVIRONMENT: "production"
+      MAISHA_MAHSA_URL: "http://dif:8088"
+      MAISHA_DATABASE_URL: "sqlite:////data/maisha.db"
+      MAISHA_SECURE_COOKIES: "true"
+    volumes:
+      - maisha_data:/data
+    expose: ["8000"]
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      dif: { condition: service_started }
+      redis: { condition: service_started }
+    restart: unless-stopped
+
+  scheduler:
+    build: { context: ../api, dockerfile: Dockerfile }
+    command: ["python", "-m", "app.jobs", "serve"]
+    env_file: [.env]
+    environment:
+      MAISHA_ENVIRONMENT: "production"
+      MAISHA_MAHSA_URL: "http://dif:8088"
+      MAISHA_DATABASE_URL: "sqlite:////data/maisha.db"
+    volumes:
+      - maisha_data:/data
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+      dif: { condition: service_started }
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "60", "1"]
+    volumes:
+      - redis_data:/data
+    expose: ["6379"]
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      MAISHA_DOMAIN: "${MAISHA_DOMAIN:?set MAISHA_DOMAIN in .env}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api: { condition: service_started }
+    restart: unless-stopped
+
+volumes:
+  maisha_data:
+  redis_data:
+  caddy_data:
+  caddy_config:

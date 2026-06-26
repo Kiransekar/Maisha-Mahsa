@@ -28,6 +28,30 @@ Bring up: `make dev` (local) or `docker compose -f infra/docker-compose.yml up -
 3. (Optional) `make seed` only on a demo box — never on the real company DB.
 4. Start the stack; confirm `GET /health` shows `db: ok`, `mahsa: ok`.
 
+## 2b. Deploy to a VPS (P7)
+
+Production runs `infra/docker-compose.prod.yml` (Caddy TLS in front; api/dif/redis internal-only;
+migrations run once before api starts; no MailHog).
+
+```bash
+# on the VPS (Docker + compose plugin installed):
+git clone <repo> /opt/maisha && cd /opt/maisha/infra
+cp ../api/.env.example .env          # then edit: MAISHA_ENVIRONMENT=production, strong
+                                     # MAISHA_APP_PASSWORD + MAISHA_SESSION_SECRET, MAISHA_DOMAIN,
+                                     # real MAISHA_SMTP_*, MAISHA_COMPANY_GSTIN
+./deploy.sh                          # builds, runs migrations, starts the stack, waits for health
+```
+
+- **DNS:** point `MAISHA_DOMAIN`'s A/AAAA record at the VPS *before* deploy — Caddy provisions a
+  Let's Encrypt cert on first boot and redirects HTTP→HTTPS automatically.
+- **Ports:** only 80/443 are published (Caddy). Firewall everything else; api/dif/redis are on
+  the internal compose network. Audit with `ss -tlnp` / your cloud firewall.
+- **Persistence + reboot:** data is on the `maisha_data` volume; all services are
+  `restart: unless-stopped`, so the stack survives reboots.
+- **Verify (P7-PRODSMOKE):** `curl -sf https://<domain>/health` (deps ok) and
+  `curl -sf https://<domain>/audit/verify`; then log in, enter a small real dataset, drive each
+  domain, confirm Mahsa status + audit entries, and confirm the 8pm brief arrives. Record it.
+
 ## 3. Scheduled jobs
 
 The `scheduler` service runs daily at `MAISHA_BRIEF_HOUR:MINUTE` (`MAISHA_BRIEF_TZ`, default

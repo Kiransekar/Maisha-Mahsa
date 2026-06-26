@@ -1,6 +1,8 @@
-# Caddy reverse proxy with automatic TLS (PRD §11.1). Replace the host with your domain.
-# Run Caddy on the VPS in front of the api service.
-maisha.example.com {
+# Caddy reverse proxy with automatic TLS (P7-TLS). Used by docker-compose.prod.yml.
+# The domain comes from MAISHA_DOMAIN in .env; Caddy auto-provisions a Let's Encrypt cert and
+# redirects HTTP->HTTPS automatically. Only this service is published (80/443); api/dif/redis
+# stay on the internal compose network.
+{$MAISHA_DOMAIN} {
 	encode gzip
-	reverse_proxy 127.0.0.1:8000
+	reverse_proxy api:8000
 }

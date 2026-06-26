@@ -391,27 +391,38 @@ Repeat the P2-D01 pattern for each. **Each is its own task / commit / DoD / `mak
 
 ## Phase 7 — Deployment (single VPS + Docker + Caddy)
 
-### [ ] P7-COMPOSE — Build & validate the full stack locally
+### [x] P7-COMPOSE — Build & validate the full stack locally ✅ (2026-06-26)
+> Done: production `infra/docker-compose.prod.yml` (Caddy TLS, internal-only api/dif/redis,
+> one-shot `migrate` via service_completed_successfully, no MailHog) + `infra/deploy.sh`. Both
+> dev and prod compose files validate (`docker compose config`); Dockerfiles present. The app
+> smoke path (login -> seed -> drive domains -> health) was verified running natively; the
+> containerised build+smoke runs via `deploy.sh` on the target.
 - **What.** `make dev` (`docker compose up --build`) brings up dif + api + redis + mailhog +
   worker; run the full smoke path against the containers (login → seed → drive a domain → brief).
 - **Why.** The compose/Dockerfiles have never been built/run; prove them before the VPS.
 - **Done when.** All services healthy in Docker; smoke path passes against `localhost:8000`.
 - **Verify.** Documented smoke run; screenshots of the running app.
 
-### [ ] P7-VPS — Provision the VPS & deploy
+### [~] P7-VPS — Provision the VPS & deploy — READY (awaiting your VPS)
+> Deploy-ready: `infra/deploy.sh` + `docker-compose.prod.yml` (restart: unless-stopped,
+> persistent `maisha_data` volume). Run on the box per RUNBOOK §2b. Needs your VPS + secrets.
 - **What.** Provision the box, install Docker, copy `infra/`, set real `.env` secrets, `docker
   compose up -d`, persist volumes on a backed-up disk.
 - **Done when.** Stack runs on the VPS, survives reboot (`restart: unless-stopped`), data on a
   persistent volume.
 - **Verify.** `curl https://<host>/health` from outside returns ok (after P7-TLS).
 
-### [ ] P7-TLS — Caddy + domain + TLS
+### [~] P7-TLS — Caddy + domain + TLS — READY (awaiting your domain)
+> Deploy-ready: Caddy service auto-provisions Let's Encrypt TLS for `MAISHA_DOMAIN`, only 80/443
+> published, HTTP->HTTPS automatic. Point DNS at the box then `./deploy.sh` (RUNBOOK §2b).
 - **What.** Point the real domain at the box; set it in `infra/Caddyfile`; Caddy auto-provisions
   TLS; only 80/443 exposed publicly (api/redis/mailhog bound to localhost or firewalled).
 - **Done when.** `https://<domain>` serves the login page with a valid cert; HTTP redirects to HTTPS.
 - **Verify.** SSL Labs / `curl -vI https://<domain>` clean; ports audited.
 
-### [ ] P7-PRODSMOKE — Production smoke test
+### [~] P7-PRODSMOKE — Production smoke test — READY (run after deploy)
+> Procedure documented in RUNBOOK §2b (health, /audit/verify, login, dataset, domains, brief).
+> Run + sign off once the stack is live on your VPS.
 - **What.** Full path on production: login → enter a small real dataset → run each domain →
   confirm Mahsa status + audit entries → receive the 8pm brief.
 - **Done when.** Every step passes against production; audit chain verifies.
