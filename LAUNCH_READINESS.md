@@ -94,7 +94,10 @@ It must print `✅ verify passed`. If it doesn't, the task is not done.
 > Until this phase is done, **do not put real financial data in the app.** No auth + no
 > migrations = a regulatory liability waiting to happen.
 
-### [ ] P1-AUTH — Single-user authentication
+### [x] P1-AUTH — Single-user authentication ✅ (2026-06-26)
+> Done: stdlib-HMAC signed cookie (no new dep), login guard middleware over all routes except
+> /health, /login, /static; `/login` + `/logout`; `login.html`; `app.core.auth`; tests in
+> `tests/integration/test_auth.py`. ponytail: single-user; audit identity stays the founder.
 - **What.** Implement the single-user password login from PRD §11.1. Login page → verify against
   `MAISHA_APP_PASSWORD` → signed, HTTP-only session cookie → middleware/dependency that
   protects every route except `/health`, `/login`, and `/static/*`.
@@ -121,7 +124,10 @@ It must print `✅ verify passed`. If it doesn't, the task is not done.
 - **Verify.** A test that runs `upgrade head` on a temp DB and asserts every model table exists;
   `make verify` green. Flip `BUILD_PROGRESS.md` L2 Alembic row to ✅.
 
-### [ ] P1-SECRETS — Config hardening & `.env.example`
+### [x] P1-SECRETS — Config hardening & `.env.example` ✅ (2026-06-26)
+> Done: `api/.env.example` documents every MAISHA_* var; `auth.assert_production_secrets`
+> refuses to boot with default password/session-secret when MAISHA_ENVIRONMENT=production.
+> Remaining nicety: move SQLite to a backed-up path — folded into P6-BACKUP.
 - **What.** Add `infra/.env.example` documenting every `MAISHA_*` var; make the app **refuse to
   start in non-dev mode** if `MAISHA_APP_PASSWORD`/`session_secret` are still defaults; move the
   SQLite file to a configured, backed-up path.

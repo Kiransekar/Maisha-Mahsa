@@ -29,6 +29,9 @@
         <a class="nav__item {{ 'is-active' if nav_active == d }}" href="/d/{{ d }}"
            {% if nav_active == d %}aria-current="page"{% endif %} style="text-transform:capitalize">{{ d }}</a>
       {% endfor %}
+      <form class="nav__logout" method="post" action="/logout">
+        <button type="submit" class="nav__item nav__item--logout">Sign out</button>
+      </form>
     </aside>
     <main class="main">
       <header class="appbar">

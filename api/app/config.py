@@ -21,6 +21,10 @@ class Settings(BaseSettings):
 
     # Single-user auth (PRD §11.1). Set MAISHA_APP_PASSWORD in production.
     app_password: str = "change-me"
+    # Session-cookie signing + hardening (P1-AUTH / P1-SECRETS). Rotating the secret logs out.
+    session_secret: str = "dev-insecure-session-secret-change-me"
+    secure_cookies: bool = False  # set True behind HTTPS in production
+    environment: str = "development"  # "production" refuses the shipped default secrets
 
     # Filer GSTIN for GSTR-1 JSON export (set MAISHA_COMPANY_GSTIN in production).
     company_gstin: str = ""

@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.cfo_router import router as cfo_router
 from app.config import get_settings
-from app.core import history_store, parallel, trace_store
+from app.core import auth, history_store, parallel, trace_store
 from app.core.approvals import pending_approvals, record_decision
 from app.core.ask import answer_query
 from app.core.audit import verify_chain
@@ -63,10 +63,60 @@ templates.env.filters["rupees"] = lambda paise: Paise(int(paise)).format_inr()
 
 def create_app() -> FastAPI:
     settings = get_settings()
+    # P1-SECRETS: never boot production with the shipped default secrets.
+    auth.assert_production_secrets(
+        environment=settings.environment,
+        app_password=settings.app_password,
+        session_secret=settings.session_secret,
+    )
     app = FastAPI(title=settings.app_name, version=settings.version)
 
     # Ensure the schema exists (dev convenience; production uses Alembic migrations).
     Base.metadata.create_all(bind=session_factory().kw["bind"])
+
+    # P1-AUTH: single-user login guard — every route needs a valid session cookie except
+    # the public allowlist (/health, /login, /static).
+    @app.middleware("http")
+    async def _require_login(request: Request, call_next):
+        if auth.is_public(request.url.path) or auth.valid_cookie(
+            request.cookies.get(auth.COOKIE_NAME), settings.session_secret
+        ):
+            return await call_next(request)
+        return RedirectResponse(url=f"/login?next={request.url.path}", status_code=303)
+
+    @app.get("/login", response_class=HTMLResponse)
+    async def login_form(request: Request, next: str = "/") -> HTMLResponse:
+        return templates.TemplateResponse(
+            request, "login.html", {"settings": settings, "next": next, "error": None}
+        )
+
+    @app.post("/login")
+    async def login_submit(
+        request: Request, password: str = Form(...), next: str = Form("/")
+    ) -> Response:
+        if auth.verify_password(password, settings.app_password):
+            resp = RedirectResponse(url=next or "/", status_code=303)
+            resp.set_cookie(
+                auth.COOKIE_NAME,
+                auth.sign(settings.session_secret),
+                httponly=True,
+                samesite="lax",
+                secure=settings.secure_cookies,
+                max_age=60 * 60 * 24 * 14,  # 2 weeks
+            )
+            return resp
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            {"settings": settings, "next": next, "error": "Incorrect password."},
+            status_code=401,
+        )
+
+    @app.post("/logout")
+    async def logout() -> RedirectResponse:
+        resp = RedirectResponse(url="/login", status_code=303)
+        resp.delete_cookie(auth.COOKIE_NAME)
+        return resp
 
     app.mount("/static", StaticFiles(directory=str(_WEB / "static")), name="static")
     app.include_router(treasury_router)

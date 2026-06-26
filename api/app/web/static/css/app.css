@@ -324,3 +324,40 @@ body::before {
 .trend__label { font-size: var(--fs-sm); color: var(--c-text-muted); margin-bottom: var(--sp-2); }
 .trend svg.spark { width: 100%; height: 32px; display: block; }
 .trend__meta { font-size: var(--fs-xs); margin-top: var(--sp-1); }
+
+/* ── Login (P1-AUTH) ─────────────────────────────────────────────────────── */
+body.login {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 100vh; padding: var(--sp-4);
+}
+.login__card {
+  width: 100%; max-width: 360px;
+  background: var(--c-surface); border: 1px solid var(--c-border);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-1);
+  padding: var(--sp-6);
+}
+.login__brand {
+  font-size: var(--fs-md); font-weight: 600;
+  display: flex; align-items: center; gap: var(--sp-2);
+}
+.login__brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--c-brand); }
+.login__sub { color: var(--c-text-muted); font-size: var(--fs-sm); margin: var(--sp-2) 0 var(--sp-5); }
+.login__card label { display: block; font-size: var(--fs-sm); color: var(--c-text-muted); margin-bottom: var(--sp-2); }
+.login__card input[type=password] {
+  width: 100%; padding: var(--sp-2) var(--sp-3);
+  border: 1px solid var(--c-border); border-radius: var(--radius-sm);
+  background: var(--c-bg); color: var(--c-text); font-size: var(--fs-base);
+  margin-bottom: var(--sp-4);
+}
+.login__card button {
+  width: 100%; padding: var(--sp-2) var(--sp-3);
+  border: 0; border-radius: var(--radius-sm);
+  background: var(--c-brand); color: #fff; font-size: var(--fs-base); cursor: pointer;
+}
+.login__err {
+  background: var(--c-brand-weak); color: var(--c-brand);
+  border-radius: var(--radius-sm); padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-sm); margin-bottom: var(--sp-4);
+}
+.nav__logout { margin-top: var(--sp-4); }
+.nav__item--logout { width: 100%; background: none; border: 0; cursor: pointer; text-align: left; font-family: inherit; }

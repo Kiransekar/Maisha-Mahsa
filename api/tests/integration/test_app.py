@@ -13,6 +13,9 @@ from fastapi.testclient import TestClient  # noqa: E402
 from app.main import app  # noqa: E402
 
 client = TestClient(app)
+# P1-AUTH: every route below the allowlist now needs a session — log the client in once
+# (default dev password). httpx persists the cookie across subsequent requests.
+client.post("/login", data={"password": "change-me"})
 
 
 def test_health_ok():
