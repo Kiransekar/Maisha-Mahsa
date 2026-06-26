@@ -83,6 +83,79 @@ def convertible_note_value(
     }
 
 
+def share_certificates(holders: list[dict], *, default_form: str = "demat") -> list[dict]:
+    """Allocate one share certificate per holder with contiguous distinctive share numbers
+    (Companies (Share Capital and Debentures) Rules 2014, Rule 5). Each holder:
+    {name, shares, form?}. ``form`` is 'demat' or 'physical'. Pure & deterministic."""
+    certificates = []
+    cursor = 1
+    index = 0
+    for h in holders:
+        shares = int(h["shares"])
+        if shares <= 0:
+            continue
+        index += 1
+        certificates.append(
+            {
+                "certificate_no": f"SC-{index:04d}",
+                "name": h["name"],
+                "shares": shares,
+                "distinctive_from": cursor,
+                "distinctive_to": cursor + shares - 1,
+                "form": h.get("form", default_form),
+            }
+        )
+        cursor += shares
+    return certificates
+
+
+def rights_entitlement(holders: list[dict], new_shares: int) -> list[dict]:
+    """Pro-rata rights-issue entitlement (Companies Act 2013 s.62(1)(a)): each existing
+    holder may subscribe to ``new_shares`` in proportion to their current holding.
+    Each holder: {name, shares}. Pure."""
+    total = sum(int(h["shares"]) for h in holders)
+    out = []
+    for h in holders:
+        held = int(h["shares"])
+        entitlement = (held * int(new_shares)) // total if total > 0 else 0
+        out.append({"name": h["name"], "shares": held, "entitlement": entitlement})
+    return out
+
+
+def buyback_compliance(
+    *,
+    paid_up_capital: int,
+    free_reserves: int,
+    buyback_amount: int,
+    shares_bought_back: int = 0,
+    total_shares: int = 0,
+    post_buyback_debt: int = 0,
+    post_buyback_equity: int = 0,
+) -> dict[str, Any]:
+    """Companies Act 2013 s.68 buyback limits: the buyback amount must not exceed 25% of
+    (paid-up capital + free reserves), shares bought back must not exceed 25% of total equity,
+    and the post-buyback debt:equity ratio must not exceed 2:1. All money in paise. Pure."""
+    funds = int(paid_up_capital) + int(free_reserves)
+    max_amount = funds // 4  # 25%
+    amount_ok = int(buyback_amount) <= max_amount
+    shares_ok = total_shares == 0 or int(shares_bought_back) <= int(total_shares) // 4
+    ratio = (post_buyback_debt / post_buyback_equity) if post_buyback_equity else 0.0
+    ratio_ok = ratio <= 2.0
+    reasons = []
+    if not amount_ok:
+        reasons.append("buyback exceeds 25% of paid-up capital + free reserves")
+    if not shares_ok:
+        reasons.append("shares bought back exceed 25% of total equity")
+    if not ratio_ok:
+        reasons.append("post-buyback debt:equity exceeds 2:1")
+    return {
+        "permitted": amount_ok and shares_ok and ratio_ok,
+        "max_amount": max_amount,
+        "debt_equity_ratio": round(ratio, 4),
+        "reasons": reasons,
+    }
+
+
 def dividend_distribution(
     *, distributable_profit: int, declared: int, shares: int
 ) -> dict[str, Any]:

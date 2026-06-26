@@ -19,7 +19,7 @@ MANIFEST = DomainManifest(
         Feature("convertible_notes", "Convertible notes (interest accrual)", D),
         Feature("investor_reporting", "Quarterly investor update generator", D),
         Feature("dividend", "Dividend distribution (s.123)", D),
-        Feature("share_certificates", "Share certificate / demat tracking", N),
-        Feature("rights_buyback", "Rights issue / buyback compliance", N),
+        Feature("share_certificates", "Share certificate / demat tracking", D),
+        Feature("rights_buyback", "Rights issue / buyback compliance", D),
     ],
 )

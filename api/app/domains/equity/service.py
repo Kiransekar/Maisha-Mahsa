@@ -86,6 +86,44 @@ class EquityService(BaseDomainService):
             pre_round_shares=pre_round_shares,
         )
 
+    # ---- share certificates / rights / buyback --------------------------------------
+
+    def _named_holders(self, session: Session) -> list[dict]:
+        return [
+            {"name": s.name, "shares": int(s.shares_held), "category": s.category}
+            for s in session.scalars(select(Shareholder).order_by(Shareholder.id)).all()
+        ]
+
+    def share_certificates(self, session: Session) -> list[dict]:
+        """Share-certificate register with contiguous distinctive share numbers."""
+        return equity_calc.share_certificates(self._named_holders(session))
+
+    def rights_entitlement(self, session: Session, new_shares: int) -> list[dict]:
+        """Pro-rata rights-issue entitlement per shareholder (s.62(1)(a))."""
+        return equity_calc.rights_entitlement(self._named_holders(session), new_shares)
+
+    def buyback_compliance(
+        self,
+        *,
+        paid_up_capital: int,
+        free_reserves: int,
+        buyback_amount: int,
+        shares_bought_back: int = 0,
+        total_shares: int = 0,
+        post_buyback_debt: int = 0,
+        post_buyback_equity: int = 0,
+    ) -> dict[str, Any]:
+        """Companies Act s.68 buyback limit check."""
+        return equity_calc.buyback_compliance(
+            paid_up_capital=paid_up_capital,
+            free_reserves=free_reserves,
+            buyback_amount=buyback_amount,
+            shares_bought_back=shares_bought_back,
+            total_shares=total_shares,
+            post_buyback_debt=post_buyback_debt,
+            post_buyback_equity=post_buyback_equity,
+        )
+
     # ---- snapshots ------------------------------------------------------------------
 
     def snapshot_cap_table(
