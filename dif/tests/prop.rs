@@ -1,9 +1,36 @@
 //! Property tests: the fold/validate invariants must hold for *any* snapshot.
 
+use mahsa::critic::update_prior;
 use mahsa::fold::fold;
+use mahsa::intent::IntentVec;
 use mahsa::money::Paise;
 use mahsa::snapshot::{Domain, Snapshot};
 use mahsa::validate::{validate, RuleSet, ValidationStatus};
+
+fn arb_intent() -> impl Strategy<Value = IntentVec> {
+    proptest::array::uniform8(0.0f64..=1.0).prop_map(IntentVec)
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(512))]
+
+    /// The critic is deterministic, keeps priors normalized, and never overshoots the outcome.
+    #[test]
+    fn critic_update_is_sound(v in arb_intent(), outcome in -0.5f64..1.5f64) {
+        let out = update_prior(v, outcome);
+        // determinism
+        prop_assert_eq!(out, update_prior(v, outcome));
+        // stays in [0,1]
+        prop_assert!(out.is_normalized());
+        // each dim moves toward the clamped target but never past it
+        let target = outcome.clamp(0.0, 1.0);
+        for i in 0..8 {
+            let (old, new) = (v.0[i], out.0[i]);
+            let (lo, hi) = (old.min(target), old.max(target));
+            prop_assert!(new >= lo - 1e-9 && new <= hi + 1e-9);
+        }
+    }
+}
 use proptest::prelude::*;
 
 fn arb_snapshot() -> impl Strategy<Value = Snapshot> {

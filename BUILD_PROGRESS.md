@@ -17,7 +17,7 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
 | L1 | Mahsa: global 8-dim fold | ✅ | `/fold` live, deterministic |
 | L1 | Mahsa: hierarchical validator + `rules.yaml` loader | ✅ | seed rules wired |
 | L1 | Mahsa: unfold → ResponseShape | ✅ | layout/flags/banners |
-| L1 | Mahsa: critic (prior update) | ⬜ | stub present |
+| L1 | Mahsa: critic (prior update) | ✅ | deterministic EMA update_prior + proptest (2026-06-26) |
 | L1 | Mahsa: property tests (proptest) | ✅ | fold invariants |
 | L1 | Mahsa: HTTP integration tests | ✅ | `/health`, `/fold` |
 | L2 | `schema.sql` — all 40+ tables, indexes, constraints | ✅ | all 12 domains + shared `documents` done |

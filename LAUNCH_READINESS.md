@@ -272,7 +272,9 @@ Repeat the P2-D01 pattern for each. **Each is its own task / commit / DoD / `mak
 
 ## Phase 4 — Mahsa engine completion
 
-### [ ] P4-CRITIC — Implement the critic (prior update)
+### [x] P4-CRITIC — Implement the critic (prior update) ✅ (2026-06-26)
+> Done: deterministic EMA `update_prior` (clamped blend toward outcome) + unit tests + proptest
+> invariants (determinism, normalized, no-overshoot). BUILD_PROGRESS L1 critic -> done.
 - **What.** Replace the `dif/src/critic.rs` stub with the real prior-update step from the PRD
   (the feedback that refines intent priors). Keep it **deterministic** — no clock/RNG/network;
   inject any time as a parameter (`CLAUDE.md` §2).
@@ -282,7 +284,9 @@ Repeat the P2-D01 pattern for each. **Each is its own task / commit / DoD / `mak
   same-output and the documented invariants hold.
 - **Verify.** `make test-rust` + `make verify` green; flip L1 critic row to ✅.
 
-### [ ] P4-RULES — Rule-set completeness pass
+### [x] P4-RULES — Rule-set completeness pass ✅ (2026-06-26)
+> Done: Python rules.py IDs == YAML rule IDs (bijection verified), every rule cites statute+section;
+> locked by tests/integration/test_rule_set_completeness.py.
 - **What.** Audit `dif/rules/rules.yaml` against every feature shipped in P3; ensure each
   enforced obligation has a cited rule + property test; no orphan rule IDs vs `domains/*/rules.py`.
 - **Done when.** Every Python `rules.py` ID maps to a YAML rule and vice-versa; `skills/indian-fin-rules`
