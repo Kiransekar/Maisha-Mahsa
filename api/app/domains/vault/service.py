@@ -113,6 +113,21 @@ class VaultService(BaseDomainService):
             raise ValueError(f"document {doc_id} not found")
         return vault_calc.verify_integrity(doc.sha256, current_content)
 
+    # ---- RBAC access control --------------------------------------------------------
+
+    def can_access(self, role: str, action: str, *, sensitivity: str = "internal") -> bool:
+        """Whether ``role`` may perform ``action`` on a document of this sensitivity."""
+        return vault_calc.can_access(role, action, sensitivity=sensitivity)
+
+    def accessible_documents(self, session: Session, role: str) -> list[dict]:
+        """Documents the role may read, each tagged with its derived sensitivity."""
+        out = []
+        for d in session.scalars(select(Document)).all():
+            sensitivity = vault_calc.document_sensitivity(d.doc_type or "other")
+            if vault_calc.can_access(role, "read", sensitivity=sensitivity):
+                out.append({"id": d.id, "file_name": d.file_name, "sensitivity": sensitivity})
+        return out
+
     # ---- Mahsa contract -------------------------------------------------------------
 
     def build_snapshot(self, session: Session, as_of: date | None = None) -> dict[str, Any]:

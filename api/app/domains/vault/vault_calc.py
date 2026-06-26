@@ -116,6 +116,50 @@ def classify(file_name: str, hint: str | None = None) -> str:
     return "other"
 
 
+# ---- RBAC access control --------------------------------------------------------------
+
+# Role -> the actions it may perform. Ranks order roles for sensitivity gating.
+_ROLE_PERMISSIONS: dict[str, set[str]] = {
+    "owner": {"read", "write", "delete", "export", "manage_access"},
+    "accountant": {"read", "write", "export"},
+    "auditor": {"read", "export"},
+    "viewer": {"read"},
+}
+_ROLE_RANK = {"viewer": 0, "auditor": 1, "accountant": 1, "owner": 2}
+_SENSITIVITY_MIN_RANK = {"public": 0, "internal": 0, "confidential": 1, "restricted": 2}
+
+# Document type -> sensitivity. Founders' / board / cap-table docs are most restricted.
+_SENSITIVITY_BY_TYPE = {
+    "board_resolution": "restricted",
+    "cap_table": "restricted",
+    "share_certificate": "restricted",
+    "moa": "confidential",
+    "aoa": "confidential",
+    "incorporation": "confidential",
+    "contract": "confidential",
+    "payslip": "confidential",
+    "form16": "confidential",
+}
+
+
+def role_permissions(role: str) -> set[str]:
+    return set(_ROLE_PERMISSIONS.get(role, set()))
+
+
+def document_sensitivity(doc_type: str) -> str:
+    """Map a document type to its access sensitivity (default 'internal')."""
+    return _SENSITIVITY_BY_TYPE.get(doc_type, "internal")
+
+
+def can_access(role: str, action: str, *, sensitivity: str = "internal") -> bool:
+    """RBAC check: the role must grant ``action`` and out-rank the document sensitivity.
+    Pure & deterministic."""
+    perms = _ROLE_PERMISSIONS.get(role)
+    if perms is None or action not in perms:
+        return False
+    return _ROLE_RANK.get(role, -1) >= _SENSITIVITY_MIN_RANK.get(sensitivity, 99)
+
+
 def build_metrics(documents: list[dict], as_of: date) -> dict[str, Any]:
     """Vault health signals: duplicate count and retention-overdue count. Integrity failures
     are detected on access (need file content), so default 0 here."""
