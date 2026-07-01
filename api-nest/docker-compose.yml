@@ -47,12 +47,23 @@ services:
       MAISHA_SECURE_COOKIES: "${MAISHA_SECURE_COOKIES:-true}"
       # Run the daily scheduler in-process (single replica). Set SMTP vars in .env to actually send.
       MAISHA_SCHEDULER_ENABLED: "${MAISHA_SCHEDULER_ENABLED:-true}"
+      # OCR: tesseract (default, but not in this slim image) or paddle (start the `ocr` profile).
+      MAISHA_OCR_PROVIDER: "${MAISHA_OCR_PROVIDER:-tesseract}"
+      MAISHA_OCR_URL: "http://ocr:8090"
     ports:
       - "8000:8000"
     depends_on:
       db: { condition: service_healthy }
       dif: { condition: service_started }
       migrate: { condition: service_completed_successfully }
+    restart: unless-stopped
+
+  # Best-in-class OCR (PaddleOCR) for receipts/invoices. Heavy image — opt in:
+  #   MAISHA_OCR_PROVIDER=paddle docker compose --profile ocr up -d --build
+  ocr:
+    build: { context: ./ocr-sidecar }
+    profiles: ["ocr"]
+    expose: ["8090"]
     restart: unless-stopped
 
 volumes:

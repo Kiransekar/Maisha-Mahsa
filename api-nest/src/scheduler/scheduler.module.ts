@@ -26,5 +26,6 @@ import { SchedulerRunner } from './scheduler.runner';
       useFactory: () => new EmailChannel(buildTransport(), process.env.MAISHA_EMAIL_SENDER ?? 'cfo@maisha-mahsa.local'),
     },
   ],
+  exports: [DomainRegistry],
 })
 export class SchedulerModule {}

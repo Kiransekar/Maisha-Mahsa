@@ -7,6 +7,7 @@ import { CoreModule } from './core/core.module';
 import { AuthModule } from './auth/auth.controller';
 import { HealthModule } from './health/health.controller';
 import { SchedulerModule } from './scheduler/scheduler.module';
+import { WebModule } from './web/web.module';
 import { GstModule } from './domains/gst/gst.module';
 import { LedgerModule } from './domains/ledger/ledger.module';
 import { TreasuryModule } from './domains/treasury/treasury.module';
@@ -28,6 +29,7 @@ import { VaultModule } from './domains/vault/vault.module';
     AuthModule,
     HealthModule,
     SchedulerModule,
+    WebModule,
     // Domain modules — one per PRD domain (all 12).
     GstModule,
     LedgerModule,

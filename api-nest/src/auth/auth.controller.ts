@@ -36,11 +36,15 @@ export class AuthController {
 }
 
 import { Module } from '@nestjs/common';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { AuthGuard } from './auth.guard';
+import { UnauthorizedRedirectFilter } from './unauthorized.filter';
 
 @Module({
   controllers: [AuthController],
-  providers: [{ provide: APP_GUARD, useClass: AuthGuard }],
+  providers: [
+    { provide: APP_GUARD, useClass: AuthGuard },
+    { provide: APP_FILTER, useClass: UnauthorizedRedirectFilter },
+  ],
 })
 export class AuthModule {}
