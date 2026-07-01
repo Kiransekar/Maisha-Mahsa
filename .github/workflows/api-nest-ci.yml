@@ -1,0 +1,33 @@
+name: api-nest CI
+
+on:
+  push:
+    paths: ['api-nest/**', '.github/workflows/api-nest-ci.yml']
+  pull_request:
+    paths: ['api-nest/**', '.github/workflows/api-nest-ci.yml']
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api-nest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: api-nest/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+      # Prove the Postgres migration applies cleanly against a real Postgres.
+      - name: migrate against ephemeral postgres
+        env:
+          MAISHA_DATABASE_URL: postgres://maisha:maisha@localhost:5432/maisha
+        run: |
+          docker run -d --name pg -e POSTGRES_USER=maisha -e POSTGRES_PASSWORD=maisha \
+            -e POSTGRES_DB=maisha -p 5432:5432 postgres:16-alpine
+          for i in $(seq 1 30); do docker exec pg pg_isready -U maisha && break; sleep 1; done
+          npm run migrate
