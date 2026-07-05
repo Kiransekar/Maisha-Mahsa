@@ -23,6 +23,11 @@ jobs:
       - run: npm run build
       - run: npx tsc --noEmit
       - run: npm test
+      # Dependency scan: fail on a CRITICAL advisory; report (non-blocking) high/moderate as debt.
+      - name: dependency audit (block critical)
+        run: npm audit --omit=dev --audit-level=critical
+      - name: dependency audit (report high)
+        run: npm audit --omit=dev --audit-level=high || true
       # Prove the Postgres migration applies cleanly against a real Postgres.
       - name: migrate against ephemeral postgres
         env:

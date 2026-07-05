@@ -17,6 +17,11 @@ async function bootstrap() {
 
   const isProd = (process.env.MAISHA_ENVIRONMENT ?? 'development') === 'production';
   const app = await NestFactory.create(AppModule, { bufferLogs: false });
+
+  // CORS: explicit allowlist from MAISHA_CORS_ORIGINS (comma-separated). Empty ⇒ same-origin only.
+  const origins = (process.env.MAISHA_CORS_ORIGINS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+  app.enableCors({ origin: origins.length ? origins : false, credentials: true });
+
   // Correlation id + structured access log + metrics — first, so everything downstream is traced.
   app.use(observabilityMiddleware);
   // Clean shutdown: close DB pool, stop the scheduler, drain in-flight work on SIGTERM/SIGINT.
