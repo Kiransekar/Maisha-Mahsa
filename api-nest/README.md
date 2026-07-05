@@ -6,7 +6,7 @@ Python reference. The Rust **Mahsa** gatekeeper (`../dif`) is kept as-is and int
 
 ## Status
 
-**All 12 domains ported, integrated, building & booting green** (109 domain/parity tests + auth/audit/money).
+**All 12 domains ported, integrated, building & booting green** (135 tests: domain/parity + auth/audit/money/llm/pdf/ocr/scheduler/cfo/email). Verified live end-to-end against the real Rust Mahsa: login → `/api/gst/fold` → statute-cited validation → sealed `audit_hash`.
 
 | Layer (Python → Nest) | Location |
 |---|---|
@@ -51,12 +51,17 @@ refused if the default password/secret are unchanged.
     npm run migration:run     # build + apply
     npm run typeorm migration:generate src/db/migrations/<Name>   # after entity changes
 
-## Deferred (next slices — flagged, not silently skipped)
+## Built since the initial port (now shipped, was "deferred")
 
-- **LLM drafting layer** (`../api/app/llm/*`): Ollama/Claude constrained decode, retry/verify,
-  guardrails, routing, LlmTrace. The loop is drafting-ready (`LoopService`), generator not wired.
-- **Scheduler + email** (`../api/app/jobs.py`, `core/email`): daily capture + CFO brief.
-- **File transports**: payslip/Form-16 PDF (payroll), OCR receipt parsing (expense), multipart
-  CSV upload (treasury currently takes CSV in the JSON body). A few cross-domain routes noted in
-  per-domain `deferred` from the port.
-- **Web UI**: intentionally out of scope (API-only). HTMX UI stays on the Python side / separate SPA.
+- **LLM drafting layer** (`src/llm/*`): Ollama/Claude constrained decode, retry/verify,
+  guardrails, routing, LlmTrace — wired into `LoopService` via the optional `CLAIM_PRODUCER`.
+  With no generator configured the loop returns `claim: null` (fail-safe; Mahsa's verdict still
+  seals). The Golden Rule holds: Mahsa recomputes every number before it reaches a human.
+- **Scheduler + email** (`src/scheduler/`, `src/email/`): daily capture + CFO brief.
+- **File transports**: payslip + Form-16 PDF (`payroll`), receipt-image OCR (`expense`),
+  multipart CSV file upload (`treasury`) — Nest is a per-domain superset of the Python routes.
+- **Web UI** (`src/web/`): premium themed dashboard shipped in this repo (commit 3c81540).
+
+## Deferred / out of scope
+
+- Nothing tracked. Migration is at full route parity with `../api` across all 12 domains.
