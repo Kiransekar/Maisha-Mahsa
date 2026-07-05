@@ -1,8 +1,9 @@
 /** Read/curate the org's CFO Profile (semantic hot layer). Auth-gated by the global guard. */
-import { Body, Controller, Get, Post, Put } from '@nestjs/common';
+import { Body, Controller, Get, Post, Put, Query } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { IsString, MaxLength } from 'class-validator';
 
+import { MemorySearchService } from './memory-search.service';
 import { CFO_CHAR_LIMIT, MemoryService } from './memory.service';
 
 class CfoDto {
@@ -15,7 +16,16 @@ class AppendDto {
 @ApiTags('memory')
 @Controller('api/memory')
 export class MemoryController {
-  constructor(private readonly memory: MemoryService) {}
+  constructor(
+    private readonly memory: MemoryService,
+    private readonly search: MemorySearchService,
+  ) {}
+
+  /** Episodic recall over the sealed decision history (lexical BM25 / tsvector). */
+  @Get('recall')
+  recall(@Query('q') q: string, @Query('limit') limit?: string) {
+    return this.search.recall(q ?? '', limit ? parseInt(limit, 10) : 10);
+  }
 
   @Get()
   async profile() {

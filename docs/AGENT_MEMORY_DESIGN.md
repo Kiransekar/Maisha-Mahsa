@@ -183,3 +183,70 @@ retrieval is a later, optional bolt-on behind the `MemorySearch` port if lexical
   strategies and corrections. *Makes it get better over time.*
 
 Each phase is independently valuable and gated (build + tests) like every prior slice.
+
+---
+
+## 9. Grounding in the survey — *Memory in the Age of AI Agents* (arXiv:2512.13564)
+
+The Hermes blog gave us a clean *practical* schema; this survey gives the *rigorous* one and validates
+our architecture in its vocabulary. It frames memory along three axes — **Forms** (what carries it),
+**Functions** (why), **Dynamics** (how it operates/evolves) — and its formal lifecycle is
+`Mₜ₊₁ = E(F(Mₜ, φₜ))`, retrieved as `mₜ = R(Mₜ, oₜ, Q)`: **Formation → Evolution → Retrieval**.
+
+### Where Maisha already sits in the taxonomy
+
+- **Functions.** The survey's finer taxonomy is *factual · experiential · working* memory (superseding
+  long/short-term). Maisha maps exactly: CFO Profile = **factual** (user + environment facts); Tax
+  Playbooks = **experiential** (its "skill/strategy-based" sub-type — distilled procedural knowledge);
+  the drafting context = **working** memory. We're already on the modern taxonomy.
+- **Forms.** We use **token-level** memory (readable text), deliberately *not* latent/parametric —
+  the survey notes latent memory "suffers from opaqueness… hard to debug, edit, or verify," which is
+  disqualifying for a compliance product. Readable + auditable is the correct form here.
+- **Formation (§5.1).** The CFO Profile is *semantic summarization* + *structured construction*; the
+  playbooks are *knowledge distillation* (experiential). We deliberately avoid *parametric
+  internalization* (fine-tuning facts into weights) — it risks catastrophic forgetting and can't be
+  audited or corrected precisely.
+- **Retrieval (§5.3).** The survey lays retrieval out as a 4-stage pipeline — *timing/intent → query
+  construction → strategy → post-retrieval* — and explicitly endorses **lexical/BM25 for
+  precision-oriented scenarios "where accuracy and relevance take precedence over recall."** That is
+  exactly finance (exact statutory terms, rule IDs, GSTINs), so our P3 lexical choice is now backed by
+  the survey, not just the Hermes blog. Graph retrieval (Zep-style temporal graph) is the future
+  upgrade, not the starting point.
+
+### The upgrades the survey prescribes (folded into the plan)
+
+1. **Evolution is a first-class process, not a footnote (§5.2).** P4 is no longer just "a daemon" — it
+   is three explicit mechanisms:
+   - **Consolidation** — merge correlated facts into higher-level insight (local → cluster → global),
+     making learning cumulative not isolated.
+   - **Updating — soft & temporal, never destructive.** When a fact changes ("moved to the new
+     regime"), *supersede it with a validity timestamp* (Zep's temporal annotation) instead of
+     overwriting. This aligns memory with Maisha's append-only, tamper-evident audit philosophy and is
+     a concrete change to P1 (today `setCfo` overwrites; it should version).
+   - **Forgetting — importance-driven and non-destructive.** The survey notes "when storage cost is
+     not a critical constraint, many systems avoid directly deleting certain memories." For a
+     compliance product with retention obligations, forgetting = **archival / de-prioritization**
+     (drop from the hot layer, keep on disk), never hard delete. The hot-layer char cap already *is* a
+     forgetting pressure that forces consolidation.
+
+2. **Trustworthy Memory as explicit design constraints (§7.7).** The survey's three pillars —
+   *privacy, explainability, hallucination-robustness* — and its call for **access control, verifiable
+   forgetting, and auditable updates** are already how Maisha is built, and we make them first-class:
+   - *Access control* → per-`company_id` isolation (the tenant boundary).
+   - *Auditable updates* → **seal memory writes into the hash-chained audit log** (a memory change is
+     itself a sealed, tamper-evident event). This is the survey's "auditable updates" for free.
+   - *Hallucination-robustness* → the Golden Rule + abstention: the drafter abstains when FACTS lack
+     the answer, and the optimizer returns "provide X" instead of a fabricated number — the survey's
+     "abstention under low-confidence retrieval."
+   - *Explainability* → recall surfaces the matched **decision + its hash** (traceable provenance).
+
+3. **Offline consolidation (§7.8).** The survey's "sleep-like" offline consolidation intervals =
+   Hermes' post-session/nightly daemon. Confirms P4's cadence: learn *out of band*, never on the hot
+   path.
+
+Net: the survey doesn't change our direction — it sharpens it. Concrete deltas to the plan: (a) P1
+`setCfo` becomes **soft/versioned** (supersede-with-timestamp), (b) memory writes **seal to the audit
+chain**, (c) P4 is specified as **Consolidation + soft Updating + non-destructive Forgetting**, (d) P3
+recall becomes an explicit **4-stage pipeline** (add light query-rewrite + post-retrieval filter over
+the lexical core). Latent/parametric/graph forms remain deliberately out — the wrong trade-offs for an
+auditable financial agent.
