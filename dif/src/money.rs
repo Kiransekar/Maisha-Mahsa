@@ -43,14 +43,15 @@ impl Paise {
 impl std::ops::Add for Paise {
     type Output = Paise;
     fn add(self, o: Paise) -> Paise {
-        Paise(self.0 + o.0)
+        // saturating: never wrap silently in release (no overflow-checks) on /fold input.
+        Paise(self.0.saturating_add(o.0))
     }
 }
 
 impl std::ops::Sub for Paise {
     type Output = Paise;
     fn sub(self, o: Paise) -> Paise {
-        Paise(self.0 - o.0)
+        Paise(self.0.saturating_sub(o.0))
     }
 }
 

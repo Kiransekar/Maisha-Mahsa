@@ -1,5 +1,5 @@
 /** Shared tables (PRD §3.1). Money columns are BIGINT paise. Mirrors api/app/db/models/shared.py. */
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 import { moneyColumn } from './money';
 
 @Entity('company')
@@ -31,6 +31,7 @@ export class User {
 
 /** Append-only, hash-chained (PRD §11.2). Application code must never UPDATE/DELETE. */
 @Entity('audit_log')
+@Index(['prev_hash'], { unique: true }) // durable backstop: a forked chain link fails loud
 export class AuditLog {
   @PrimaryGeneratedColumn() id: number;
   @Column() timestamp: string;
@@ -62,6 +63,7 @@ export class LlmTrace {
 }
 
 @Entity('metric_snapshot')
+@Index(['domain', 'captured_at', 'metric'], { unique: true }) // one row per metric per day; also serves domain queries
 export class MetricSnapshot {
   @PrimaryGeneratedColumn() id: number;
   @Column() captured_at: string;

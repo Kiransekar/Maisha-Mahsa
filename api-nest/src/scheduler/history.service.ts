@@ -5,7 +5,10 @@
  */
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { LessThan, Repository } from 'typeorm';
+
+/** Trend history is capped at this many days; older captures are pruned to bound table growth. */
+const RETENTION_DAYS = Number(process.env.MAISHA_HISTORY_RETENTION_DAYS ?? 400);
 
 import { MetricSnapshot } from '../common/shared.entities';
 import { enrich } from '../llm/tools';
@@ -36,7 +39,15 @@ export class HistoryService {
         rows.push(this.repo.create({ captured_at: capturedAt, domain: service.domain, metric, value }));
       }
     }
-    if (rows.length) await this.repo.save(rows);
+    // Idempotent per (domain, captured_at, metric): a re-run on the same day overwrites, never
+    // duplicates — duplicate rows would corrupt every trend series.
+    if (rows.length) await this.repo.upsert(rows, ['domain', 'captured_at', 'metric']);
+
+    // Prune history older than the retention window (ISO date strings sort chronologically).
+    const cutoffMs = Date.parse(`${capturedAt}T00:00:00Z`) - RETENTION_DAYS * 86_400_000;
+    if (Number.isFinite(cutoffMs)) {
+      await this.repo.delete({ captured_at: LessThan(new Date(cutoffMs).toISOString().slice(0, 10)) });
+    }
     return rows.length;
   }
 

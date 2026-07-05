@@ -14,18 +14,31 @@ async function bootstrap() {
     sessionSecret: process.env.MAISHA_SESSION_SECRET ?? DEFAULT_SESSION_SECRET,
   });
 
+  const isProd = (process.env.MAISHA_ENVIRONMENT ?? 'development') === 'production';
   const app = await NestFactory.create(AppModule);
-  app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true }));
+  app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }));
 
-  const config = new DocumentBuilder()
-    .setTitle('Maisha API')
-    .setDescription('Indian startup financial suite — NestJS. Every result validated by Mahsa.')
-    .setVersion('4.0.0')
-    .build();
-  SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, config));
+  // ponytail: the handful of security headers we need, no helmet dep for four static headers.
+  app.use((_req: unknown, res: { setHeader(k: string, v: string): void }, next: () => void) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    if (isProd) res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+    next();
+  });
+
+  // Swagger exposes the full API surface — keep it off in production.
+  if (!isProd) {
+    const config = new DocumentBuilder()
+      .setTitle('Maisha API')
+      .setDescription('Indian startup financial suite — NestJS. Every result validated by Mahsa.')
+      .setVersion('4.0.0')
+      .build();
+    SwaggerModule.setup('docs', app, SwaggerModule.createDocument(app, config));
+  }
 
   const port = Number(process.env.PORT ?? 8000);
   await app.listen(port);
-  new Logger('Bootstrap').log(`Maisha API on :${port} — docs at /docs`);
+  new Logger('Bootstrap').log(`Maisha API on :${port}${isProd ? '' : ' — docs at /docs'}`);
 }
 bootstrap();

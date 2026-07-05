@@ -12,9 +12,14 @@ const HUNDRED = 100;
 
 /** Paise from a rupee amount, half-up (mirrors Decimal(str(x))*100 quantize ROUND_HALF_UP). */
 export function paiseFromRupees(rupees: string | number): number {
-  const d = typeof rupees === 'number' ? rupees : Number(rupees);
-  const scaled = d * HUNDRED;
-  return Math.sign(scaled) * Math.round(Math.abs(scaled));
+  // Scale on the decimal string, not a binary float: "1.005" → 101 paise (float*100 would give 100).
+  const s = (typeof rupees === 'string' ? rupees : rupees.toString()).trim();
+  const neg = s.startsWith('-');
+  const [intPart = '0', fracPart = ''] = s.replace(/^[-+]/, '').split('.');
+  const base = Number(intPart || '0') * HUNDRED + Number((fracPart + '00').slice(0, 2) || '0');
+  const roundUp = (fracPart[2] ?? '0') >= '5' ? 1 : 0; // ROUND_HALF_UP on the sub-paise digit
+  const total = base + roundUp;
+  return neg ? -total : total;
 }
 
 /** Indian-grouped rupee string, e.g. ₹12,34,567.00. Display only — never money-math input. */

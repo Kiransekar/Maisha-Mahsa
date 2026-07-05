@@ -7,12 +7,13 @@ use crate::snapshot::{Domain, FoldRequest};
 use crate::unfold::{unfold, ResponseShape};
 use crate::validate::{validate, RuleSet, Validation};
 use axum::{
-    extract::State,
+    extract::{DefaultBodyLimit, State},
     routing::{get, post},
     Json, Router,
 };
 use serde::Serialize;
 use std::sync::Arc;
+use tower_http::catch_panic::CatchPanicLayer;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -44,6 +45,9 @@ pub fn build_router(rules: RuleSet) -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/fold", post(fold_handler))
+        // Any handler panic becomes a 500 instead of resetting the connection; cap the request body.
+        .layer(CatchPanicLayer::new())
+        .layer(DefaultBodyLimit::max(256 * 1024))
         .with_state(state)
 }
 

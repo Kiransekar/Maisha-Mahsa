@@ -46,7 +46,7 @@ export class TreasuryController {
 
   /** Import a bank statement CSV as a multipart `file` upload (utf-8, BOM tolerated). */
   @Post('accounts/:account_id/import/file')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024, files: 1 } }))
   async importStatementFile(
     @Param('account_id', ParseIntPipe) accountId: number,
     @UploadedFile() file: Express.Multer.File,

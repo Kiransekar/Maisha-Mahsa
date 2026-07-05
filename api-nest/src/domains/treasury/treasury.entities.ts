@@ -1,5 +1,5 @@
 /** Treasury domain tables (PRD §3.2). Money columns are BIGINT paise. Mirrors api/app/db/models/treasury.py. */
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 import { moneyColumn } from '../../common/money';
 
 @Entity('bank_accounts')
@@ -19,7 +19,7 @@ export class BankAccount {
 @Entity('bank_transactions')
 export class BankTransaction {
   @PrimaryGeneratedColumn() id: number;
-  @Column({ type: 'integer' }) account_id: number;
+  @Index() @Column({ type: 'integer' }) account_id: number;
   @Column() txn_date: string;
   @Column({ type: 'text', nullable: true }) description: string | null;
   @Column({ type: 'text', nullable: true }) reference: string | null;

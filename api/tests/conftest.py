@@ -16,8 +16,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-import app.db.models  # noqa: F401  registers all models on Base.metadata
-from app.db.base import Base
+# Hermetic: tests must never depend on an ambient Mahsa (e.g. a dev sidecar on :8088). Point the
+# default at a dead port before the app imports; tests needing a real engine use `mahsa_server`.
+os.environ.setdefault("MAISHA_MAHSA_URL", "http://127.0.0.1:9")
+
+import app.db.models  # noqa: E402,F401  registers all models on Base.metadata
+from app.db.base import Base  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 

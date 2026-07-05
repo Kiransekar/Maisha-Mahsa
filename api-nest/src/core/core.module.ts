@@ -21,7 +21,10 @@ const claimProducer = {
       provider === 'claude'
         ? (process.env.MAISHA_CLAUDE_MODEL ?? 'claude-opus-4-8')
         : (process.env.MAISHA_OLLAMA_MODEL ?? 'qwen3:14b');
-    return new MaishaGenerator(buildClient(), `${provider}:${model}`, process.env.MAISHA_LLM_REDACT_PII === 'true');
+    // Cloud (Claude) redacts PII by default (opt-out); local Ollama opts in. Never send unredacted
+    // PAN/Aadhaar/GSTIN to a third party unless explicitly disabled.
+    const redactPii = provider === 'claude' ? process.env.MAISHA_LLM_REDACT_PII !== 'false' : process.env.MAISHA_LLM_REDACT_PII === 'true';
+    return new MaishaGenerator(buildClient(), `${provider}:${model}`, redactPii);
   },
 };
 

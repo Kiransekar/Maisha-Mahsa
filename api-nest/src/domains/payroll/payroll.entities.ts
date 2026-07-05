@@ -1,5 +1,5 @@
 /** Payroll domain tables (PRD §3.5). Money columns are BIGINT paise. Mirrors app/db/models/payroll.py. */
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 import { moneyColumn } from '../../common/money';
 
 @Entity('employees')
@@ -23,7 +23,7 @@ export class Employee {
 @Entity('salary_structures')
 export class SalaryStructure {
   @PrimaryGeneratedColumn() id: number;
-  @Column({ type: 'integer' }) employee_id: number;
+  @Index() @Column({ type: 'integer' }) employee_id: number;
   @Column() effective_from: string;
   @Column(moneyColumn()) basic: number; // paise (monthly)
   @Column(moneyColumn()) hra: number;
@@ -58,8 +58,8 @@ export class PayrollRun {
 @Entity('payroll_entries')
 export class PayrollEntry {
   @PrimaryGeneratedColumn() id: number;
-  @Column({ type: 'integer' }) payroll_run_id: number;
-  @Column({ type: 'integer' }) employee_id: number;
+  @Index() @Column({ type: 'integer' }) payroll_run_id: number;
+  @Index() @Column({ type: 'integer' }) employee_id: number;
   @Column(moneyColumn()) gross: number;
   @Column(moneyColumn()) basic: number;
   @Column(moneyColumn()) hra: number;
@@ -78,7 +78,7 @@ export class PayrollEntry {
 @Entity('esop_grants')
 export class EsopGrant {
   @PrimaryGeneratedColumn() id: number;
-  @Column({ type: 'integer' }) employee_id: number;
+  @Index() @Column({ type: 'integer' }) employee_id: number;
   @Column() grant_date: string;
   @Column() vesting_start_date: string;
   @Column({ type: 'integer', default: 12 }) cliff_months: number;

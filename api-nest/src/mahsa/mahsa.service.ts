@@ -102,6 +102,12 @@ export class MahsaService {
     if (opts.domain != null) payload.domain = opts.domain;
     if (opts.query != null) payload.query = opts.query;
     if (opts.rulesVersion != null) payload.rules_version = opts.rulesVersion;
-    return (await this.post('/fold', payload)) as FoldResult;
+    const data = await this.post('/fold', payload);
+    // Fail loud on a malformed 200: a missing shape/validation must raise MahsaError here, not a
+    // raw TypeError three layers downstream — the Golden Rule needs a real verdict or none.
+    if (!data || typeof data !== 'object' || !data.shape || !data.validation) {
+      throw new MahsaError('Mahsa /fold returned a malformed response (missing shape/validation)');
+    }
+    return data as FoldResult;
   }
 }

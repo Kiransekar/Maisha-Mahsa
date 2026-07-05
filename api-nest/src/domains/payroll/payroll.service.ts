@@ -108,11 +108,14 @@ export class PayrollService implements SnapshotProducer {
     const anchor = `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-28`;
 
     const run = this.runs.create({ month_year: monthYear, run_date: runDate, status: 'draft' });
-    await this.runs.save(run);
 
+    // Compute every employee's entry first (reads only), then persist the run header, all entries,
+    // and the totals in ONE transaction — a crash mid-run must never leave a run with partial
+    // entries and stale zero totals.
     const totals = { gross: 0, deductions: 0, net: 0, pf_employer: 0, esi_employer: 0 };
     let minNet: number | null = null;
     let count = 0;
+    const entryPayloads: Array<Record<string, any>> = [];
     for (const emp of await this.activeEmployees()) {
       const structure = await this.latestStructure(emp.id, anchor);
       if (structure === null) continue;
@@ -126,24 +129,21 @@ export class PayrollService implements SnapshotProducer {
         lop_days: lopDays[emp.id] ?? 0,
         days_in_month: daysInMonth,
       });
-      await this.entries.save(
-        this.entries.create({
-          payroll_run_id: run.id,
-          employee_id: emp.id,
-          gross: comp.gross_salary,
-          basic: comp.basic,
-          hra: comp.hra,
-          lta: comp.lta,
-          special_allowance: comp.special_allowance,
-          employee_pf: comp.employee_pf,
-          employee_esi: comp.employee_esi,
-          professional_tax: comp.professional_tax,
-          tds: comp.tds_monthly,
-          employer_pf: comp.employer_pf,
-          employer_esi: comp.employer_esi,
-          net_pay: comp.net_salary,
-        }),
-      );
+      entryPayloads.push({
+        employee_id: emp.id,
+        gross: comp.gross_salary,
+        basic: comp.basic,
+        hra: comp.hra,
+        lta: comp.lta,
+        special_allowance: comp.special_allowance,
+        employee_pf: comp.employee_pf,
+        employee_esi: comp.employee_esi,
+        professional_tax: comp.professional_tax,
+        tds: comp.tds_monthly,
+        employer_pf: comp.employer_pf,
+        employer_esi: comp.employer_esi,
+        net_pay: comp.net_salary,
+      });
       totals.gross += comp.gross_salary;
       totals.deductions += comp.employee_deductions;
       totals.net += comp.net_salary;
@@ -158,7 +158,12 @@ export class PayrollService implements SnapshotProducer {
     run.total_net = totals.net;
     run.total_pf_employer = totals.pf_employer;
     run.total_esi_employer = totals.esi_employer;
-    await this.runs.save(run);
+    await this.runs.manager.transaction(async (em) => {
+      await em.save(run);
+      if (entryPayloads.length) {
+        await em.save(entryPayloads.map((p) => this.entries.create({ ...p, payroll_run_id: run.id })));
+      }
+    });
 
     return {
       payroll_run_id: run.id,

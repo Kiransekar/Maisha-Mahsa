@@ -130,7 +130,8 @@ impl Default for Snapshot {
 impl Snapshot {
     /// Net monthly burn (burn minus revenue), in paise; clamped at zero (profitable → 0).
     pub fn net_burn(&self) -> Paise {
-        let net = self.monthly_burn.0 - self.monthly_revenue.0;
+        // saturating: attacker-controlled /fold paise must never overflow (silent wrap in release).
+        let net = self.monthly_burn.0.saturating_sub(self.monthly_revenue.0);
         Paise(net.max(0))
     }
 

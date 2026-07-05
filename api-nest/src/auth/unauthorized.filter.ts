@@ -4,7 +4,7 @@ import { Request, Response } from 'express';
 
 @Catch(UnauthorizedException)
 export class UnauthorizedRedirectFilter implements ExceptionFilter {
-  catch(exc: UnauthorizedException, host: ArgumentsHost): void {
+  catch(_exc: UnauthorizedException, host: ArgumentsHost): void {
     const ctx = host.switchToHttp();
     const req = ctx.getRequest<Request>();
     const res = ctx.getResponse<Response>();
@@ -17,6 +17,7 @@ export class UnauthorizedRedirectFilter implements ExceptionFilter {
       res.redirect(302, '/login');
       return;
     }
-    res.status(401).json({ statusCode: 401, message: exc.message, error: 'Unauthorized' });
+    // Fixed message — don't echo internal exception text back to the client.
+    res.status(401).json({ statusCode: 401, message: 'Unauthorized', error: 'Unauthorized' });
   }
 }

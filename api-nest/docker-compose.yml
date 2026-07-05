@@ -16,7 +16,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: "${POSTGRES_USER:-maisha}"
-      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-maisha}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}"
       POSTGRES_DB: "${POSTGRES_DB:-maisha}"
     volumes:
       - maisha_pg:/var/lib/postgresql/data
@@ -31,7 +31,7 @@ services:
     build: { context: ., dockerfile: Dockerfile }
     command: ["npm", "run", "migrate"]
     environment:
-      MAISHA_DATABASE_URL: "postgres://${POSTGRES_USER:-maisha}:${POSTGRES_PASSWORD:-maisha}@db:5432/${POSTGRES_DB:-maisha}"
+      MAISHA_DATABASE_URL: "postgres://${POSTGRES_USER:-maisha}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-maisha}"
     depends_on:
       db: { condition: service_healthy }
     restart: "no"
@@ -42,7 +42,7 @@ services:
     environment:
       MAISHA_ENVIRONMENT: "${MAISHA_ENVIRONMENT:-production}"
       MAISHA_MAHSA_URL: "http://dif:8088"
-      MAISHA_DATABASE_URL: "postgres://${POSTGRES_USER:-maisha}:${POSTGRES_PASSWORD:-maisha}@db:5432/${POSTGRES_DB:-maisha}"
+      MAISHA_DATABASE_URL: "postgres://${POSTGRES_USER:-maisha}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-maisha}"
       MAISHA_DB_SYNC: "false"
       MAISHA_SECURE_COOKIES: "${MAISHA_SECURE_COOKIES:-true}"
       # Run the daily scheduler in-process (single replica). Set SMTP vars in .env to actually send.

@@ -16,12 +16,24 @@ import { AuditCore, AuditEntry, GENESIS_HASH, makeEntry, verifyChain } from './a
 export class AuditService {
   constructor(@InjectRepository(AuditLog) private readonly repo: Repository<AuditLog>) {}
 
+  // Serialize read-last-hash → insert so two concurrent folds can't read the same prev_hash and
+  // fork the chain. ponytail: in-process promise chain (single API instance); the UNIQUE(prev_hash)
+  // index on audit_log is the durable backstop that makes a cross-instance fork fail loud.
+  private tail: Promise<unknown> = Promise.resolve();
+
   private async lastHash(): Promise<string> {
     const row = await this.repo.findOne({ where: {}, order: { id: 'DESC' } });
     return row?.this_hash ?? GENESIS_HASH;
   }
 
   async append(core: AuditCore): Promise<AuditEntry> {
+    const run = this.tail.then(() => this.appendSerial(core));
+    // Keep the chain alive even if one append rejects; callers still see their own error.
+    this.tail = run.catch(() => undefined);
+    return run;
+  }
+
+  private async appendSerial(core: AuditCore): Promise<AuditEntry> {
     const prev = await this.lastHash();
     const entry = makeEntry(prev, core);
     await this.repo.save(

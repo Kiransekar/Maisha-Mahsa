@@ -1,5 +1,5 @@
 /** Ledger / accounting tables (PRD §3.8). Money columns are BIGINT paise. Mirrors api/app/db/models/ledger.py. */
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 import { moneyColumn } from '../../common/money';
 
 @Entity('chart_of_accounts')
@@ -31,8 +31,8 @@ export class JournalEntry {
 @Entity('journal_lines')
 export class JournalLine {
   @PrimaryGeneratedColumn() id: number;
-  @Column({ type: 'integer' }) journal_entry_id: number;
-  @Column({ type: 'integer' }) account_id: number;
+  @Index() @Column({ type: 'integer' }) journal_entry_id: number;
+  @Index() @Column({ type: 'integer' }) account_id: number;
   @Column(moneyColumn({ default: 0 })) debit: number; // paise
   @Column(moneyColumn({ default: 0 })) credit: number; // paise
   @Column({ type: 'text', nullable: true }) description: string | null;

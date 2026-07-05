@@ -106,9 +106,13 @@ export class TreasuryService implements SnapshotProducer {
       imported += 1;
     }
 
-    if (toSave.length) await this.txns.save(toSave);
+    // Rows + the updated running balance in one transaction: a crash between must not leave the
+    // stored balance out of sync with the transactions.
     account.current_balance = running;
-    await this.accounts.save(account);
+    await this.txns.manager.transaction(async (em) => {
+      if (toSave.length) await em.save(toSave);
+      await em.save(account);
+    });
 
     return {
       account_id: accountId,

@@ -41,7 +41,7 @@ Full setup and usage walkthrough: **[USER_GUIDE.md](./USER_GUIDE.md)**.
 
 ## Status
 
-Green and bottom-up verified — **52 Rust tests** (clippy-clean), **372 Python tests**, and
+Green and bottom-up verified — **57 Rust tests** (clippy-clean), **425 Python tests**, and
 the **13/13 golden LLM eval** all pass. **100 of 116 domain features** are built across all
 12 domains; **GST, Ledger, and Treasury are 100% complete**. See `BUILD_PROGRESS.md` for the
 authoritative tracker.

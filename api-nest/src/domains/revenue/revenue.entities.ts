@@ -1,5 +1,5 @@
 /** Revenue domain tables (PRD §3.3). Money columns are BIGINT paise. Mirrors api/app/db/models/revenue.py. */
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 import { moneyColumn } from '../../common/money';
 
 @Entity('customers')
@@ -23,7 +23,7 @@ export class Customer {
 export class Invoice {
   @PrimaryGeneratedColumn() id: number;
   @Column({ unique: true }) invoice_number: string;
-  @Column({ type: 'integer' }) customer_id: number;
+  @Index() @Column({ type: 'integer' }) customer_id: number;
   @Column() invoice_date: string;
   @Column() due_date: string;
   @Column(moneyColumn()) subtotal: number; // paise (taxable)
@@ -44,7 +44,7 @@ export class Invoice {
 @Entity('invoice_items')
 export class InvoiceItem {
   @PrimaryGeneratedColumn() id: number;
-  @Column({ type: 'integer' }) invoice_id: number;
+  @Index() @Column({ type: 'integer' }) invoice_id: number;
   @Column() description: string;
   @Column({ type: 'text', nullable: true }) hsn_code: string | null;
   @Column({ type: 'integer', default: 1 }) quantity: number;
@@ -56,7 +56,7 @@ export class InvoiceItem {
 export class CreditNote {
   @PrimaryGeneratedColumn() id: number;
   @Column({ unique: true }) credit_note_number: string;
-  @Column({ type: 'integer' }) invoice_id: number;
+  @Index() @Column({ type: 'integer' }) invoice_id: number;
   @Column() issue_date: string;
   @Column({ type: 'text', nullable: true }) reason: string | null;
   @Column(moneyColumn()) amount: number; // paise

@@ -1,10 +1,10 @@
 /** Server-rendered premium UI. Reads live domain health through Mahsa; every page is auth-gated. */
-import { Body, Controller, Get, Header, NotFoundException, Param, Post } from '@nestjs/common';
+import { Body, Controller, Get, Header, Logger, NotFoundException, Param, Post } from '@nestjs/common';
 
 import { AuditService } from '../audit/audit.service';
 import { briefPayload, collectHealth, composeBrief, DomainHealth } from '../cfo/cfo';
 import { LoopService } from '../core/loop.service';
-import { MahsaError, MahsaService } from '../mahsa/mahsa.service';
+import { MahsaService } from '../mahsa/mahsa.service';
 import { DomainRegistry } from '../scheduler/registry.service';
 import { HistoryService } from '../scheduler/history.service';
 import { page } from './layout';
@@ -38,13 +38,14 @@ const ACTIONS: Record<string, DomainAction[]> = {
   compliance: [{ label: 'Statutory alerts', href: '/api/compliance/alerts', icon: '🔔' }],
 };
 
-function mahsaDown(msg: string): string {
+function mahsaDown(err: unknown): string {
+  // Log the detail server-side; never render raw internal error text into the page.
+  new Logger('web').warn(`Mahsa unreachable: ${(err as Error)?.message ?? err}`);
   return `<div class="page-h"><h1>Overview</h1></div>
     <section class="card verdict warn" style="margin-top:16px">
       <span class="led" style="background:var(--warn)"></span>
       <div><b>Mahsa engine unreachable</b>
-      <div style="color:var(--muted);font-size:13px;margin-top:4px">The suite refuses to show a verdict it can't validate (the Golden Rule). Start the sidecar, then reload.</div>
-      <div class="hash" style="margin-top:8px">${msg}</div></div></section>`;
+      <div style="color:var(--muted);font-size:13px;margin-top:4px">The suite refuses to show a verdict it can't validate (the Golden Rule). Start the sidecar, then reload.</div></div></section>`;
 }
 
 @Controller()
@@ -69,11 +70,11 @@ export class WebController {
     try {
       const health = await collectHealth(this.registry.all(), this.mahsa, today());
       const brief = briefPayload(composeBrief(today(), health));
-      const intact = await this.audit.verify().catch(() => true);
+      // Fail loud: a verify() error must never render as "intact" (false trust).
+      const intact = await this.audit.verify().catch(() => false);
       return page({ title: 'Overview', body: overviewBody(brief, intact), active: '/' });
     } catch (e) {
-      const body = e instanceof MahsaError ? mahsaDown(e.message) : mahsaDown((e as Error).message);
-      return page({ title: 'Overview', body, active: '/' });
+      return page({ title: 'Overview', body: mahsaDown(e), active: '/' });
     }
   }
 
@@ -88,7 +89,7 @@ export class WebController {
       const series = await this.history.domainSeries(domain).catch(() => ({}));
       return page({ title: domain, body: domainBody(domain, snapshot, fold, series, ACTIONS[domain] ?? []), active: '/' });
     } catch (e) {
-      return page({ title: domain, body: mahsaDown((e as Error).message), active: '/' });
+      return page({ title: domain, body: mahsaDown(e), active: '/' });
     }
   }
 
@@ -117,7 +118,7 @@ export class WebController {
       );
       return page({ title: 'Approvals', body: approvalsBody(rows), active: '/approvals' });
     } catch (e) {
-      return page({ title: 'Approvals', body: mahsaDown((e as Error).message), active: '/approvals' });
+      return page({ title: 'Approvals', body: mahsaDown(e), active: '/approvals' });
     }
   }
 

@@ -24,7 +24,8 @@ export interface AuditEntry extends AuditCore {
   this_hash: string;
 }
 
-/** Deterministic JSON: recursively sorted keys, no insignificant whitespace. */
+/** Deterministic JSON for this chain: recursively sorted keys, no insignificant whitespace.
+ * Internally consistent (verifyChain) — not asserted to be byte-identical to Python's json.dumps. */
 export function canonicalJson(payload: unknown): string {
   return JSON.stringify(sortKeys(payload));
 }
@@ -35,6 +36,10 @@ function sortKeys(v: any): any {
     const out: Record<string, any> = {};
     for (const k of Object.keys(v).sort()) out[k] = sortKeys(v[k]);
     return out;
+  }
+  // Reject non-finite numbers: NaN/Infinity serialize to `null`, letting distinct entries collide.
+  if (typeof v === 'number' && !Number.isFinite(v)) {
+    throw new Error('audit entry contains a non-finite number; refusing to seal an ambiguous hash');
   }
   return v;
 }

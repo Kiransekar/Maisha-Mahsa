@@ -66,7 +66,12 @@ export class ExpenseController {
 
   /** Upload a receipt image (multipart `file`); OCR it, then parse. 503 if OCR is unavailable. */
   @Post('parse-receipt/image')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: 5 * 1024 * 1024, files: 1 },
+      fileFilter: (_req, f, cb) => cb(null, f.mimetype.startsWith('image/')),
+    }),
+  )
   parseReceiptImage(@UploadedFile() file: Express.Multer.File) {
     if (!file) throw new BadRequestException('multipart field `file` (an image) is required');
     return this.service.parseReceiptImage(file.buffer);

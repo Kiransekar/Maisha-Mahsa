@@ -4,11 +4,14 @@
  * cookie — no session store, no extra dependency. ponytail: swap in a users table + scrypt
  * only if this ever becomes multi-user.
  */
-import { createHmac, timingSafeEqual } from 'crypto';
+import { createHmac, randomBytes, timingSafeEqual } from 'crypto';
 
 export const COOKIE_NAME = 'maisha_auth';
 export const DEFAULT_PASSWORD = 'change-me';
 export const DEFAULT_SESSION_SECRET = 'dev-insecure-session-secret-change-me';
+
+/** Session lifetime; a leaked cookie is useless past this window. */
+export const SESSION_TTL_MS = Number(process.env.MAISHA_SESSION_TTL_HOURS ?? 168) * 3_600_000;
 
 /** Constant-time equality that never leaks length via early return. */
 function safeEqual(a: string, b: string): boolean {
@@ -26,13 +29,26 @@ export function verifyPassword(supplied: string, expected: string): boolean {
   return safeEqual(supplied, expected);
 }
 
-/** Opaque session token: HMAC(secret, 'authed'). Rotating the secret logs everyone out. */
-export function sign(secret: string): string {
-  return createHmac('sha256', secret).update('authed').digest('hex');
+/**
+ * Signed session token: `issuedAt.nonce.HMAC(secret, "issuedAt.nonce")`. The per-mint nonce and
+ * issued-at bound a leaked cookie to SESSION_TTL_MS; rotating the secret still logs everyone out.
+ */
+export function sign(secret: string, iat: number = Date.now(), nonce: string = randomBytes(9).toString('hex')): string {
+  const payload = `${iat}.${nonce}`;
+  return `${payload}.${createHmac('sha256', secret).update(payload).digest('hex')}`;
 }
 
-export function validCookie(value: string | null | undefined, secret: string): boolean {
-  return value != null && safeEqual(value, sign(secret));
+export function validCookie(value: string | null | undefined, secret: string, now: number = Date.now()): boolean {
+  if (value == null) return false;
+  const i = value.lastIndexOf('.');
+  if (i < 0) return false;
+  const payload = value.slice(0, i);
+  const mac = value.slice(i + 1);
+  const expected = createHmac('sha256', secret).update(payload).digest('hex');
+  if (!safeEqual(mac, expected)) return false;
+  const iat = Number(payload.split('.')[0]);
+  // Reject expired tokens (and tokens dated in the future, allowing 60s of clock skew).
+  return Number.isFinite(iat) && now - iat <= SESSION_TTL_MS && iat <= now + 60_000;
 }
 
 /** Routes reachable without logging in. */

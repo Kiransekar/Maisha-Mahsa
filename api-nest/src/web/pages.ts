@@ -176,8 +176,8 @@ export function domainBody(
       <h3 class="eyebrow">Ask Maisha</h3>
       <p style="color:var(--muted);font-size:13px;margin:0 0 12px">Every number is copied from verified facts — never invented.</p>
       <div class="row">
-        <input id="q" aria-label="Ask a question" placeholder="e.g. what's my exposure this period?" onkeydown="if(event.key==='Enter')ask('${esc(domain)}')">
-        <button class="btn primary" onclick="ask('${esc(domain)}')">Ask</button>
+        <input id="q" aria-label="Ask a question" placeholder="e.g. what's my exposure this period?" data-domain="${esc(domain)}" onkeydown="if(event.key==='Enter')ask(this.dataset.domain)">
+        <button class="btn primary" data-domain="${esc(domain)}" onclick="ask(this.dataset.domain)">Ask</button>
       </div>
       <div id="draft"></div>
     </div>

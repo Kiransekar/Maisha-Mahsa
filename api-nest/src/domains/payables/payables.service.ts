@@ -5,7 +5,7 @@
  */
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Not, Repository } from 'typeorm';
+import { In, IsNull, Not, Repository } from 'typeorm';
 
 import { SnapshotProducer } from '../../core/loop.service';
 import * as calc from './payables.calc';
@@ -151,10 +151,19 @@ export class PayablesService implements SnapshotProducer {
     return calc.apAging(payables, asOf);
   }
 
+  /** Batch-load vendors into a map, avoiding one findOne per bill (N+1). */
+  private async vendorMap(ids: number[]): Promise<Map<number, any>> {
+    if (!ids.length) return new Map();
+    const vendors = await this.vendors.findBy({ id: In([...new Set(ids)]) });
+    return new Map(vendors.map((v) => [v.id, v]));
+  }
+
   async msmeMaxDaysUnpaid(asOf: string): Promise<number> {
     let worst = 0;
-    for (const b of await this.openBills()) {
-      const vendor = await this.vendors.findOne({ where: { id: b.vendor_id } });
+    const bills = await this.openBills();
+    const byId = await this.vendorMap(bills.map((b) => b.vendor_id));
+    for (const b of bills) {
+      const vendor = byId.get(b.vendor_id);
       if (vendor && vendor.msme_status) {
         worst = Math.max(worst, daysBetween(asOf, b.bill_date));
       }
@@ -193,8 +202,10 @@ export class PayablesService implements SnapshotProducer {
 
   async recurringPayables(): Promise<Record<string, any>[]> {
     const rows: calc.RecurringBill[] = [];
-    for (const b of await this.bills.find()) {
-      const vendor = await this.vendors.findOne({ where: { id: b.vendor_id } });
+    const allBills = await this.bills.find();
+    const byId = await this.vendorMap(allBills.map((b) => b.vendor_id));
+    for (const b of allBills) {
+      const vendor = byId.get(b.vendor_id);
       rows.push({
         vendor_id: b.vendor_id,
         vendor_name: vendor ? vendor.name : '',
@@ -215,9 +226,11 @@ export class PayablesService implements SnapshotProducer {
     const execute = opts.execute ?? false;
     const cutoff = addDays(asOf, horizonDays);
     const lines: Record<string, any>[] = [];
-    for (const b of await this.openBills()) {
+    const openBills = await this.openBills();
+    const byId = await this.vendorMap(openBills.map((b) => b.vendor_id));
+    for (const b of openBills) {
       if (b.due_date > cutoff) continue;
-      const vendor = await this.vendors.findOne({ where: { id: b.vendor_id } });
+      const vendor = byId.get(b.vendor_id);
       lines.push({
         bill_id: b.id,
         bill_number: b.bill_number,

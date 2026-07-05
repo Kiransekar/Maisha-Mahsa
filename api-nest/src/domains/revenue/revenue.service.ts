@@ -5,7 +5,7 @@
  */
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Not, Repository } from 'typeorm';
+import { In, Not, Repository } from 'typeorm';
 
 import { Company } from '../../common/shared.entities';
 import { SnapshotProducer } from '../../core/loop.service';
@@ -85,21 +85,24 @@ export class RevenueService implements SnapshotProducer {
       irn: body.irn ?? null,
       status: 'issued',
     });
-    await this.invoices.save(invoice);
-    for (const ln of body.lines) {
-      const qty = Math.trunc(Number(ln.quantity ?? 1));
-      const rate = Math.trunc(Number(ln.rate));
-      await this.items.save(
-        this.items.create({
-          invoice_id: invoice.id,
-          description: ln.description ?? '',
-          hsn_code: ln.hsn_code ?? null,
-          quantity: qty,
-          rate,
-          amount: qty * rate,
+    // Invoice header + line items in one transaction: never leave an invoice with missing items.
+    await this.invoices.manager.transaction(async (em) => {
+      await em.save(invoice);
+      await em.save(
+        body.lines.map((ln) => {
+          const qty = Math.trunc(Number(ln.quantity ?? 1));
+          const rate = Math.trunc(Number(ln.rate));
+          return this.items.create({
+            invoice_id: invoice.id,
+            description: ln.description ?? '',
+            hsn_code: ln.hsn_code ?? null,
+            quantity: qty,
+            rate,
+            amount: qty * rate,
+          });
         }),
       );
-    }
+    });
     return {
       invoice_id: invoice.id,
       invoice_number: body.invoice_number,
@@ -149,10 +152,14 @@ export class RevenueService implements SnapshotProducer {
    * dunning email composer. Mirrors the Python RevenueService.pending_dunning. */
   async pendingDunning(asOf: string): Promise<Record<string, any>[]> {
     const out: Record<string, any>[] = [];
-    for (const i of await this.openReceivables()) {
+    const open = await this.openReceivables();
+    // Batch-load customers once instead of one findOne per invoice (N+1 on the daily-brief path).
+    const custs = await this.customers.findBy({ id: In([...new Set(open.map((i) => i.customer_id))]) });
+    const byId = new Map(custs.map((c) => [c.id, c]));
+    for (const i of open) {
       const stages = revenue.dunningDue(i.due_date, asOf);
       if (stages.length === 0) continue;
-      const customer = await this.customers.findOne({ where: { id: i.customer_id } });
+      const customer = byId.get(i.customer_id);
       out.push({
         invoice_number: i.invoice_number,
         customer_name: customer?.name ?? '',

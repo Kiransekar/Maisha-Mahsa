@@ -103,18 +103,22 @@ export class LedgerService implements SnapshotProducer {
       total_credit: totalCredit,
       is_auto_generated: source === 'manual' ? 0 : 1,
     });
-    await this.entries.save(entry);
-    for (const ln of args.lines) {
-      await this.lines.save(
-        this.lines.create({
-          journal_entry_id: entry.id,
-          account_id: ~~ln.account_id,
-          debit: ~~(ln.debit ?? 0),
-          credit: ~~(ln.credit ?? 0),
-          description: ln.description ?? null,
-        }),
+    // Header + lines in one transaction: a crash mid-loop must never leave an orphaned,
+    // half-written (and therefore unbalanced) journal entry.
+    await this.entries.manager.transaction(async (em) => {
+      await em.save(entry);
+      await em.save(
+        args.lines.map((ln) =>
+          this.lines.create({
+            journal_entry_id: entry.id,
+            account_id: ~~ln.account_id,
+            debit: ~~(ln.debit ?? 0),
+            credit: ~~(ln.credit ?? 0),
+            description: ln.description ?? null,
+          }),
+        ),
       );
-    }
+    });
     return {
       journal_entry_id: entry.id,
       total_debit: totalDebit,

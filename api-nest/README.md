@@ -6,7 +6,7 @@ Python reference. The Rust **Mahsa** gatekeeper (`../dif`) is kept as-is and int
 
 ## Status
 
-**All 12 domains ported, integrated, building & booting green** (135 tests: domain/parity + auth/audit/money/llm/pdf/ocr/scheduler/cfo/email). Verified live end-to-end against the real Rust Mahsa: login → `/api/gst/fold` → statute-cited validation → sealed `audit_hash`.
+**All 12 domains ported, integrated, building & booting green** (143 tests: domain/parity + auth/audit/money/llm/pdf/ocr/scheduler/cfo/email). Verified live end-to-end against the real Rust Mahsa: login → `/api/gst/fold` → statute-cited validation → sealed `audit_hash`.
 
 | Layer (Python → Nest) | Location |
 |---|---|
@@ -27,7 +27,7 @@ compliance, vault. 62 routes; OpenAPI at `/docs`.
 ## Run (local, SQLite)
 
     npm install
-    npm test                 # 112 tests
+    npm test                 # 143 tests
     npm run start:dev        # http://localhost:8000  (docs at /docs)
 
 Mahsa must be running for `/fold` routes: `cd ../dif && cargo run` (serves :8088). Without it,

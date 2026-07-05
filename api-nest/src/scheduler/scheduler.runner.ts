@@ -35,10 +35,16 @@ export class SchedulerRunner implements OnModuleInit, OnModuleDestroy {
     const delayMs = Math.max(0, secondsUntilNext(new Date(), { hour, minute, tz }) * 1000);
     // ponytail: setTimeout caps at ~24.8 days; a daily delay is always well under that.
     this.timer = setTimeout(async () => {
-      const today = new Date().toISOString().slice(0, 10);
-      const result = await this.jobs.runOnce('all', today);
-      this.log.log(`daily jobs ran: ${JSON.stringify(result)}`);
-      this.arm(hour, minute, tz); // re-arm for the next day
+      // Always re-arm: a throw in the tick body must not silently kill the daily loop.
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        const result = await this.jobs.runOnce('all', today);
+        this.log.log(`daily jobs ran: ${JSON.stringify(result)}`);
+      } catch (e) {
+        this.log.error(`daily jobs tick failed: ${(e as Error).message}`);
+      } finally {
+        this.arm(hour, minute, tz); // re-arm for the next day
+      }
     }, delayMs);
   }
 }

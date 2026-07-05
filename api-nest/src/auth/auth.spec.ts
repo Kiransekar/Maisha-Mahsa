@@ -17,6 +17,16 @@ describe('auth (single-user HMAC)', () => {
     expect(validCookie(null, s)).toBe(false);
   });
 
+  it('session token expires and rejects tampering', () => {
+    const s = 'secret';
+    const now = 1_000_000_000_000;
+    const fresh = sign(s, now);
+    expect(validCookie(fresh, s, now + 1000)).toBe(true); // within TTL
+    expect(validCookie(fresh, s, now + 200 * 3_600_000)).toBe(false); // past 168h TTL
+    expect(validCookie(fresh + 'x', s, now)).toBe(false); // tampered MAC
+    expect(validCookie('1.2.3', s, now)).toBe(false); // forged payload
+  });
+
   it('public allowlist', () => {
     expect(isPublic('/health')).toBe(true);
     expect(isPublic('/health/mahsa')).toBe(true);
