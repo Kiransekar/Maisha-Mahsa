@@ -62,14 +62,14 @@ function feedbackFor(bad: [string, string][], fold: FoldResult): string {
 
 export async function generateVerified(
   generator: ClaimProducer,
-  args: { snapshot: Record<string, any>; query: string; domain: string; fold: FoldResult; maxRetries: number },
+  args: { snapshot: Record<string, any>; query: string; domain: string; fold: FoldResult; maxRetries: number; profile?: string },
 ): Promise<DraftResult> {
   const facts = enrich(args.snapshot);
   const allowed = allowedValues(facts);
   let feedback: string | null = null;
 
   for (let attempt = 1; attempt <= args.maxRetries + 1; attempt++) {
-    const claim = await generator.produce({ snapshot: args.snapshot, query: args.query, domain: args.domain, feedback });
+    const claim = await generator.produce({ snapshot: args.snapshot, query: args.query, domain: args.domain, feedback, profile: args.profile });
     const bad = unbackedNumbers(claim, allowed);
     if (bad.length === 0) {
       return { claim, attempts: attempt, verified: true, requiresApproval: args.fold.shape.requires_approval };

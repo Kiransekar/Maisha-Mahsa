@@ -10,6 +10,11 @@ export class AuditAndPerfIndexes1782926120274 implements MigrationInterface {
   name = 'AuditAndPerfIndexes1782926120274';
 
   public async up(q: QueryRunner): Promise<void> {
+    // Drop pre-existing duplicate captures (from before the unique constraint) so the index can build.
+    await q.query(
+      `DELETE FROM "metric_snapshot" WHERE "id" NOT IN ` +
+        `(SELECT MIN("id") FROM "metric_snapshot" GROUP BY "domain", "captured_at", "metric")`,
+    );
     await q.query(`CREATE UNIQUE INDEX "UQ_audit_log_prev_hash" ON "audit_log" ("prev_hash")`);
     await q.query(`CREATE UNIQUE INDEX "UQ_metric_snapshot_domain_day_metric" ON "metric_snapshot" ("domain", "captured_at", "metric")`);
     await q.query(`CREATE INDEX "IDX_journal_lines_entry" ON "journal_lines" ("journal_entry_id")`);

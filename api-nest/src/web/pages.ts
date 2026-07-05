@@ -295,9 +295,21 @@ export function trendsBody(data: { domain: string; series: Record<string, [strin
 
 // ---- settings -------------------------------------------------------------------------
 
-export function settingsBody(info: { engine: string; rules: string; scheduler: boolean; llm: string; domains: number }): string {
+export function settingsBody(info: {
+  engine: string;
+  rules: string;
+  scheduler: boolean;
+  llm: string;
+  domains: number;
+  cfoMemory: string;
+  cfoUsed: number;
+  cfoLimit: number;
+}): string {
   const row = (k: string, v: string) => `<tr><td>${esc(k)}</td><td>${v}</td></tr>`;
   const yn = (b: boolean) => (b ? '<span class="pill ok"><span class="led" style="background:currentColor"></span>on</span>' : '<span class="pill">off</span>');
+  const memBlock = info.cfoMemory
+    ? `<pre style="white-space:pre-wrap;margin:0;font:inherit;color:var(--muted)">${esc(info.cfoMemory)}</pre>`
+    : `<span style="color:var(--faint)">Empty — the agent will learn this org's posture, or set it via <span class="mono">PUT /api/memory/cfo</span>.</span>`;
   return `<div class="page-h"><h1>Settings</h1><span class="crumb">single-operator</span></div>
     <p class="sub">Engine posture and account. The Golden Rule is not configurable: Mahsa validates every number.</p>
     <section class="card" style="padding:8px 16px"><table class="metrics">
@@ -307,7 +319,58 @@ export function settingsBody(info: { engine: string; rules: string; scheduler: b
       ${row('Scheduler (daily capture + brief)', yn(info.scheduler))}
       ${row('LLM drafting', info.llm === 'off' ? yn(false) : `<span class="pill ok"><span class="led" style="background:currentColor"></span>${esc(info.llm)}</span>`)}
       ${row('Theme', 'Use the ☾ / ☀ toggle in the top bar')}
-    </table></section>`;
+    </table></section>
+
+    <div class="page-h minor"><h1>CFO Profile (memory)</h1><span class="crumb">${info.cfoUsed} / ${info.cfoLimit} chars</span></div>
+    <p class="sub">The durable posture the AI CFO remembers about this org — regime choices, standing instructions, risk appetite. Context only; never a source of numbers.</p>
+    <section class="card stat">${memBlock}</section>`;
+}
+
+// ---- tax optimizer --------------------------------------------------------------------
+
+export function optimizeBody(r: {
+  as_of: string;
+  appetite: string;
+  quantified_saving_inr: string;
+  quantified_saving_paise: number;
+  audit_hash: string;
+  moves: Array<{ name: string; category: string; statute: string; section: string; risk: string; saving_inr: string | null; needs: string[]; note: string; steps: string[] }>;
+}): string {
+  if (!r.moves.length)
+    return `<div class="page-h"><h1>Tax Optimizer</h1><span class="crumb">as of ${esc(r.as_of)}</span></div>
+      <section class="card"><div class="empty"><div class="big">No applicable moves right now</div>
+      As your profile and data fill in, cited tax-saving strategies appear here — quantified where the facts allow, honest about what to provide otherwise.</div></section>`;
+
+  const quantified = r.moves.filter((m) => m.saving_inr);
+  const cards = r.moves
+    .map((m) => {
+      const rk = m.risk === 'low' ? 'ok' : m.risk === 'aggressive' ? 'bad' : 'warn';
+      const value = m.saving_inr
+        ? `<div class="val" style="color:var(--ok)">${esc(m.saving_inr)}<small> now</small></div>`
+        : `<div class="note" style="margin-top:2px">Provide <b>${esc(m.needs.slice(0, 3).join(', '))}</b> to quantify.</div>`;
+      const steps = m.steps.map((s) => `<li>${esc(s)}</li>`).join('');
+      return `<section class="card" style="padding:16px 18px;margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+          <div><b style="font-size:15px">${esc(m.name)}</b>
+            <div class="rule" style="margin-top:8px"><span class="cite">${esc(m.statute)} — ${esc(m.section)}</span></div></div>
+          <span class="pill ${rk}"><span class="led" style="background:currentColor"></span>${esc(m.risk)}</span>
+        </div>
+        ${value}
+        <div class="note" style="margin-top:8px;color:var(--muted)">${esc(m.note)}</div>
+        <details style="margin-top:8px"><summary style="cursor:pointer;color:var(--accent);font-size:13px">Steps</summary>
+          <ol style="margin:8px 0 0;padding-left:20px;color:var(--muted);font-size:13px;line-height:1.7">${steps}</ol></details>
+      </section>`;
+    })
+    .join('');
+
+  return `<div class="page-h"><h1>Tax Optimizer</h1><span class="crumb">as of ${esc(r.as_of)} · appetite: ${esc(r.appetite)}</span></div>
+    <p class="sub">Ranked, statute-cited moves to reduce tax. Every ₹ figure is computed deterministically and sealed to the audit chain — never guessed.</p>
+    <section class="tiles" style="margin-bottom:18px">
+      ${tile('Quantifiable now', r.quantified_saving_inr, `${quantified.length} move(s) with a computed ₹ impact`, r.quantified_saving_paise > 0 ? 'ok' : '')}
+      ${tile('Applicable strategies', String(r.moves.length), 'personalized to your org', '')}
+      ${tile('Sealed', '⛓', `audit ${esc(r.audit_hash.slice(0, 10))}…`, '')}
+    </section>
+    ${cards}`;
 }
 
 // ---- audit ----------------------------------------------------------------------------

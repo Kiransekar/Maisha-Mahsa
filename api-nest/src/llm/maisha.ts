@@ -20,6 +20,7 @@ export interface ClaimProducer {
     query: string;
     domain: string;
     feedback?: string | null;
+    profile?: string;
   }): Promise<ActionClaim>;
 }
 
@@ -37,6 +38,7 @@ export class MaishaGenerator implements ClaimProducer {
     query: string;
     domain: string;
     feedback?: string | null;
+    profile?: string;
   }): Promise<ActionClaim> {
     // Input guardrails run before the model sees anything.
     const guard = scanInput(args.query, { redactPii: this.redactPii });
@@ -62,6 +64,7 @@ export class MaishaGenerator implements ClaimProducer {
       facts,
       rules: rulesForDomain(args.domain),
       feedback: args.feedback,
+      profile: args.profile,
     });
     const raw = await this.client.complete({ system: SYSTEM_PROMPT, user, schema: ACTION_CLAIM_SCHEMA });
     const claim = parseClaim(raw);

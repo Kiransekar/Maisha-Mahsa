@@ -7,8 +7,10 @@ import { LoopService } from '../core/loop.service';
 import { MahsaService } from '../mahsa/mahsa.service';
 import { DomainRegistry } from '../scheduler/registry.service';
 import { HistoryService } from '../scheduler/history.service';
+import { TaxOptimizerService } from '../tax-optimizer/tax-optimizer.service';
+import { MemoryService } from '../memory/memory.service';
 import { page } from './layout';
-import { approvalsBody, askFragment, auditBody, DomainAction, domainBody, loginBody, overviewBody, settingsBody, trendsBody } from './pages';
+import { approvalsBody, askFragment, auditBody, DomainAction, domainBody, loginBody, optimizeBody, overviewBody, settingsBody, trendsBody } from './pages';
 
 const HTML = 'text/html; charset=utf-8';
 const today = () => new Date().toISOString().slice(0, 10);
@@ -56,6 +58,8 @@ export class WebController {
     private readonly loop: LoopService,
     private readonly audit: AuditService,
     private readonly history: HistoryService,
+    private readonly optimizer: TaxOptimizerService,
+    private readonly memory: MemoryService,
   ) {}
 
   @Get('login')
@@ -135,6 +139,7 @@ export class WebController {
   @Header('Content-Type', HTML)
   async settings(): Promise<string> {
     const h = await this.mahsa.health().catch(() => ({}));
+    const cfo = await this.memory.getCfo().catch(() => ({ content: '', used: 0, limit: 0 }));
     return page({
       title: 'Settings',
       body: settingsBody({
@@ -143,9 +148,23 @@ export class WebController {
         scheduler: process.env.MAISHA_SCHEDULER_ENABLED === 'true',
         llm: process.env.MAISHA_LLM_PROVIDER ?? 'off',
         domains: this.registry.all().length,
+        cfoMemory: cfo.content,
+        cfoUsed: cfo.used,
+        cfoLimit: cfo.limit,
       }),
       active: '/settings',
     });
+  }
+
+  @Get('optimize')
+  @Header('Content-Type', HTML)
+  async optimize(): Promise<string> {
+    try {
+      const report = await this.optimizer.optimize();
+      return page({ title: 'Tax Optimizer', body: optimizeBody(report), active: '/optimize' });
+    } catch (e) {
+      return page({ title: 'Tax Optimizer', body: mahsaDown(e), active: '/optimize' });
+    }
   }
 
   @Get('audit')

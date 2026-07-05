@@ -3,6 +3,7 @@ import { CSS, esc } from './theme';
 
 const NAV: [string, string][] = [
   ['/', 'Overview'],
+  ['/optimize', 'Optimize'],
   ['/approvals', 'Approvals'],
   ['/trends', 'Trends'],
   ['/audit', 'Audit'],

@@ -62,12 +62,16 @@ export function buildUserPrompt(args: {
   facts: Record<string, any>;
   rules: RuleHint[];
   feedback?: string | null;
+  profile?: string;
 }): string {
   const fb = args.feedback
     ? `CORRECTION (your previous draft was rejected):\n  ${args.feedback}\n\n`
     : '';
+  // Org context personalizes the framing. It is NOT a source of numbers — those come only from FACTS.
+  const prof = args.profile ? `ORG PROFILE (context only — never a source of numbers):\n${args.profile}\n\n` : '';
   return (
     `DOMAIN: ${args.domain}\n\n` +
+    prof +
     fb +
     `QUESTION:\n  ${args.query}\n\n` +
     `FACTS (the only numbers you may state):\n${factsBlock(args.facts)}\n\n` +

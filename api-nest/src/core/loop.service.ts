@@ -7,6 +7,7 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 
 import { AuditService } from '../audit/audit.service';
+import { MemoryService } from '../memory/memory.service';
 import { ClaimProducer } from '../llm/maisha';
 import { generateVerified } from '../llm/retry';
 import { ActionClaim } from '../llm/schema';
@@ -37,6 +38,7 @@ export class LoopService {
     private readonly audit: AuditService,
     @Optional() private readonly trace?: TraceService,
     @Optional() @Inject(CLAIM_PRODUCER) private readonly generator?: ClaimProducer | null,
+    @Optional() private readonly memory?: MemoryService,
   ) {}
 
   async run(args: {
@@ -64,11 +66,14 @@ export class LoopService {
     let requiresApproval = fold.shape.requires_approval;
     if (this.generator && args.query) {
       const started = Date.now();
+      // CFO Profile personalizes the draft's framing — context only, never a source of numbers.
+      const profile = this.memory ? await this.memory.profileText().catch(() => '') : '';
       const draft = await generateVerified(this.generator, {
         snapshot,
         query: args.query,
         domain: service.domain,
         fold,
+        profile,
         maxRetries: args.maxRetries ?? 2,
       });
       latencyMs = Date.now() - started;

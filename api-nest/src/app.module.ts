@@ -4,6 +4,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { buildDataSourceOptions } from './db/data-source';
 import { CoreModule } from './core/core.module';
+import { MemoryModule } from './memory/memory.module';
+import { TaxOptimizerModule } from './tax-optimizer/tax-optimizer.module';
 import { AuthModule } from './auth/auth.controller';
 import { HealthModule } from './health/health.controller';
 import { SchedulerModule } from './scheduler/scheduler.module';
@@ -25,11 +27,13 @@ import { VaultModule } from './domains/vault/vault.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: '.env' }),
     TypeOrmModule.forRoot(buildDataSourceOptions()),
+    MemoryModule,
     CoreModule,
     AuthModule,
     HealthModule,
     SchedulerModule,
     WebModule,
+    TaxOptimizerModule,
     // Domain modules — one per PRD domain (all 12).
     GstModule,
     LedgerModule,
