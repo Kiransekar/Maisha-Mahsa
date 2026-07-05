@@ -5,6 +5,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 import { AppModule } from './app.module';
 import { assertProductionSecrets, DEFAULT_PASSWORD, DEFAULT_SESSION_SECRET } from './auth/auth';
+import { observabilityMiddleware } from './observability/middleware';
 
 async function bootstrap() {
   // Fail fast: refuse to boot in production with the shipped default secrets (P1-SECRETS).
@@ -15,7 +16,11 @@ async function bootstrap() {
   });
 
   const isProd = (process.env.MAISHA_ENVIRONMENT ?? 'development') === 'production';
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bufferLogs: false });
+  // Correlation id + structured access log + metrics — first, so everything downstream is traced.
+  app.use(observabilityMiddleware);
+  // Clean shutdown: close DB pool, stop the scheduler, drain in-flight work on SIGTERM/SIGINT.
+  app.enableShutdownHooks();
   app.useGlobalPipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }));
 
   // ponytail: the handful of security headers we need, no helmet dep for four static headers.
