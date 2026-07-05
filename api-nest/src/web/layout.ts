@@ -21,7 +21,9 @@ document.cookie='theme='+next+';path=/;max-age=31536000;samesite=lax';
 var b=document.getElementById('themebtn');if(b)b.textContent=next==='dark'?'☀':'☾';}
 function toggleMenu(){var n=document.querySelector('nav.main');if(n)n.classList.toggle('open');}
 (function(){var m=document.cookie.match(/theme=(light|dark)/),b=document.getElementById('themebtn');
-if(b)b.textContent=(m?m[1]:(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'))==='dark'?'☀':'☾';})();`;
+if(b)b.textContent=(m?m[1]:(window.matchMedia('(prefers-color-scheme:dark)').matches?'dark':'light'))==='dark'?'☀':'☾';})();
+fetch('/login/me').then(function(r){return r.json()}).then(function(u){var w=document.getElementById('whoami');
+if(w&&u&&u.role)w.textContent=u.role+' ⚙';}).catch(function(){});`;
 
 export function page(opts: { title: string; body: string; active?: string; user?: string; bare?: boolean }): string {
   const nav = opts.bare
@@ -35,7 +37,7 @@ export function page(opts: { title: string; body: string; active?: string; user?
         <button class="iconbtn menu-toggle" onclick="toggleMenu()" aria-label="Menu">☰</button>
         <a class="brand" href="/"><span class="dot" aria-hidden="true"></span>Maisha <small>· Mahsa-validated</small></a>
         ${nav}<div class="spacer"></div>
-        <a class="who" href="/settings" title="Settings">${esc(opts.user ?? 'founder')} ⚙</a>
+        <a class="who" id="whoami" href="/settings" title="Settings">${esc(opts.user ?? 'founder')} ⚙</a>
         <button class="iconbtn" id="themebtn" onclick="toggleTheme()" aria-label="Toggle light or dark theme" title="Toggle theme">☾</button>
         <button class="btn ghost sm" onclick="fetch('/login/logout',{method:'POST'}).then(()=>location.href='/login')">Sign out</button>
       </div></header>`;

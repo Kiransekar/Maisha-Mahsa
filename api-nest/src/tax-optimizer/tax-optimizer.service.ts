@@ -11,6 +11,7 @@ import { Repository } from 'typeorm';
 import { AuditService } from '../audit/audit.service';
 import { Company } from '../common/shared.entities';
 import { formatInr } from '../common/money';
+import { currentUserId } from '../auth/request-context';
 import { MemoryService } from '../memory/memory.service';
 import { DomainRegistry } from '../scheduler/registry.service';
 import { PlaybookFeedback } from './playbook-feedback.entities';
@@ -70,7 +71,7 @@ export class TaxOptimizerService {
         timestamp: new Date().toISOString(),
         action: `playbook.${decision}`,
         domain: 'tax',
-        user_id: process.env.MAISHA_DEFAULT_USER_ID ?? 'founder',
+        user_id: currentUserId(),
         query: playbookId,
         intent_global: null,
         intent_domain: null,
@@ -158,7 +159,7 @@ export class TaxOptimizerService {
       timestamp: new Date().toISOString(),
       action: 'tax.optimize',
       domain: 'tax',
-      user_id: process.env.MAISHA_DEFAULT_USER_ID ?? 'founder',
+      user_id: currentUserId(),
       query: null,
       intent_global: null,
       intent_domain: null,

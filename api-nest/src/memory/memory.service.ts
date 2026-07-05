@@ -14,6 +14,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
 import { AuditService } from '../audit/audit.service';
+import { currentUserId } from '../auth/request-context';
 import { Company } from '../common/shared.entities';
 import { OrgMemory, OrgMemoryHistory } from './org-memory.entities';
 
@@ -83,7 +84,7 @@ export class MemoryService {
           timestamp: new Date().toISOString(),
           action: 'memory.update',
           domain: 'memory',
-          user_id: process.env.MAISHA_DEFAULT_USER_ID ?? 'founder',
+          user_id: currentUserId(),
           query: null,
           intent_global: null,
           intent_domain: null,

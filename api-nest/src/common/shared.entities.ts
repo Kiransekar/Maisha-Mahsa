@@ -24,8 +24,12 @@ export class User {
   @PrimaryGeneratedColumn('uuid') id: string;
   @Column({ unique: true }) email: string;
   @Column({ type: 'text', nullable: true }) name: string | null;
-  @Column({ default: 'founder' }) role: string;
+  @Column({ default: 'viewer' }) role: string; // admin | operator | viewer
   @Column({ default: 'founder' }) expertise: string;
+  @Column({ type: 'text', nullable: true }) password_hash: string | null; // scrypt salt:hash
+  @Column({ type: 'text', nullable: true }) mfa_secret: string | null; // base32 TOTP secret
+  @Column({ default: 0 }) mfa_enabled: number;
+  @Column({ default: 1 }) active: number;
   @CreateDateColumn() created_at: Date;
 }
 

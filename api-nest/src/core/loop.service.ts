@@ -7,6 +7,7 @@
 import { Inject, Injectable, Optional } from '@nestjs/common';
 
 import { AuditService } from '../audit/audit.service';
+import { currentUserId } from '../auth/request-context';
 import { MemoryService } from '../memory/memory.service';
 import { ClaimProducer } from '../llm/maisha';
 import { generateVerified } from '../llm/retry';
@@ -87,7 +88,7 @@ export class LoopService {
       timestamp,
       action: args.action ?? 'fold',
       domain: service.domain,
-      user_id: args.userId ?? process.env.MAISHA_DEFAULT_USER_ID ?? 'founder',
+      user_id: args.userId ?? currentUserId(),
       query: args.query ?? null,
       intent_global: fold.global_intent,
       intent_domain: fold.domain_intent ?? null,
