@@ -38,6 +38,11 @@ export class MemoryController {
     return this.memory.setCfo(body.content);
   }
 
+  @Get('history')
+  history() {
+    return this.memory.getHistory();
+  }
+
   @Post('cfo/append')
   append(@Body() body: AppendDto) {
     return this.memory.appendCfo(body.line);

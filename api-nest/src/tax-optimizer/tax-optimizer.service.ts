@@ -4,7 +4,7 @@
  * trust level as the domain calc engines), never by an LLM (the Golden Rule); each run is sealed
  * into the hash-chained audit log. Personalized by the CFO Profile's risk appetite.
  */
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 
@@ -13,9 +13,11 @@ import { Company } from '../common/shared.entities';
 import { formatInr } from '../common/money';
 import { MemoryService } from '../memory/memory.service';
 import { DomainRegistry } from '../scheduler/registry.service';
+import { PlaybookFeedback } from './playbook-feedback.entities';
 import { FactVal, Move, OptContext, PLAYBOOKS, Playbook } from './playbooks';
 
 const RISK_PRIORITY: Record<string, number> = { low: 3, medium: 2, aggressive: 1 };
+const DECISIONS = new Set(['adopted', 'dismissed']);
 
 export interface OptimizerMove {
   id: string;
@@ -29,6 +31,7 @@ export interface OptimizerMove {
   needs: string[];
   note: string;
   steps: string[];
+  feedback: string | null; // 'adopted' | 'dismissed' | null — this org's experiential memory
 }
 
 export interface OptimizationReport {
@@ -48,7 +51,35 @@ export class TaxOptimizerService {
     private readonly memory: MemoryService,
     private readonly audit: AuditService,
     @InjectRepository(Company) private readonly companies: Repository<Company>,
+    @InjectRepository(PlaybookFeedback) private readonly feedback: Repository<PlaybookFeedback>,
   ) {}
+
+  private async resolveCompanyId(): Promise<number> {
+    const c = await this.companies.findOne({ where: {}, order: { id: 'ASC' } });
+    return c?.id ?? 1;
+  }
+
+  /** Record that the org adopted or dismissed a strategy — sealed, so the optimizer learns. */
+  async recordFeedback(playbookId: string, decision: string): Promise<{ playbook_id: string; decision: string }> {
+    if (!DECISIONS.has(decision)) throw new BadRequestException(`decision must be one of: ${[...DECISIONS].join(', ')}`);
+    if (!PLAYBOOKS.some((p) => p.id === playbookId)) throw new BadRequestException(`unknown playbook '${playbookId}'`);
+    const company_id = await this.resolveCompanyId();
+    await this.feedback.upsert({ company_id, playbook_id: playbookId, decision, at: new Date().toISOString() }, ['company_id', 'playbook_id']);
+    await this.audit
+      .append({
+        timestamp: new Date().toISOString(),
+        action: `playbook.${decision}`,
+        domain: 'tax',
+        user_id: process.env.MAISHA_DEFAULT_USER_ID ?? 'founder',
+        query: playbookId,
+        intent_global: null,
+        intent_domain: null,
+        validation_status: 'recorded',
+        rules_version: 'tax-optimizer/v1',
+      })
+      .catch(() => undefined);
+    return { playbook_id: playbookId, decision };
+  }
 
   /** Merge every domain's deterministic snapshot metrics into one flat FACTS map. */
   private async gatherFacts(asOf?: string): Promise<Record<string, FactVal>> {
@@ -91,6 +122,10 @@ export class TaxOptimizerService {
       },
     };
 
+    // Experiential memory: this org's prior decisions on each strategy.
+    const fbRows = await this.feedback.find({ where: { company_id: company?.id ?? 1 } }).catch(() => []);
+    const fbMap = new Map(fbRows.map((f) => [f.playbook_id, f.decision]));
+
     const applicable = PLAYBOOKS.filter((p) => safe(() => p.appliesWhen(ctx), false)).filter(
       (p) => appetite !== 'low' || p.risk !== 'aggressive',
     );
@@ -110,11 +145,13 @@ export class TaxOptimizerService {
           needs: m.needs,
           note: m.note,
           steps: p.steps,
+          feedback: fbMap.get(p.id) ?? null,
         };
       })
       .sort(rankMoves);
 
-    const quantified = moves.reduce((s, m) => s + (m.saving_paise ?? 0), 0);
+    // Only count savings the org hasn't already dismissed (it learns; it stops double-counting).
+    const quantified = moves.filter((m) => m.feedback !== 'dismissed').reduce((s, m) => s + (m.saving_paise ?? 0), 0);
 
     // Seal the advisory run into the audit chain — deterministic, tamper-evident, no LLM number.
     const entry = await this.audit.append({
@@ -141,8 +178,11 @@ export class TaxOptimizerService {
   }
 }
 
-/** Quantified moves first (largest ₹ saving), then applicable-but-needs-input by risk priority. */
+/** Dismissed moves sink; then quantified (largest ₹) first; then needs-input by risk priority. */
 function rankMoves(a: OptimizerMove, b: OptimizerMove): number {
+  const ad = a.feedback === 'dismissed',
+    bd = b.feedback === 'dismissed';
+  if (ad !== bd) return ad ? 1 : -1;
   const aq = a.saving_paise != null,
     bq = b.saving_paise != null;
   if (aq !== bq) return aq ? -1 : 1;

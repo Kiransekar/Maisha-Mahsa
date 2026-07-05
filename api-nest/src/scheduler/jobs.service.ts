@@ -11,6 +11,7 @@ import { collectHealth, composeBrief, briefPayload } from '../cfo/cfo';
 import { composeComplianceAlert, composeDunning } from '../email/compose';
 import { EmailChannel } from '../email/channel';
 import { MahsaError, MahsaService } from '../mahsa/mahsa.service';
+import { MemoryService } from '../memory/memory.service';
 import { DomainRegistry } from './registry.service';
 import { HistoryService } from './history.service';
 
@@ -22,7 +23,7 @@ interface HasDunning {
   pendingDunning(asOf: string): Promise<Record<string, any>[]>;
 }
 
-export type JobCommand = 'capture' | 'brief' | 'dunning' | 'alerts' | 'audit-verify' | 'all';
+export type JobCommand = 'capture' | 'brief' | 'dunning' | 'alerts' | 'audit-verify' | 'evolve' | 'all';
 
 @Injectable()
 export class JobsService {
@@ -34,7 +35,13 @@ export class JobsService {
     private readonly mahsa: MahsaService,
     private readonly audit: AuditService,
     private readonly channel: EmailChannel,
+    private readonly memory: MemoryService,
   ) {}
+
+  /** Offline memory evolution: consolidate the hot layer + cap the archive (survey §5.2/§7.8). */
+  async runEvolve(): Promise<Record<string, any>> {
+    return this.memory.evolve();
+  }
 
   private cfoEmail(): string {
     return process.env.MAISHA_CFO_EMAIL ?? 'founder@maisha-mahsa.local';
@@ -102,6 +109,7 @@ export class JobsService {
     if (command === 'dunning' || command === 'all') await guard('dunning', () => this.runDunning(today));
     if (command === 'alerts' || command === 'all') await guard('alerts', () => this.runAlerts(today));
     if (command === 'audit-verify' || command === 'all') await guard('audit_verify', () => this.runAuditVerify());
+    if (command === 'evolve' || command === 'all') await guard('evolve', () => this.runEvolve());
 
     return { ran: command, at: new Date().toISOString(), results };
   }

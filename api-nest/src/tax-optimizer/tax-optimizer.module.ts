@@ -4,11 +4,12 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 
 import { Company } from '../common/shared.entities';
 import { SchedulerModule } from '../scheduler/scheduler.module';
+import { PlaybookFeedback } from './playbook-feedback.entities';
 import { TaxOptimizerController } from './tax-optimizer.controller';
 import { TaxOptimizerService } from './tax-optimizer.service';
 
 @Module({
-  imports: [SchedulerModule, TypeOrmModule.forFeature([Company])], // DomainRegistry from SchedulerModule; Mahsa/Audit/Memory are global
+  imports: [SchedulerModule, TypeOrmModule.forFeature([Company, PlaybookFeedback])], // DomainRegistry from SchedulerModule; Mahsa/Audit/Memory are global
   controllers: [TaxOptimizerController],
   providers: [TaxOptimizerService],
   exports: [TaxOptimizerService],

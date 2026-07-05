@@ -5,7 +5,7 @@ import { ApiTags } from '@nestjs/swagger';
 import { JobCommand, JobsService } from './jobs.service';
 import { HistoryService } from './history.service';
 
-const COMMANDS = new Set<JobCommand>(['capture', 'brief', 'dunning', 'alerts', 'audit-verify', 'all']);
+const COMMANDS = new Set<JobCommand>(['capture', 'brief', 'dunning', 'alerts', 'audit-verify', 'evolve', 'all']);
 
 @ApiTags('jobs')
 @Controller('api/jobs')

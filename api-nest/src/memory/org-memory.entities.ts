@@ -14,3 +14,18 @@ export class OrgMemory {
   @Column({ type: 'text', default: '' }) content: string;
   @UpdateDateColumn() updated_at: Date;
 }
+
+/**
+ * Superseded versions of the hot layer. Memory Evolution is *non-destructive* (survey §5.2/§7.7):
+ * an update archives the prior content with a timestamp rather than overwriting it, so history is
+ * never lost and every change is auditable. Forgetting = archival, never a hard delete.
+ */
+@Entity('org_memory_history')
+@Index(['company_id', 'kind'])
+export class OrgMemoryHistory {
+  @PrimaryGeneratedColumn() id: number;
+  @Column({ type: 'integer', default: 1 }) company_id: number;
+  @Column() kind: string;
+  @Column({ type: 'text', default: '' }) content: string;
+  @Column() superseded_at: string;
+}

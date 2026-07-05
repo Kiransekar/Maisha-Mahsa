@@ -176,13 +176,17 @@ retrieval is a later, optional bolt-on behind the `MemorySearch` port if lexical
 - **P2 — Tax Optimizer + shipped playbooks:** `playbook` table + ~20 universal playbooks with
   `applies_when` + `headroom_formula`; `TaxOptimizerService` (deterministic headroom, Mahsa-validated,
   ranked, cited); surface on a `/optimize` route + a Tax page in the UI. *The killer feature.*
-- **P3 — Episodic retrieval:** FTS5/tsvector index over `audit_log` + `MemorySearch` port + bookends
-  + a `recall` tool the agent can call. *Gives the agent real recall.*
-- **P4 — Consolidation daemon:** background post-session review (sandboxed, best-effort) + nightly
-  pass on the scheduler; learn org-specific playbooks and CFO-profile facts from adopted/rejected
-  strategies and corrections. *Makes it get better over time.*
+- **P3 — Episodic retrieval:** ✅ FTS5/tsvector lexical search over `audit_log` + `/api/memory/recall`.
+- **P4 — Memory Evolution:** ✅ soft/temporal versioned updates (non-destructive `org_memory_history`),
+  memory writes sealed to the audit chain (auditable updates §7.7), deterministic consolidation
+  (dedupe), non-destructive forgetting (bounded archive retention), an offline `evolve` job on the
+  scheduler, and the **experiential-learning loop**: playbook feedback (adopt/dismiss) so the optimizer
+  stops re-surfacing rejected moves and stops counting their savings. *Makes it get better over time.*
 
-Each phase is independently valuable and gated (build + tests) like every prior slice.
+**All four phases shipped.** Each was independently valuable and gated (build + tsc + tests) like
+every prior slice. Remaining/optional: LLM-assisted consolidation & summarization (gated on a live
+model provider), org-specific *learned* playbooks (promote from the feedback signal), and the
+retrieval query-rewrite stage — all additive on this foundation.
 
 ---
 

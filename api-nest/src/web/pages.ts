@@ -334,22 +334,26 @@ export function optimizeBody(r: {
   quantified_saving_inr: string;
   quantified_saving_paise: number;
   audit_hash: string;
-  moves: Array<{ name: string; category: string; statute: string; section: string; risk: string; saving_inr: string | null; needs: string[]; note: string; steps: string[] }>;
+  moves: Array<{ id: string; name: string; category: string; statute: string; section: string; risk: string; saving_inr: string | null; needs: string[]; note: string; steps: string[]; feedback: string | null }>;
 }): string {
   if (!r.moves.length)
     return `<div class="page-h"><h1>Tax Optimizer</h1><span class="crumb">as of ${esc(r.as_of)}</span></div>
       <section class="card"><div class="empty"><div class="big">No applicable moves right now</div>
       As your profile and data fill in, cited tax-saving strategies appear here — quantified where the facts allow, honest about what to provide otherwise.</div></section>`;
 
-  const quantified = r.moves.filter((m) => m.saving_inr);
+  const quantified = r.moves.filter((m) => m.saving_inr && m.feedback !== 'dismissed');
   const cards = r.moves
     .map((m) => {
       const rk = m.risk === 'low' ? 'ok' : m.risk === 'aggressive' ? 'bad' : 'warn';
+      const dimmed = m.feedback === 'dismissed' ? 'opacity:.55;' : '';
       const value = m.saving_inr
         ? `<div class="val" style="color:var(--ok)">${esc(m.saving_inr)}<small> now</small></div>`
         : `<div class="note" style="margin-top:2px">Provide <b>${esc(m.needs.slice(0, 3).join(', '))}</b> to quantify.</div>`;
       const steps = m.steps.map((s) => `<li>${esc(s)}</li>`).join('');
-      return `<section class="card" style="padding:16px 18px;margin-bottom:12px">
+      const state = m.feedback
+        ? `<span class="pill ${m.feedback === 'adopted' ? 'ok' : ''}" style="margin-right:8px">${m.feedback === 'adopted' ? '✓ adopted' : '✕ dismissed'}</span>`
+        : '';
+      return `<section class="card" style="padding:16px 18px;margin-bottom:12px;${dimmed}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
           <div><b style="font-size:15px">${esc(m.name)}</b>
             <div class="rule" style="margin-top:8px"><span class="cite">${esc(m.statute)} — ${esc(m.section)}</span></div></div>
@@ -357,20 +361,31 @@ export function optimizeBody(r: {
         </div>
         ${value}
         <div class="note" style="margin-top:8px;color:var(--muted)">${esc(m.note)}</div>
-        <details style="margin-top:8px"><summary style="cursor:pointer;color:var(--accent);font-size:13px">Steps</summary>
-          <ol style="margin:8px 0 0;padding-left:20px;color:var(--muted);font-size:13px;line-height:1.7">${steps}</ol></details>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:10px">
+          ${state}
+          <button class="btn sm" onclick="fb('${esc(m.id)}','adopted')">Adopt</button>
+          <button class="btn sm ghost" onclick="fb('${esc(m.id)}','dismissed')">Dismiss</button>
+          <details style="margin-left:auto"><summary style="cursor:pointer;color:var(--accent);font-size:13px">Steps</summary>
+            <ol style="margin:8px 0 0;padding-left:20px;color:var(--muted);font-size:13px;line-height:1.7">${steps}</ol></details>
+        </div>
       </section>`;
     })
     .join('');
 
   return `<div class="page-h"><h1>Tax Optimizer</h1><span class="crumb">as of ${esc(r.as_of)} · appetite: ${esc(r.appetite)}</span></div>
-    <p class="sub">Ranked, statute-cited moves to reduce tax. Every ₹ figure is computed deterministically and sealed to the audit chain — never guessed.</p>
+    <p class="sub">Ranked, statute-cited moves to reduce tax. Every ₹ figure is computed deterministically and sealed to the audit chain — never guessed. Adopt or dismiss a move and the optimizer remembers.</p>
     <section class="tiles" style="margin-bottom:18px">
       ${tile('Quantifiable now', r.quantified_saving_inr, `${quantified.length} move(s) with a computed ₹ impact`, r.quantified_saving_paise > 0 ? 'ok' : '')}
       ${tile('Applicable strategies', String(r.moves.length), 'personalized to your org', '')}
       ${tile('Sealed', '⛓', `audit ${esc(r.audit_hash.slice(0, 10))}…`, '')}
     </section>
-    ${cards}`;
+    ${cards}
+    <script>
+    async function fb(id, decision){
+      await fetch('/api/optimize/feedback',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({playbook_id:id,decision:decision})});
+      location.reload();
+    }
+    </script>`;
 }
 
 // ---- audit ----------------------------------------------------------------------------
