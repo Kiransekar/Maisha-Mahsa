@@ -17,6 +17,7 @@ pub mod critic;
 pub mod fold;
 pub mod intent;
 pub mod money;
+pub mod recompute;
 pub mod snapshot;
 pub mod unfold;
 pub mod validate;

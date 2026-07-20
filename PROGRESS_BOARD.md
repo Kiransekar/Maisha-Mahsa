@@ -31,7 +31,10 @@ Governing spec: `docs/MASTER_PLAN.md` (immutable). Detail log: `PROGRESS.md`.
 - [ ] WS1.E3 rule-pack versioning
 
 ## P0/P3 · WS2 state packs · WS3 Mahsa recomputation
-- [ ] WS2.1–2.4  · [ ] WS3.1–3.5
+- [ ] WS2.1–2.4
+- [x] WS3.1 Rust recompute port (6 paths, parity harness; itr/regime/retention still Python-only)
+- [~] WS3.2 parity gate (vector-parity live via tests/parity.rs; randomized Py↔Rust fuzz TODO)
+- [ ] WS3.3 kill default-healthy · [ ] WS3.4 verdict object · [ ] WS3.5 honest-state wiring
 
 ## P1 · Platform (WS4 tenancy · WS5 RBAC · WS6 entitlements)
 - [ ] WS4.1–4.8  · [ ] WS5.1–5.3  · [ ] WS6.1–6.4
