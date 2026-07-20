@@ -1,0 +1,164 @@
+# WS6.1 — TIER ENTITLEMENTS: default plan-to-feature split (stored as DATA, not code).
+#
+# Cumulative plans:  Basics ⊂ Startup ⊂ Growth.
+#   Basics       = `basics`                       (71 features)
+#   Startup      = Basics + `startup_adds`        (71 + 34 = 105)
+#   Growth       = Startup + `growth_adds`        (105 + 11 = 116)
+# Counts are the agreed WS6.1 split: 71 / +34 / +11 = 116 domain features.
+#
+# PRODUCT-CONFIRMABLE (§0.6): the COUNTS are fixed by WS6.1, but the exact
+# which-feature-lands-in-which-plan below is a plausible DEFAULT, not a statutory
+# or spec-fixed fact. Product must confirm the assignment. Every key here is a real
+# domain-manifest feature key; `entitlements.validate_registry()` enforces that this
+# file partitions the 116 domain features exactly (no gaps, no overlaps, no strays).
+
+basics:
+  # treasury (5)
+  - multi_bank_csv
+  - cash_position
+  - burn
+  - runway
+  - upi_recon
+  # revenue (7)
+  - customer_master
+  - invoice_gen
+  - tds_on_receipts
+  - ar_aging
+  - dunning
+  - credit_notes
+  - gstr1_bridge
+  # payables (8)
+  - vendor_master
+  - tds_engine
+  - ap_aging
+  - msme_45day
+  - itc_bridge
+  - payment_run
+  - three_way_match
+  - recurring
+  # payroll (11)
+  - salary_structure
+  - pf
+  - esi
+  - pt
+  - tds
+  - payroll_run
+  - ecr
+  - payslip
+  - form16
+  - gratuity
+  - bonus
+  # gst (7)
+  - gstin_validation
+  - gstr1
+  - gstr3b
+  - late_fee_interest
+  - itc_recon
+  - hsn_master
+  - gstr9
+  # tax (5)
+  - advance_tax
+  - tds_returns
+  - tds_aggregation
+  - interest_234b
+  - form_26as
+  # ledger (10)
+  - chart_of_accounts
+  - journal
+  - trial_balance
+  - pnl
+  - balance_sheet
+  - general_ledger
+  - bank_recon
+  - depreciation
+  - cash_flow
+  - auto_posting
+  # forecast (1)
+  - cash_forecast
+  # compliance (5)
+  - calendar
+  - seed_statutory
+  - alerts
+  - filing_status
+  - mark_filed
+  # expense (5)
+  - claim_workflow
+  - policy_check
+  - petty_cash
+  - receipt_parse
+  - analytics
+  # vault (7)
+  - ingest
+  - dedup
+  - classify
+  - retention
+  - search
+  - integrity
+  - ocr_pipeline
+
+startup_adds:
+  # treasury (2)
+  - burn_attribution
+  - bg_tracking
+  # revenue (3)
+  - revenue_recognition
+  - irn
+  - dunning_send
+  # payables (1)
+  - early_pay
+  # payroll (2)
+  - lwf
+  - leave
+  # gst (4)
+  - e_invoice
+  - rcm
+  - composition
+  - lut
+  # tax (3)
+  - audit_44ab
+  - mat
+  - itr
+  # forecast (5)
+  - budget
+  - scenario
+  - burn_multiple
+  - unit_economics
+  - headcount
+  # equity (7)
+  - cap_table
+  - esop_pool
+  - safe_notes
+  - dilution
+  - cap_table_snapshot
+  - investor_reporting
+  - share_certificates
+  # compliance (3)
+  - mca_filings
+  - audit_support
+  - dpiit
+  # expense (3)
+  - ocr_capture
+  - card_recon
+  - mileage
+  # vault (1)
+  - auto_archive
+
+growth_adds:
+  # treasury (1)
+  - treasury_policy
+  # revenue (1)
+  - export_invoicing
+  # tax (2)
+  - tax_holiday
+  - transfer_pricing
+  # forecast (2)
+  - rolling_reforecast
+  - rev_recognition_forecast
+  # equity (3)
+  - convertible_notes
+  - dividend
+  - rights_buyback
+  # compliance (1)
+  - secretarial
+  # vault (1)
+  - access_control
