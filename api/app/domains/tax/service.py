@@ -25,6 +25,52 @@ def _tds_due_date(payment_date: str) -> date:
     return date(year, month, 7)
 
 
+# ---- compute-time recompute claims (§0.4) for on-demand tax figures --------------------
+# These figures aren't persisted as rows (unlike TDS returns), so they can't be batch-iterated
+# by ``recompute_claims``. Instead each compute method attaches the claim it just produced, so a
+# verifying caller can hand it to Mahsa (which recomputes it to the paisa and BLOCKs on mismatch).
+# The claim inputs are the exact arguments the figure was computed on; the targets are the ported
+# Rust recompute fns (see dif/src/recompute/slab_tax.rs, all parity-locked).
+
+
+def interest_234b_claim(
+    assessed_tax: int, advance_paid: int, months: int, interest: int
+) -> RecomputeClaim:
+    return RecomputeClaim(
+        target="interest_234b",
+        inputs={
+            "assessed_tax": int(assessed_tax),
+            "advance_paid": int(advance_paid),
+            "months": int(months),
+        },
+        claimed_paise=int(interest),
+        label="tax.interest_234b",
+    )
+
+
+def interest_234c_claim(
+    total_liability: int, cumulative_paid: list[int], total_234c: int
+) -> RecomputeClaim:
+    return RecomputeClaim(
+        target="interest_234c",
+        inputs={
+            "total_liability": int(total_liability),
+            "cumulative_paid": [int(p) for p in cumulative_paid],
+        },
+        claimed_paise=int(total_234c),
+        label="tax.interest_234c",
+    )
+
+
+def company_tax_115baa_claim(total_income: int, normal_tax: int) -> RecomputeClaim:
+    return RecomputeClaim(
+        target="company_tax_115baa",
+        inputs={"total_income": int(total_income)},
+        claimed_paise=int(normal_tax),
+        label="tax.company_tax_115baa",
+    )
+
+
 class TaxService(BaseDomainService):
     domain = "tax"
     keywords = (
@@ -138,7 +184,12 @@ class TaxService(BaseDomainService):
         for q in order:
             running += paid_by_installment[q]
             cumulative.append(running)
-        return tax_calc.interest_234c(total_liability, cumulative)
+        result = tax_calc.interest_234c(total_liability, cumulative)
+        # Compute-time claim (§0.4): Mahsa can independently recompute total_234c.
+        result["recompute_claim"] = interest_234c_claim(
+            total_liability, cumulative, result["total_234c"]
+        )
+        return result
 
     # ---- Mahsa contract -------------------------------------------------------------
 
@@ -165,9 +216,7 @@ class TaxService(BaseDomainService):
             worst = max(worst, late)
         return worst
 
-    def recompute_claims(
-        self, session: Session, as_of: date | None = None
-    ) -> list[RecomputeClaim]:
+    def recompute_claims(self, session: Session, as_of: date | None = None) -> list[RecomputeClaim]:
         """Prime-Directive claims (§0.4) for every filed, late ``TdsReturn``'s s.234E late fee —
         the only tax figure ported to Mahsa (``late_fee_234e``). ``inputs`` are the exact
         arguments ``file_tds_return`` computed ``late_filing_fee`` on, so Mahsa recomputes the
@@ -208,7 +257,7 @@ class TaxService(BaseDomainService):
     ) -> dict[str, Any]:
         """ITR-5/ITR-6 headline computation (e-filing portal upload is out of scope). Company
         regime is chosen explicitly via ``regime_115baa`` (§WS1.C4)."""
-        return tax_calc.itr_computation(
+        result = tax_calc.itr_computation(
             entity_type=entity_type,
             gross_total_income=gross_total_income,
             deductions=deductions,
@@ -217,6 +266,11 @@ class TaxService(BaseDomainService):
             advance_tax_paid=advance_tax_paid,
             regime_115baa=regime_115baa,
         )
+        # Compute-time claim (§0.4) for the ported 115BAA company-tax figure (normal_tax).
+        if entity_type.lower() == "company" and regime_115baa:
+            total_income = max(0, int(gross_total_income) - int(deductions))
+            result["recompute_claim"] = company_tax_115baa_claim(total_income, result["normal_tax"])
+        return result
 
     def arms_length_check(
         self, price: int, comparables: list[int], *, tolerance_pct: float = 3.0
