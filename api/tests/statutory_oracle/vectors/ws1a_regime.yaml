@@ -1,0 +1,62 @@
+# WS1.A1 — dual-regime selector (Income-tax Act 1961 ↔ 2025). Boundary 2026-04-01, keyed on
+# the earlier of credit/payment (MMX-1.0 §WS1.A1). Structural rule from the spec, not a rate.
+
+- id: regime_credit_mar_pay_apr_is_1961
+  statute: Income-tax Act
+  section: "regime boundary"
+  source: "MMX-1.0 §WS1.A1 (earlier-of-credit-or-payment; boundary 2026-04-01)"
+  ca_initials: PENDING
+  ca_date: null
+  target: regime_for
+  inputs: {credit_date: "2026-03-15", payment_date: "2026-04-10"}  # earlier = Mar -> old
+  expected: regime_1961
+
+- id: regime_advance_pay_mar_credit_apr_is_1961
+  statute: Income-tax Act
+  section: "regime boundary"
+  source: "MMX-1.0 §WS1.A1"
+  ca_initials: PENDING
+  ca_date: null
+  target: regime_for
+  inputs: {credit_date: "2026-04-05", payment_date: "2026-03-20"}  # advance paid Mar -> old
+  expected: regime_1961
+
+- id: regime_both_april_is_2025
+  statute: Income-tax Act
+  section: "regime boundary"
+  source: "MMX-1.0 §WS1.A1"
+  ca_initials: PENDING
+  ca_date: null
+  target: regime_for
+  inputs: {credit_date: "2026-04-02", payment_date: "2026-04-10"}
+  expected: regime_2025
+
+- id: regime_on_boundary_is_2025
+  statute: Income-tax Act
+  section: "regime boundary"
+  source: "MMX-1.0 §WS1.A1 (2025 Act applies on/after 2026-04-01)"
+  ca_initials: PENDING
+  ca_date: null
+  target: regime_for
+  inputs: {payment_date: "2026-04-01"}  # exactly the boundary -> new
+  expected: regime_2025
+
+- id: regime_form_map_salary_cert_2025
+  statute: Income-tax Act
+  section: "form map"
+  source: "MMX-1.0 §WS1.A1 (16->130, 16A->131, 24Q->138, 3CD->26, 15G/H->121)"
+  ca_initials: PENDING
+  ca_date: null
+  target: form_name
+  inputs: {key: "tds_salary_certificate", regime: "regime_2025"}
+  expected: "Form 130"
+
+- id: regime_form_map_salary_cert_1961
+  statute: Income-tax Act
+  section: "form map"
+  source: "MMX-1.0 §WS1.A1"
+  ca_initials: PENDING
+  ca_date: null
+  target: form_name
+  inputs: {key: "tds_salary_certificate", regime: "regime_1961"}
+  expected: "Form 16"

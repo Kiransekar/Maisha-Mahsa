@@ -1,5 +1,10 @@
 # Maisha-Mahsa — Build Doctrine (CLAUDE.md)
 
+> **`docs/MASTER_PLAN.md` (MMX-1.0) is the immutable program spec.** Read it at session start.
+> Never modify it. Log work to `PROGRESS.md` and mirror status in `PROGRESS_BOARD.md`. Follow §0
+> governance — especially §0.4 (no ✓ Verified without Mahsa recomputation) and §0.6 (no invented
+> statutory values; source from CA-initialled oracle vectors or a cited primary source).
+
 > This file governs **how** we build. The product spec is
 > [`maisha_mahsa_v4_full_suite_prd.md`](./maisha_mahsa_v4_full_suite_prd.md) — that PRD is the
 > source of truth for *what* to build. Do not contradict the PRD; if a change is needed,

@@ -8,8 +8,8 @@ import hashlib
 from datetime import date
 from typing import Any
 
-# Retention classes (PRD §1.12): statutory 7y, operational 3y, permanent (equity/legal).
-RETENTION_YEARS = {"statutory": 7, "operational": 3, "permanent": None}
+# Retention classes: statutory 8y (§WS1.C5, counted from FY-end), operational 3y, permanent.
+RETENTION_YEARS = {"statutory": 8, "operational": 3, "permanent": None}
 
 # doc_type -> retention class. Statutory documents (tax/GST/payroll/contracts) keep 7 years;
 # equity/legal records are permanent; everything else is operational (3 years).
@@ -49,17 +49,27 @@ def retention_class(doc_type: str) -> str:
     return "operational"
 
 
+def fy_end(d: date) -> date:
+    """End of the Indian financial year (31 March) containing ``d``. Apr–Dec → 31 Mar next
+    year; Jan–Mar → 31 Mar this year."""
+    end_year = d.year + 1 if d.month >= 4 else d.year
+    return date(end_year, 3, 31)
+
+
 def retention_until(upload_date: str, doc_type: str) -> str | None:
-    """ISO date until which the document must be retained, or None for permanent records."""
-    years = RETENTION_YEARS[retention_class(doc_type)]
+    """ISO date until which the document must be retained, or None for permanent records.
+    Statutory records: 8 years from the END OF THE FY of upload, not the upload date (§WS1.C5).
+    Operational records: counted from the upload date."""
+    cls = retention_class(doc_type)
+    years = RETENTION_YEARS[cls]
     if years is None:
         return None
     d = date.fromisoformat(upload_date)
-    # clamp Feb-29 uploads to Feb-28 on the target year
+    base = fy_end(d) if cls == "statutory" else d
     try:
-        return d.replace(year=d.year + years).isoformat()
-    except ValueError:
-        return d.replace(year=d.year + years, day=28).isoformat()
+        return base.replace(year=base.year + years).isoformat()
+    except ValueError:  # Feb-29 upload on an operational (upload-date) record
+        return base.replace(year=base.year + years, day=28).isoformat()
 
 
 def to_archive(documents: list[dict], as_of: str) -> list[str]:

@@ -54,9 +54,13 @@ test-rust: ## cargo test for the Mahsa DIF core
 test-py: ## pytest unit + integration for the Maisha API
 	cd api && .venv/bin/pytest -q
 
-lint: ## ruff + mypy + clippy (warnings are errors)
+lint: gates ## ruff + mypy + clippy + statutory grep-gates (warnings are errors)
 	cd api && .venv/bin/ruff check . && .venv/bin/mypy app evals
 	cd dif && $(CARGO) clippy --all-targets -- -D warnings
+
+gates: ## MMX-1.0 grep-gates (QG.3): truncate-then-round, draft-IRN honesty, etc.
+	bash scripts/check_no_truncate_round.sh
+	bash scripts/check_no_draft_irn.sh
 
 fmt: ## Format Rust + Python
 	cd dif && $(CARGO) fmt

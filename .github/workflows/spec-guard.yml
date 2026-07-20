@@ -1,0 +1,16 @@
+name: spec-guard
+# MMX-1.0 §0.1/§0.3: the immutable program spec may only be amended by the human owner
+# (by issuing a new MMX version), never edited in a PR. Any PR touching it fails.
+
+on:
+  pull_request:
+    paths: ['docs/MASTER_PLAN.md']
+
+jobs:
+  block-spec-edit:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "::error::docs/MASTER_PLAN.md is IMMUTABLE (MMX-1.0 §0.1). It may only be amended"
+          echo "::error::by the owner issuing a new MMX version. Revert this change."
+          exit 1

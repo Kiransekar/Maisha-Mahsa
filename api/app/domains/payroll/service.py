@@ -6,6 +6,7 @@ exhaustively-tested ``statutory`` module. Deterministic — the payroll month is
 from __future__ import annotations
 
 from datetime import date
+from decimal import ROUND_CEILING, Decimal
 from typing import Any
 
 from sqlalchemy import select
@@ -13,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core import pdf
 from app.core.domain import BaseDomainService
+from app.core.statutory_wage import EXCLUDED_CAP_FRACTION, statutory_wage_base
 from app.db.models.payroll import Employee, PayrollEntry, PayrollRun, SalaryStructure
 from app.domains.payroll import ecr, statutory
 from app.domains.payroll.manifest import MANIFEST
@@ -32,9 +34,22 @@ def compute_components(
     """Derive gross, statutory deductions, net pay and CTC for one month. Pure.
     ``lop_days`` defaults to 0 (no loss-of-pay → identical to a full month)."""
     gross = int(basic) + int(hra) + int(lta) + int(special_allowance)
-    emp_pf = int(statutory.pf_employee(basic))
-    empr_pf = int(statutory.pf_employer(basic))
-    emp_esi, empr_esi = statutory.esi(gross)
+    # Route PF & ESI through the Code-on-Wages s.2(y) base, not raw Basic/gross, so an
+    # under-weighted CTC yields the correct (larger) base (§WS1.B1). Basic-only input ->
+    # wage_base == basic == gross, so existing behaviour is unchanged.
+    wage_base = int(
+        statutory_wage_base(
+            {
+                "basic": int(basic),
+                "hra": int(hra),
+                "lta": int(lta),
+                "special_allowance": int(special_allowance),
+            }
+        )
+    )
+    emp_pf = int(statutory.pf_employee(wage_base))
+    empr_pf = int(statutory.pf_employer(wage_base))
+    emp_esi, empr_esi = statutory.esi(wage_base)
     pt = int(statutory.professional_tax(state, gross, month))
     tds = int(statutory.monthly_tds(gross * 12))
     lop = int(statutory.loss_of_pay(gross, lop_days, days_in_month))
@@ -61,8 +76,78 @@ def compute_components(
     }
 
 
+def check_ctc_compliance(
+    *, basic: int, hra: int, lta: int = 0, special_allowance: int = 0
+) -> dict[str, Any]:
+    """CTC validator (MMX-1.0 §WS1.B3): Basic+DA must be >= ``EXCLUDED_CAP_FRACTION`` (the same
+    s.2(y) 50% threshold ``statutory_wage_base`` uses for its add-back, imported not hardcoded)
+    of total remuneration. This salary-structure schema has no separate DA field, so "Basic+DA"
+    is just Basic here. Pure — never touches the DB or mutates a stored structure. When
+    non-compliant, ``suggestion`` proposes a restructure that raises Basic to the required floor
+    by trimming the excluded components (special allowance first, then LTA, then HRA), holding
+    total CTC (the sum of these 4 components) exactly constant — the caller must apply it
+    explicitly via ``set_salary_structure``; nothing here writes to storage."""
+    components = {
+        "basic": int(basic),
+        "hra": int(hra),
+        "lta": int(lta),
+        "special_allowance": int(special_allowance),
+    }
+    total = sum(components.values())
+    basic_plus_da = components["basic"]
+    compliant = total == 0 or Decimal(basic_plus_da) >= Decimal(total) * EXCLUDED_CAP_FRACTION
+    required_minimum = (
+        0
+        if total == 0
+        else int(
+            (Decimal(total) * EXCLUDED_CAP_FRACTION).to_integral_value(ROUND_CEILING)
+        )
+    )
+    report: dict[str, Any] = {
+        "compliant": compliant,
+        "status": "ok" if compliant else "non_compliant",
+        "basic_plus_da": basic_plus_da,
+        "total_remuneration": total,
+        "required_minimum_basic_plus_da": required_minimum,
+        "suggestion": None,
+    }
+    if not compliant:
+        report["suggestion"] = _rebalance_suggestion(components, required_minimum)
+    return report
+
+
+def _rebalance_suggestion(components: dict[str, int], required_minimum: int) -> dict[str, int]:
+    """Propose Basic raised to ``required_minimum``, funded by trimming excluded components
+    (in order: special allowance, LTA, HRA) so total CTC is unchanged. Floors each component
+    at zero; never produces a negative component."""
+    shortfall = required_minimum - components["basic"]
+    proposed = dict(components)
+    proposed["basic"] = required_minimum
+    for key in ("special_allowance", "lta", "hra"):
+        if shortfall <= 0:
+            break
+        take = min(proposed[key], shortfall)
+        proposed[key] -= take
+        shortfall -= take
+    return proposed
+
+
 def _month_of(iso_date: str) -> int:
     return date.fromisoformat(iso_date).month
+
+
+def _structure_wage_base(structure: SalaryStructure) -> int:
+    """Code-on-Wages s.2(y) statutory wage base (paise) for a salary structure (§WS1.B1)."""
+    return int(
+        statutory_wage_base(
+            {
+                "basic": structure.basic,
+                "hra": structure.hra,
+                "lta": structure.lta,
+                "special_allowance": structure.special_allowance,
+            }
+        )
+    )
 
 
 class PayrollService(BaseDomainService):
@@ -127,6 +212,22 @@ class PayrollService(BaseDomainService):
         session.add(structure)
         session.flush()
         return structure
+
+    def validate_ctc(
+        self, session: Session, employee_id: int, *, on_or_before: str
+    ) -> dict[str, Any]:
+        """CTC-compliance report (§WS1.B3) for ``employee_id``'s latest salary structure as of
+        ``on_or_before``. Read-only — never writes; the caller applies a returned suggestion
+        via ``set_salary_structure`` explicitly if they choose to."""
+        structure = self._latest_structure(session, employee_id, on_or_before)
+        if structure is None:
+            raise ValueError(f"no salary structure for employee {employee_id} as of {on_or_before}")
+        return check_ctc_compliance(
+            basic=structure.basic,
+            hra=structure.hra,
+            lta=structure.lta,
+            special_allowance=structure.special_allowance,
+        )
 
     def _latest_structure(
         self, session: Session, employee_id: int, on_or_before: str
@@ -349,7 +450,9 @@ class PayrollService(BaseDomainService):
             structure = self._latest_structure(session, emp.id, anchor)
             if structure is None:
                 continue
-            basic = structure.basic
+            # PF is levied on the Code-on-Wages s.2(y) base, not raw Basic (§WS1.B1); basic-only
+            # structures are unchanged (wage_base == basic).
+            basic = _structure_wage_base(structure)
             comp = compute_components(
                 basic=structure.basic, hra=structure.hra, lta=structure.lta,
                 special_allowance=structure.special_allowance, state=emp.state,
@@ -398,7 +501,9 @@ class PayrollService(BaseDomainService):
             )
             total_gross += comp["gross_salary"]
             total_employer_pf += comp["employer_pf"]
-            bonus_required += int(statutory.bonus_provision_monthly(structure.basic))
+            bonus_required += int(
+                statutory.bonus_provision_monthly(_structure_wage_base(structure))
+            )
             employee_lwf, employer_lwf = statutory.labour_welfare_fund(emp.state, month)
             lwf_due += int(employee_lwf) + int(employer_lwf)
             min_net = comp["net_salary"] if min_net is None else min(min_net, comp["net_salary"])

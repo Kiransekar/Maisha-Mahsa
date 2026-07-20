@@ -12,9 +12,11 @@ def test_sha256_is_stable_and_content_addressed():
 
 
 def test_retention_classes():
-    # statutory (invoice) -> 7 years
-    assert v.retention_until("2026-05-10", "invoice") == "2033-05-10"
-    # operational (other) -> 3 years
+    # statutory (invoice) -> 8 years from FY-end (§WS1.C5): FY of 2026-05-10 ends 2027-03-31
+    assert v.retention_until("2026-05-10", "invoice") == "2035-03-31"
+    # a Jan-Mar upload sits in the FY ending that same 31 Mar
+    assert v.retention_until("2026-02-10", "invoice") == "2034-03-31"
+    # operational (other) -> 3 years from upload date (unchanged)
     assert v.retention_until("2026-05-10", "other") == "2029-05-10"
     # permanent (share certificate) -> None
     assert v.retention_until("2026-05-10", "share_certificate") is None

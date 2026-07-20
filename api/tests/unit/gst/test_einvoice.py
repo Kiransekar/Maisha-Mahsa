@@ -5,9 +5,10 @@ from __future__ import annotations
 import hashlib
 
 from app.core.money import Paise
-from app.domains.gst.gst_calc import compute_irn, einvoice_payload
+from app.domains.gst.gst_calc import DRAFT_IRN_LABEL, compute_irn, einvoice_payload
 
 _GSTIN = "27AAPFU0939F1ZV"
+_LABEL = "DRAFT — not IRP-registered; not a valid e-invoice until registered"
 
 
 def test_irn_is_deterministic_64_hex_matching_spec() -> None:
@@ -44,6 +45,21 @@ def test_payload_schema_and_qr() -> None:
     # IRN is present and matches the standalone computation; QR carries it
     assert p["Irn"] == compute_irn(_GSTIN, doc_no="INV-9", doc_date="2026-05-10")
     assert p["QrData"]["Irn"] == p["Irn"] and p["QrData"]["MainHsnCode"] == "9983"
+
+
+def test_draft_honesty_label_present_on_every_irn_surface() -> None:
+    """WS9.3: a self-computed IRN is never IRP-registered. The exact draft label must appear
+    both at the top level of the e-invoice payload and on the QR caption block, so a human
+    reading either surface cannot mistake it for a filed, legally valid e-invoice."""
+    assert DRAFT_IRN_LABEL == _LABEL
+    p = einvoice_payload(
+        seller_gstin=_GSTIN, buyer_gstin="29AAB...", doc_no="INV-9", doc_date="2026-05-10",
+        taxable=Paise.from_rupees(100000), igst=0,
+        cgst=Paise.from_rupees(9000), sgst=Paise.from_rupees(9000),
+        total=Paise.from_rupees(118000), hsn="9983",
+    )
+    assert p["IrnStatus"] == _LABEL
+    assert p["QrData"]["Caption"] == _LABEL
 
 
 def test_b2c_when_no_buyer_gstin() -> None:

@@ -1,0 +1,81 @@
+# WS1.B1-wiring + WS1.B2 — PF/ESI routed through the s.2(y) wage base, and hybrid gratuity across
+# the 21-11-2025 Labour-Code transition. Values computed from the spec's stated algorithm (cited
+# primary source, §0.6(b)); ca_initials PENDING until confirmed. amounts are integer paise.
+
+# ---- WS1.B1-wiring: PF & ESI use the added-back s.2(y) base, not raw Basic and not gross -------
+- id: wiring_pf_esi_on_underweighted_ctc
+  statute: Code on Wages 2019
+  section: "2(y)"
+  # Basic ₹8k + HRA ₹6k + special ₹6k = ₹20k gross; excluded ₹12k = 60% > 50% -> add back
+  # ₹2k over the ₹10k cap -> wage base ₹10,000. PF 12% of ₹10k = ₹1,200 (below ₹15k ceiling);
+  # ESI on ₹10k = 0.75% ₹75 (ceil) / 3.25% ₹325. On raw Basic ₹8k it would be ₹960/₹60/₹260;
+  # on gross ₹20k it would be ₹150/₹650 — so the asserted figures prove the wage base is used.
+  source: "MMX-1.0 §WS1.B1 (PF/ESI on the s.2(y) wage base ₹10,000, not Basic ₹8,000 or gross ₹20,000)"
+  ca_initials: PENDING
+  ca_date: null
+  target: payroll_components
+  inputs:
+    basic: 800000
+    hra: 600000
+    lta: 0
+    special_allowance: 600000
+    state: null
+    month: 6
+  expected:
+    employee_pf: 120000
+    employer_pf: 120000
+    employee_esi: 7500
+    employer_esi: 32500
+
+# ---- WS1.B2: hybrid gratuity across the 21-11-2025 boundary ------------------------------------
+- id: gratuity_hybrid_split_old_and_new_base
+  statute: Code on Wages 2019 / Payment of Gratuity
+  section: "2(y); 15/26"
+  # Service 2020-11-21 -> 2027-11-21 = 7 completed years. Anniversaries completing before the
+  # 21-11-2025 boundary: 2021..2024 = 4 years on OLD base ₹26,000 -> (15/26)x26000x4 = ₹60,000.
+  # The 2025-11-21 anniversary is ON the boundary -> post; 2026,2027 -> 3 years on NEW base
+  # ₹52,000 -> (15/26)x52000x3 = ₹90,000. Total ₹1,50,000.
+  source: "MMX-1.0 §WS1.B2 (pre-boundary service on last-drawn Basic, post on s.2(y) wage base; 15/26 from statutory.py)"
+  ca_initials: PENDING
+  ca_date: null
+  target: gratuity_hybrid
+  inputs:
+    doj: "2020-11-21"
+    exit_date: "2027-11-21"
+    boundary: "2025-11-21"
+    old_base: 2600000
+    new_base: 5200000
+  expected: 15000000
+
+- id: gratuity_hybrid_all_post_boundary_uses_new_base
+  statute: Code on Wages 2019 / Payment of Gratuity
+  section: "2(y); 15/26"
+  # Joined 2026-01-01 (after the boundary), exit 2028-01-01 = 2 completed years, both post ->
+  # (15/26) x new_base ₹26,000 x 2 = ₹30,000. Old base is irrelevant on this path.
+  source: "MMX-1.0 §WS1.B2 (service entirely on/after 21-11-2025 -> new base only)"
+  ca_initials: PENDING
+  ca_date: null
+  target: gratuity_hybrid
+  inputs:
+    doj: "2026-01-01"
+    exit_date: "2028-01-01"
+    boundary: "2025-11-21"
+    old_base: 9900000
+    new_base: 2600000
+  expected: 3000000
+
+- id: gratuity_hybrid_ineligible_under_one_year
+  statute: Code on Wages 2019 / Payment of Gratuity
+  section: "2(y); FTE eligibility"
+  # Under one completed year of service -> not eligible -> nil.
+  source: "MMX-1.0 §WS1.B2 (FTE eligibility >= 1 completed year)"
+  ca_initials: PENDING
+  ca_date: null
+  target: gratuity_hybrid
+  inputs:
+    doj: "2025-06-01"
+    exit_date: "2025-11-01"
+    boundary: "2025-11-21"
+    old_base: 2600000
+    new_base: 5200000
+  expected: 0

@@ -24,21 +24,24 @@ _TDS_SECTIONS: dict[str, dict[str, Any]] = {
         "single": 30000_00,
         "aggregate": 100000_00,
     },
-    # 194J: professional/technical — 10% (2% technical/call-centre); threshold ₹30k.
+    # 194J: professional/technical — 10% (2% technical/call-centre). Threshold ₹50k from
+    # FY 2025-26 (Finance Act 2025; MMX-1.0 §WS1.C1), was ₹30k.
     "194J": {
         "rate": Decimal("10"),
         "rate_technical": Decimal("2"),
-        "single": 30000_00,
-        "aggregate": 30000_00,
+        "single": 50000_00,
+        "aggregate": 50000_00,
     },
     # 194H: commission/brokerage — 2% (w.e.f 01-Oct-2024); threshold ₹20k (FY25-26).
     "194H": {"rate": Decimal("2"), "single": 20000_00, "aggregate": 20000_00},
-    # 194I: rent — 2% (plant & machinery) / 10% (land/building/furniture); threshold ₹2.4L.
+    # 194I: rent — 2% (plant & machinery) / 10% (land/building/furniture). From FY 2025-26 the
+    # threshold is ₹50,000 PER MONTH (or part thereof); TDS applies to the full month's rent
+    # once crossed, and there is NO annual-aggregate trigger (Finance Act 2025; §WS1.C2).
     "194I": {
         "rate_plant": Decimal("2"),
         "rate_building": Decimal("10"),
-        "single": 240000_00,
-        "aggregate": 240000_00,
+        "single": 50000_00,
+        "per_month": True,  # per-payment threshold only; annual aggregate does not apply
     },
 }
 
@@ -74,7 +77,12 @@ def tds_on_payment(
     if cfg is None:
         raise ValueError(f"unknown TDS section: {section}")
     amount = int(amount)
-    applies = amount >= cfg["single"] or (aggregate_ytd + amount) >= cfg["aggregate"]
+    if cfg.get("per_month"):
+        # 194I: month-granular — TDS on the full month's rent once the per-month threshold is
+        # crossed; annual aggregate does not apply (§WS1.C2). ``amount`` is one month's rent.
+        applies = amount >= cfg["single"]
+    else:
+        applies = amount >= cfg["single"] or (aggregate_ytd + amount) >= cfg["aggregate"]
     if not applies:
         return {"applicable": False, "rate": Decimal("0"), "tds_paise": 0}
     rate = tds_rate(section, payee_type=payee_type, category=category)
@@ -132,6 +140,81 @@ def ap_aging(payables: list[dict], as_of: date) -> dict[str, Any]:
         buckets[aging_bucket(days)] += outstanding
         total += outstanding
     return {"buckets": buckets, "total_outstanding": total}
+
+
+# ---- MSME Form-1 half-yearly return (WS1.D8) --------------------------------------------
+#
+# Specified Companies (Furnishing of information about payment to micro and small enterprise
+# suppliers) Order, 2019 under Companies Act 2013 s.405: amounts due to MSME-registered
+# vendors outstanding beyond the MSMED Act s.15 45-day payment period (MSME_PAYMENT_DAYS
+# above), reported in two half-yearly windows — MASTER_PLAN.md §WS1.D8:
+#   April-September -> return due 31 October
+#   October-March   -> return due 30 April
+
+
+def msme_form1_period(for_date: date) -> dict[str, str]:
+    """Resolve the MSME Form-1 half-yearly window containing ``for_date`` and its statutory
+    return due date (MASTER_PLAN.md §WS1.D8). Pure; the date is injected, never read from a
+    clock."""
+    y = for_date.year
+    if 4 <= for_date.month <= 9:
+        start = date(y, 4, 1)
+        end = date(y, 9, 30)
+        due = date(y, 10, 31)
+    elif for_date.month >= 10:
+        start = date(y, 10, 1)
+        end = date(y + 1, 3, 31)
+        due = date(y + 1, 4, 30)
+    else:  # Jan-Mar: second half of the FY that started the previous October
+        start = date(y - 1, 10, 1)
+        end = date(y, 3, 31)
+        due = date(y, 4, 30)
+    return {"start": start.isoformat(), "end": end.isoformat(), "due_date": due.isoformat()}
+
+
+def msme_form1_pack(payables: list[dict], period_end: date) -> dict[str, Any]:
+    """Build the MSME Form-1 half-yearly return data pack: amounts due to MSME-registered
+    vendors outstanding beyond the MSMED Act s.15 45-day payment period (``MSME_PAYMENT_DAYS``),
+    as of the half-year window containing ``period_end`` (MASTER_PLAN.md §WS1.D8). Pure —
+    ``period_end`` is the injected reporting date, never the wall clock.
+
+    Each item in ``payables``: {vendor_id, vendor_name, vendor_msme (bool), bill_date
+    'YYYY-MM-DD', outstanding_paise}. ``reason_for_delay`` is a manual-entry placeholder per
+    the Form-1 instructions — it is not derivable from ledger data.
+    """
+    period = msme_form1_period(period_end)
+    lines: list[dict[str, Any]] = []
+    total = 0
+    for p in payables:
+        if not p.get("vendor_msme"):
+            continue
+        outstanding = int(p["outstanding_paise"])
+        if outstanding <= 0:
+            continue
+        bill_date = date.fromisoformat(p["bill_date"])
+        days_outstanding = (period_end - bill_date).days
+        if days_outstanding <= MSME_PAYMENT_DAYS:
+            continue
+        lines.append(
+            {
+                "vendor_id": p["vendor_id"],
+                "vendor_name": p.get("vendor_name", ""),
+                "bill_date": p["bill_date"],
+                "outstanding_paise": outstanding,
+                "days_outstanding": days_outstanding,
+                "reason_for_delay": "",
+            }
+        )
+        total += outstanding
+    lines.sort(key=lambda ln: (-ln["days_outstanding"], ln["vendor_id"]))
+    return {
+        "period_start": period["start"],
+        "period_end": period["end"],
+        "return_due_date": period["due_date"],
+        "total_outstanding_paise": total,
+        "vendor_count": len(lines),
+        "lines": lines,
+    }
 
 
 def early_payment_discount(

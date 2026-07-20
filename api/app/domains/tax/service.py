@@ -175,8 +175,10 @@ class TaxService(BaseDomainService):
         book_profit: int | None = None,
         tds_paid: int = 0,
         advance_tax_paid: int = 0,
+        regime_115baa: bool = True,
     ) -> dict[str, Any]:
-        """ITR-5/ITR-6 headline computation (e-filing portal upload is out of scope)."""
+        """ITR-5/ITR-6 headline computation (e-filing portal upload is out of scope). Company
+        regime is chosen explicitly via ``regime_115baa`` (§WS1.C4)."""
         return tax_calc.itr_computation(
             entity_type=entity_type,
             gross_total_income=gross_total_income,
@@ -184,6 +186,7 @@ class TaxService(BaseDomainService):
             book_profit=book_profit,
             tds_paid=tds_paid,
             advance_tax_paid=advance_tax_paid,
+            regime_115baa=regime_115baa,
         )
 
     def arms_length_check(

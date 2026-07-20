@@ -87,8 +87,9 @@ _LATE_FEE_CAP_NIL = 50_000  # ₹500 cap for nil returns
 _INTEREST_RATE = Decimal("0.18")  # 18% p.a., s.50
 
 
-def _round_rupee(paise: int) -> int:
-    rupees = (Decimal(int(paise)) / 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+def _round_rupee(paise: Decimal | int) -> int:
+    # Accepts an EXACT Decimal — callers must not pre-truncate with int() (§WS1.C3).
+    rupees = (Decimal(paise) / 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
     return int(rupees) * 100
 
 
@@ -109,7 +110,7 @@ def rcm_liability(supplies: list[dict]) -> dict[str, Any]:
     total_tax = 0
     for s in supplies:
         taxable = int(s["taxable"])
-        tax = _round_rupee(int(Decimal(taxable) * Decimal(str(s["rate"])) / 100))
+        tax = _round_rupee(Decimal(taxable) * Decimal(str(s["rate"])) / 100)
         total_taxable += taxable
         total_tax += tax
     return {
@@ -234,7 +235,7 @@ def composition_tax(turnover: int, *, category: str) -> dict[str, Any]:
         "category": category,
         "rate_pct": float(rate * 100),
         "turnover": int(turnover),
-        "tax": _round_rupee(int(Decimal(int(turnover)) * rate)),
+        "tax": _round_rupee(Decimal(int(turnover)) * rate),
     }
 
 
@@ -257,6 +258,12 @@ def lut_validity(issue_date: str) -> str:
 
 
 # ---- e-Invoice IRN + NIC schema -------------------------------------------------------
+
+# WS9.3: the IRN below is computed locally (same NIC hash algorithm) but never registered with
+# the IRP — it has no legal force as an e-invoice until the real IRP call happens (out of scope
+# here). Every surface that shows this IRN (JSON payload, PDF, QR caption) MUST carry this exact
+# label so a human never mistakes a draft number for a filed one. See scripts/check_no_draft_irn.sh.
+DRAFT_IRN_LABEL = "DRAFT — not IRP-registered; not a valid e-invoice until registered"
 
 
 def _einvoice_fy(iso_date: str) -> str:
@@ -298,6 +305,7 @@ def einvoice_payload(
     payload = {
         "Version": "1.1",
         "Irn": irn,
+        "IrnStatus": DRAFT_IRN_LABEL,
         "TranDtls": {"TaxSch": "GST", "SupTyp": sup_typ, "RegRev": "N"},
         "DocDtls": {"Typ": doc_type, "No": doc_no, "Dt": dt},
         "SellerDtls": {"Gstin": seller_gstin.upper()},
@@ -321,6 +329,8 @@ def einvoice_payload(
             "DocNo": doc_no, "DocTyp": doc_type, "DocDt": dt,
             "TotInvVal": _to_rupees(total), "ItemCnt": item_count,
             "MainHsnCode": hsn or "", "Irn": irn,
+            # rendered under/beside the QR image wherever this data is shown as a caption
+            "Caption": DRAFT_IRN_LABEL,
         },
     }
     return payload

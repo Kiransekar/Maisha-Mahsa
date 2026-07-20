@@ -1,0 +1,75 @@
+# WS1.C — the five proven defects, regression-locked (MMX-1.0 §WS1.C).
+# Values sourced from the immutable spec (owner-cited primary source, §0.6(b)). Each vector is
+# ca_initials: PENDING until a CA initials it (§0.6 / WS1.E2). amounts are integer paise.
+
+- id: tds_194j_50k_boundary
+  statute: Income-tax Act
+  section: "194J"
+  source: "MMX-1.0 §WS1.C1 (Finance Act 2025; threshold 30k -> 50k)"
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_on_payment
+  inputs: {section: "194J", amount: 5000000}   # ₹50,000 = at threshold -> TDS applies
+  expected: {applicable: true, tds_paise: 500000}  # 10% of ₹50,000 = ₹5,000
+
+- id: tds_194j_below_new_threshold
+  statute: Income-tax Act
+  section: "194J"
+  source: "MMX-1.0 §WS1.C1"
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_on_payment
+  inputs: {section: "194J", amount: 4000000}   # ₹40,000 < ₹50,000 -> no TDS (was TDS under old ₹30k)
+  expected: {applicable: false, tds_paise: 0}
+
+- id: tds_194i_40k_no_tds
+  statute: Income-tax Act
+  section: "194I"
+  source: "MMX-1.0 §WS1.C2 (₹50,000 per month or part thereof; no annual aggregate)"
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_on_payment
+  inputs: {section: "194I", amount: 4000000, category: "building", aggregate_ytd: 12000000}
+  # ₹40,000/mo is below the per-month threshold; a big YTD must NOT drag it into TDS.
+  expected: {applicable: false, tds_paise: 0}
+
+- id: tds_194i_55k_full_month
+  statute: Income-tax Act
+  section: "194I"
+  source: "MMX-1.0 §WS1.C2"
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_on_payment
+  inputs: {section: "194I", amount: 5500000, category: "building"}  # ₹55,000/mo crosses -> full
+  expected: {applicable: true, tds_paise: 550000}  # 10% of ₹55,000 = ₹5,500
+
+- id: esi_20001_gross_ceil
+  statute: ESI Act 1948
+  section: "contribution rounding"
+  source: "MMX-1.0 §WS1.C3 (ceil the exact Decimal product before any int truncation)"
+  ca_initials: PENDING
+  ca_date: null
+  target: esi
+  inputs: {gross_monthly: 2000100}   # gross ₹20,001
+  expected: [15100, 65100]  # employee 0.75%=₹150.0075->ceil ₹151; employer 3.25%=₹650.0325->ceil ₹651
+
+- id: company_115baa_1cr
+  statute: Income-tax Act
+  section: "115BAA"
+  source: "MMX-1.0 §WS1.C4 (22% + 10% surcharge + 4% cess = 25.168%; MAT excluded)"
+  ca_initials: PENDING
+  ca_date: null
+  target: itr_computation
+  inputs: {entity_type: "company", gross_total_income: 1000000000, book_profit: 1000000000, regime_115baa: true}
+  # total income ₹1,00,00,000 -> 25.168% = ₹25,16,800; MAT excluded even though book_profit given.
+  expected: {form: "ITR-6", normal_tax: 251680000, mat: 0, tax_payable: 251680000}
+
+- id: retention_invoice_8y_fy_end
+  statute: "MCA/IT books retention"
+  section: "statutory retention"
+  source: "MMX-1.0 §WS1.C5 (8 years from FY-end, not upload date)"
+  ca_initials: PENDING
+  ca_date: null
+  target: retention_until
+  inputs: {upload_date: "2025-06-15", doc_type: "invoice"}  # FY ends 2026-03-31 -> +8y
+  expected: "2034-03-31"

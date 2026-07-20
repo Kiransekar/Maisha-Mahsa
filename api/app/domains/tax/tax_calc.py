@@ -150,7 +150,10 @@ def audit_required(
     return turnover > int(_AUDIT_BUSINESS) and cash_ratio > 0.05
 
 
-_COMPANY_TAX_RATE = Decimal("0.22")  # s.115BAA concessional regime (companies)
+# s.115BAA concessional regime (companies): 22% base + 10% surcharge + 4% cess = 25.168%
+# effective (MMX-1.0 §WS1.C4). MAT (s.115JB) does NOT apply on this path.
+_COMPANY_115BAA_BASE = Decimal("0.22")
+_COMPANY_115BAA_SURCHARGE = Decimal("0.10")
 _FIRM_TAX_RATE = Decimal("0.30")  # LLP / firm
 _ONE_CRORE_PAISE = 10**7 * 100
 _RULE_10D_THRESHOLD = _ONE_CRORE_PAISE  # Rs 1 crore aggregate international transactions
@@ -166,19 +169,33 @@ def itr_computation(
     book_profit: int | None = None,
     tds_paid: int = 0,
     advance_tax_paid: int = 0,
+    regime_115baa: bool = True,
 ) -> dict[str, Any]:
-    """Prepare the headline ITR computation. ``entity_type`` 'company' → ITR-6 (s.115BAA 22%),
-    'firm'/'llp' → ITR-5 (30%). For companies the normal tax is compared with MAT (s.115JB) and
-    the higher applies; prepaid TDS + advance tax are netted off. The e-filing JSON/portal
-    upload is the external boundary (out of scope). Pure & exact paise."""
+    """Prepare the headline ITR computation. ``entity_type`` 'company' → ITR-6, 'firm'/'llp' →
+    ITR-5 (30% + cess). The company regime is chosen explicitly (§WS1.C4): ``regime_115baa=True``
+    (default) → 22% + 10% surcharge + 4% cess = 25.168% effective, and MAT (s.115JB) is EXCLUDED;
+    the non-115BAA path (normal rates + MAT comparison) has no CA-initialled rate vector yet and is
+    BLOCKED-CA. Prepaid TDS + advance tax are netted off. The e-filing upload is out of scope.
+    Pure & exact paise."""
     et = entity_type.lower()
     total_income = max(0, int(gross_total_income) - int(deductions))
     if et == "company":
-        form, rate = "ITR-6", _COMPANY_TAX_RATE
+        if not regime_115baa:
+            raise NotImplementedError(
+                "BLOCKED-CA: non-115BAA company tax needs a CA-initialled rate vector "
+                "(MMX-1.0 §0.6, §WS1.C4)."
+            )
+        form = "ITR-6"
+        # 22% × 1.10 surcharge × 1.04 cess = 25.168% effective; MAT excluded on this path.
+        effective = _COMPANY_115BAA_BASE * (Decimal(1) + _COMPANY_115BAA_SURCHARGE) * (
+            Decimal(1) + _CESS
+        )
+        normal_tax = _round_rupee(Decimal(total_income) * effective)
+        mat = 0
     else:
-        form, rate = "ITR-5", _FIRM_TAX_RATE
-    normal_tax = _round_rupee(Decimal(total_income) * rate * (Decimal(1) + _CESS))
-    mat = mat_liability(int(book_profit)) if (et == "company" and book_profit is not None) else 0
+        form = "ITR-5"
+        normal_tax = _round_rupee(Decimal(total_income) * _FIRM_TAX_RATE * (Decimal(1) + _CESS))
+        mat = 0
     tax_payable = max(normal_tax, mat)
     prepaid = int(tds_paid) + int(advance_tax_paid)
     return {
@@ -204,7 +221,11 @@ def arms_length_check(
     if not comparables:
         return {"at_arms_length": None, "reason": "no comparables provided"}
     mean = sum(int(c) for c in comparables) // len(comparables)
-    band = int(Decimal(mean) * Decimal(str(tolerance_pct)) / Decimal(100))
+    band = int(
+        (Decimal(mean) * Decimal(str(tolerance_pct)) / Decimal(100)).to_integral_value(
+            ROUND_HALF_UP
+        )
+    )
     lower, upper = mean - band, mean + band
     at_arms_length = lower <= int(price) <= upper
     return {

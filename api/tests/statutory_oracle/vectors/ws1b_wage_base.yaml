@@ -1,0 +1,52 @@
+# WS1.B1 — Code on Wages s.2(y) statutory wage base (MMX-1.0 §WS1.B1). Values are computed from
+# the spec's stated algorithm (cited primary source, §0.6(b)); ca_initials PENDING until the
+# Ministry-FAQ worked examples are confirmed. amounts are integer paise.
+
+- id: wage_base_compliant_no_addback
+  statute: Code on Wages 2019
+  section: "2(y)"
+  source: "MMX-1.0 §WS1.B1 (excluded 40% < 50% -> no add-back; wages = Basic+DA+retaining)"
+  ca_initials: PENDING
+  ca_date: null
+  target: statutory_wage_base
+  # Basic ₹30k + HRA ₹15k + special ₹5k = ₹50k total; excluded ₹20k = 40% <= 50% -> base = ₹30k
+  inputs:
+    components: {basic: 3000000, hra: 1500000, special_allowance: 500000}
+  expected: 3000000
+
+- id: wage_base_addback_when_basic_underweighted
+  statute: Code on Wages 2019
+  section: "2(y)"
+  source: "MMX-1.0 §WS1.B1 (excluded 66.7% > 50% -> add back the excess over 50%)"
+  ca_initials: PENDING
+  ca_date: null
+  target: statutory_wage_base
+  # Basic ₹20k + HRA ₹25k + special ₹15k = ₹60k; excluded ₹40k > ₹30k cap -> add back ₹10k -> ₹30k
+  inputs:
+    components: {basic: 2000000, hra: 2500000, special_allowance: 1500000}
+  expected: 3000000
+
+- id: wage_base_overtime_counts_as_excluded
+  statute: Code on Wages 2019
+  section: "2(y)"
+  source: "MMX-1.0 §WS1.B1 (overtime is in the excluded total)"
+  ca_initials: PENDING
+  ca_date: null
+  target: statutory_wage_base
+  # Basic ₹20k + overtime ₹40k = ₹60k; excluded ₹40k > ₹30k cap -> add back ₹10k -> ₹30k
+  inputs:
+    components: {basic: 2000000, overtime: 4000000}
+  expected: 3000000
+
+- id: wage_base_in_kind_capped_15pct
+  statute: Code on Wages 2019
+  section: "2(y)"
+  source: "MMX-1.0 §WS1.B1 (in-kind counts up to 15% of the wage base — interpretation BLOCKED-CA)"
+  ca_initials: PENDING
+  ca_date: null
+  target: statutory_wage_base
+  # Basic ₹30k, in-kind ₹10k; countable = min(₹10k, 15% of ₹30k = ₹4,500) = ₹4,500 -> ₹34,500
+  inputs:
+    components: {basic: 3000000}
+    in_kind: 1000000
+  expected: 3450000

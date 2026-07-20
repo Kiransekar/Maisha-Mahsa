@@ -14,7 +14,7 @@ def test_ingest_and_dedup(session):
     )
     assert first["duplicate"] is False
     assert first["doc_type"] == "invoice"  # classified from file name
-    assert first["retention_until"] == "2033-05-10"  # 7-year statutory
+    assert first["retention_until"] == "2035-03-31"  # 8-year statutory from FY-end (§WS1.C5)
 
     # re-ingesting identical content is detected as a duplicate (same content hash = id)
     again = svc.ingest(

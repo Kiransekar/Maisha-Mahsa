@@ -5,7 +5,7 @@ net-burn, the burn multiple, and SaaS unit economics (CAC / LTV / payback).
 
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 
@@ -69,7 +69,9 @@ def scenario_net_change(
     base_revenue: int, base_cost: int, *, revenue_mult: float = 1.0, extra_cost: int = 0
 ) -> int:
     """Monthly net change for a scenario: revenue×mult − (cost + extra). Negative = burn."""
-    revenue = int(Decimal(int(base_revenue)) * Decimal(str(revenue_mult)))
+    revenue = int(
+        (Decimal(int(base_revenue)) * Decimal(str(revenue_mult))).to_integral_value(ROUND_HALF_UP)
+    )
     return revenue - (int(base_cost) + int(extra_cost))
 
 

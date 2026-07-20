@@ -11,7 +11,8 @@ Payment of Bonus Act 1965, Payment of Gratuity Act 1972, state Professional Tax 
 
 from __future__ import annotations
 
-from decimal import ROUND_HALF_UP, Decimal
+from datetime import date
+from decimal import ROUND_CEILING, ROUND_HALF_UP, Decimal
 
 from app.core.money import Paise
 
@@ -87,15 +88,18 @@ _LWF_STATES_MODELLED = frozenset(_LWF_TABLES)
 # ---- rounding helpers -----------------------------------------------------------------
 
 
-def _round_rupee(paise: int) -> int:
-    """Round paise to the nearest whole rupee (half up)."""
-    rupees = (Decimal(int(paise)) / 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
+def _round_rupee(paise: Decimal | int) -> int:
+    """Round to the nearest whole rupee (half up). Accepts an EXACT Decimal paise amount —
+    callers must not pre-truncate with int() (that is the §WS1.C3 truncate-then-round defect)."""
+    rupees = (Decimal(paise) / 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP)
     return int(rupees) * 100
 
 
-def _ceil_rupee(paise: int) -> int:
-    """Round paise UP to the next whole rupee (ESI convention)."""
-    return -(-int(paise) // 100) * 100
+def _ceil_rupee(paise: Decimal | int) -> int:
+    """Round UP to the next whole rupee (ESI convention). Ceil is applied to the EXACT Decimal
+    product BEFORE any int truncation, so a fractional-paise remainder still rounds up (§WS1.C3)."""
+    rupees = (Decimal(paise) / 100).quantize(Decimal("1"), rounding=ROUND_CEILING)
+    return int(rupees) * 100
 
 
 # ---- PF (EPF) -------------------------------------------------------------------------
@@ -107,17 +111,17 @@ def pf_wage(basic_monthly: int) -> int:
 
 
 def pf_employee(basic_monthly: int) -> Paise:
-    return Paise(_round_rupee(int(Decimal(pf_wage(basic_monthly)) * PF_RATE)))
+    return Paise(_round_rupee(Decimal(pf_wage(basic_monthly)) * PF_RATE))
 
 
 def pf_employer(basic_monthly: int) -> Paise:
     # Aggregate employer share 12% (EPS 8.33% on ceiling + EPF 3.67%); modelled as 12% of PF wage.
-    return Paise(_round_rupee(int(Decimal(pf_wage(basic_monthly)) * PF_RATE)))
+    return Paise(_round_rupee(Decimal(pf_wage(basic_monthly)) * PF_RATE))
 
 
 def eps_employer(basic_monthly: int) -> Paise:
     """Employer's EPS share = 8.33% of EPS wage (PF wage capped at ₹15,000 → max ₹1,250)."""
-    return Paise(_round_rupee(int(Decimal(pf_wage(basic_monthly)) * EPS_RATE)))
+    return Paise(_round_rupee(Decimal(pf_wage(basic_monthly)) * EPS_RATE))
 
 
 def epf_employer_diff(basic_monthly: int) -> Paise:
@@ -132,8 +136,8 @@ def esi(gross_monthly: int) -> tuple[Paise, Paise]:
     """(employee, employer) ESI. Nil when gross exceeds the ₹21,000 ceiling."""
     if int(gross_monthly) > int(ESI_WAGE_CEILING):
         return Paise(0), Paise(0)
-    emp = _ceil_rupee(int(Decimal(int(gross_monthly)) * ESI_EMPLOYEE_RATE))
-    empr = _ceil_rupee(int(Decimal(int(gross_monthly)) * ESI_EMPLOYER_RATE))
+    emp = _ceil_rupee(Decimal(int(gross_monthly)) * ESI_EMPLOYEE_RATE)
+    empr = _ceil_rupee(Decimal(int(gross_monthly)) * ESI_EMPLOYER_RATE)
     return Paise(emp), Paise(empr)
 
 
@@ -248,10 +252,54 @@ def gratuity_required(last_basic_monthly: int, completed_years: int) -> Paise:
     return Paise(_round_rupee(int(amount.to_integral_value(ROUND_HALF_UP))))
 
 
+def _completed_years(start: date, end: date) -> int:
+    """Whole completed years of service from ``start`` through ``end`` (anniversary count)."""
+    if end < start:
+        return 0
+    years = end.year - start.year
+    if (end.month, end.day) < (start.month, start.day):
+        years -= 1
+    return max(0, years)
+
+
+def gratuity_hybrid(
+    *,
+    doj: date,
+    exit_date: date,
+    boundary: date,
+    old_base: int,
+    new_base: int,
+) -> Paise:
+    """Hybrid gratuity across the Labour-Code transition (MMX-1.0 §WS1.B2).
+
+    Completed years of service rendered before ``boundary`` (21-11-2025) are valued on the OLD
+    base (last-drawn Basic); years completed on/after ``boundary`` on the NEW s.2(y) wage base.
+    Both legs reuse the same 15/26 factor; the legs are summed and rounded once. FTE eligibility:
+    nil unless total service ≥ 1 completed year. All dates are injected — no clock. ``old_base``
+    and ``new_base`` are the monthly Basic / statutory wage base in paise.
+
+    Apportionment (a computational interpretation, no statutory value invented): a completed year
+    is assigned to the pre-boundary leg when its anniversary (completion date) falls strictly
+    before ``boundary``, else to the post-boundary leg.
+    """
+    total_years = _completed_years(doj, exit_date)
+    if total_years < 1:  # FTE eligibility >= 1 completed year
+        return Paise(0)
+    b = (boundary.year, boundary.month, boundary.day)
+    pre_years = sum(
+        1 for k in range(1, total_years + 1) if (doj.year + k, doj.month, doj.day) < b
+    )
+    post_years = total_years - pre_years
+    old_leg = Decimal(int(old_base)) * GRATUITY_NUM * pre_years / GRATUITY_DEN
+    new_leg = Decimal(int(new_base)) * GRATUITY_NUM * post_years / GRATUITY_DEN
+    total = old_leg + new_leg
+    return Paise(_round_rupee(int(total.to_integral_value(ROUND_HALF_UP))))
+
+
 def bonus_provision_monthly(basic_monthly: int) -> Paise:
     """Monthly statutory minimum bonus provision (8.33%). Nil if Basic exceeds the
     ₹21,000 eligibility ceiling; calculated on Basic capped at ₹7,000."""
     if int(basic_monthly) > int(BONUS_ELIGIBILITY_BASIC):
         return Paise(0)
     cap = min(int(basic_monthly), int(BONUS_WAGE_CAP))
-    return Paise(_round_rupee(int(Decimal(cap) * BONUS_MIN_RATE)))
+    return Paise(_round_rupee(Decimal(cap) * BONUS_MIN_RATE))

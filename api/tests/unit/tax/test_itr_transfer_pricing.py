@@ -4,7 +4,8 @@ from app.core.money import Paise
 from app.domains.tax import tax_calc as t
 
 
-def test_itr6_company_uses_higher_of_normal_and_mat():
+def test_itr6_company_115baa_effective_rate_and_mat_excluded():
+    # §WS1.C4: 115BAA = 22% + 10% surcharge + 4% cess = 25.168% effective; MAT excluded.
     res = t.itr_computation(
         entity_type="company",
         gross_total_income=Paise.from_rupees(10_000_000),
@@ -14,10 +15,21 @@ def test_itr6_company_uses_higher_of_normal_and_mat():
         advance_tax_paid=Paise.from_rupees(1_000_000),
     )
     assert res["form"] == "ITR-6"
-    # normal 22%+4% cess = 22.88% > MAT 15%+4% cess = 15.6% -> normal applies
-    assert res["normal_tax"] > res["mat"]
+    assert res["normal_tax"] == Paise.from_rupees(2_516_800)  # 25.168% of 1 crore
+    assert res["mat"] == 0  # MAT excluded on the 115BAA path
     assert res["tax_payable"] == res["normal_tax"]
     assert res["balance_payable"] == res["tax_payable"] - Paise.from_rupees(1_500_000)
+
+
+def test_itr6_non_115baa_is_blocked_ca():
+    import pytest
+
+    with pytest.raises(NotImplementedError):
+        t.itr_computation(
+            entity_type="company",
+            gross_total_income=Paise.from_rupees(10_000_000),
+            regime_115baa=False,
+        )
 
 
 def test_itr5_firm_form_and_rate():
