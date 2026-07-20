@@ -28,7 +28,13 @@ class _FakeService(BaseDomainService):
 
 class _FakeMahsa:
     async def fold(
-        self, snapshot: dict[str, Any], *, domain: str | None = None, query: str | None = None
+        self,
+        snapshot: dict[str, Any],
+        *,
+        domain: str | None = None,
+        query: str | None = None,
+        rules_version: str | None = None,
+        recompute_claims: object | None = None,
     ) -> FoldResult:
         return FoldResult(
             global_intent=[0.0],

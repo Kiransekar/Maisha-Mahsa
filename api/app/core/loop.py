@@ -51,9 +51,18 @@ async def run_loop(
     except TypeError:
         snapshot = service.build_snapshot(session)
 
+    # Prime-Directive claims (§0.4): the domain's recomputable figures, for Mahsa to
+    # independently recompute and BLOCK on mismatch. Same optional-as_of fallback.
+    try:
+        claims = service.recompute_claims(session, as_of)  # type: ignore[call-arg]
+    except TypeError:
+        claims = service.recompute_claims(session)
+
     # Mahsa folds/validates the deterministic snapshot first — its verdict is the source of
     # truth and is independent of any LLM draft (the Golden Rule).
-    fold = await mahsa.fold(snapshot, domain=service.domain, query=query)
+    fold = await mahsa.fold(
+        snapshot, domain=service.domain, query=query, recompute_claims=claims or None
+    )
 
     # Optional drafting step with verification: the LLM proposes an ActionClaim, every number
     # is checked against the deterministic facts, and unbacked numbers trigger bounded

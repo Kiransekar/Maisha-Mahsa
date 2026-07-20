@@ -139,9 +139,46 @@ async def test_payroll_loop_folds_and_audits(session, mahsa_server):
     assert len(outcome.fold.domain_intent) == 8
     assert outcome.fold.validation.status == "green"
     assert outcome.snapshot["metrics"]["min_net_pay_paise"] == Paise.from_rupees(98000)
+    # Prime Directive: run_loop sent payroll's recompute claims and Mahsa verified every one to
+    # the paisa (a mismatch would have forced a MAHSA-PARITY-001 block, i.e. red).
+    assert outcome.fold.recompute, "payroll should emit recompute claims"
+    assert all(c.matches for c in outcome.fold.recompute)
+    assert not any(t.id == "MAHSA-PARITY-001" for t in outcome.fold.validation.triggered)
 
     chain = load_chain(session)
     assert verify_chain(chain) is True
+
+
+async def test_payroll_recompute_mismatch_blocks_live(session, mahsa_server):
+    # A tampered payroll figure must be BLOCKED by Mahsa's independent recomputation (§0.4).
+    svc = PayrollService()
+    emp = Employee(employee_code="E9", name="Ravi", date_of_joining="2021-04-01", state="MH")
+    session.add(emp)
+    session.flush()
+    # Basic ₹18k (< ₹21k ESI ceiling) so PF and ESI both fire -> richer claim set.
+    svc.set_salary_structure(
+        session, emp.id, effective_from="2026-04-01", basic=Paise.from_rupees(18000), hra=0
+    )
+    session.commit()
+
+    mahsa = MahsaClient(mahsa_server)
+    snapshot = svc.build_snapshot(session, date(2026, 6, 16))
+    claims = svc.recompute_claims(session, date(2026, 6, 16))
+    assert claims
+
+    # Correct claims verify and do not block.
+    ok = await mahsa.fold(snapshot, domain="payroll", recompute_claims=claims)
+    assert all(c.matches for c in ok.recompute)
+    assert not any(t.id == "MAHSA-PARITY-001" for t in ok.validation.triggered)
+
+    # Tamper one claimed figure by ₹1 -> Mahsa recomputes the true value and BLOCKS.
+    tampered = list(claims)
+    i = next(k for k, c in enumerate(tampered) if c.target == "pf_employee")
+    tampered[i] = tampered[i].model_copy(update={"claimed_paise": tampered[i].claimed_paise + 100})
+    blocked = await mahsa.fold(snapshot, domain="payroll", recompute_claims=tampered)
+    assert blocked.validation.status == "red"
+    assert any(t.id == "MAHSA-PARITY-001" for t in blocked.validation.triggered)
+    assert any(not c.matches and c.recomputed_paise is not None for c in blocked.recompute)
 
 
 async def test_gst_overdue_filing_loop_is_red_and_audited(session, mahsa_server):

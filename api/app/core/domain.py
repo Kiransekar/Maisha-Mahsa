@@ -68,6 +68,13 @@ class BaseDomainService(ABC):
         """
         raise NotImplementedError
 
+    def recompute_claims(self, session: Session) -> list[Any]:
+        """Prime-Directive claims (§0.4): the figures this domain computed, for Mahsa to
+        independently recompute and BLOCK on mismatch. Default: none (the domain's figures are
+        not yet Mahsa-recomputable → honest-pending). Override to emit ``RecomputeClaim``s.
+        Read-only w.r.t. ``session``."""
+        return []
+
 
 class PendingDomainService(BaseDomainService):
     """Placeholder for a domain that is scaffolded but not yet built. It is a *typed,

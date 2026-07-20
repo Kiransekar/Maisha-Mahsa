@@ -16,13 +16,25 @@ from app.jobs import run_brief, run_capture
 
 
 class _GreenMahsa:
-    async def fold(self, snapshot: dict[str, Any], *, domain=None, query=None) -> FoldResult:
+    async def fold(
+        self,
+        snapshot: dict[str, Any],
+        *,
+        domain=None,
+        query=None,
+        rules_version=None,
+        recompute_claims=None,
+    ) -> FoldResult:
         return FoldResult(
-            global_intent=[0.0], global_dims=["x"],
+            global_intent=[0.0],
+            global_dims=["x"],
             validation=Validation(status="green"),
             shape=ResponseShape(
-                status="green", color="green", layout="default",
-                requires_approval=False, global_score=90.0,
+                status="green",
+                color="green",
+                layout="default",
+                requires_approval=False,
+                global_score=90.0,
             ),
             rules_version="rv",
         )
@@ -39,8 +51,13 @@ async def test_brief_job_dispatches_via_transport(session: Session) -> None:
     transport = InMemoryTransport()
     channel = EmailChannel(transport, sender="cfo@maisha.local")
     res = await run_brief(
-        session, _GreenMahsa(), build_registry(), channel,  # type: ignore[arg-type]
-        to="founder@maisha.local", company_name="Maisha-Mahsa", as_of=date(2026, 6, 24),
+        session,
+        _GreenMahsa(),
+        build_registry(),
+        channel,  # type: ignore[arg-type]
+        to="founder@maisha.local",
+        company_name="Maisha-Mahsa",
+        as_of=date(2026, 6, 24),
     )
     assert res["job"] == "brief"
     assert res["overall_score"] == 90.0  # all domains green

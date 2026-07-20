@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core import pdf
 from app.core.domain import BaseDomainService
+from app.core.mahsa_client import RecomputeClaim
 from app.core.statutory_wage import EXCLUDED_CAP_FRACTION, statutory_wage_base
 from app.db.models.payroll import Employee, PayrollEntry, PayrollRun, SalaryStructure
 from app.domains.payroll import ecr, statutory
@@ -62,6 +63,7 @@ def compute_components(
         "hra": int(hra),
         "lta": int(lta),
         "special_allowance": int(special_allowance),
+        "wage_base": wage_base,  # s.2(y) base PF/ESI are computed on (drives recompute claims)
         "employee_pf": emp_pf,
         "employer_pf": empr_pf,
         "employee_esi": int(emp_esi),
@@ -74,6 +76,41 @@ def compute_components(
         "net_salary": net,
         "ctc": ctc,
     }
+
+
+def payslip_recompute_claims(
+    comp: dict[str, int], *, label_prefix: str = "payroll"
+) -> list[RecomputeClaim]:
+    """Prime-Directive claims (§0.4) for the recomputable figures in one payslip ``comp`` (from
+    ``compute_components``). Each claim carries the SAME inputs the Python fn used, so Mahsa
+    recomputes the identical figure and BLOCKs on any mismatch. PT/TDS/loss-of-pay are not yet
+    ported to Mahsa, so no claim is emitted for them (they stay honest-pending elsewhere)."""
+    wb = int(comp["wage_base"])
+    excluded = int(comp["hra"]) + int(comp["lta"]) + int(comp["special_allowance"])
+    return [
+        RecomputeClaim(
+            target="statutory_wage_base",
+            inputs={"included": int(comp["basic"]), "excluded": excluded, "in_kind": 0},
+            claimed_paise=wb,
+            label=f"{label_prefix}.wage_base",
+        ),
+        RecomputeClaim(
+            target="pf_employee", inputs={"basic_monthly": wb},
+            claimed_paise=int(comp["employee_pf"]), label=f"{label_prefix}.pf_employee",
+        ),
+        RecomputeClaim(
+            target="pf_employer", inputs={"basic_monthly": wb},
+            claimed_paise=int(comp["employer_pf"]), label=f"{label_prefix}.pf_employer",
+        ),
+        RecomputeClaim(
+            target="esi_employee", inputs={"gross_monthly": wb},
+            claimed_paise=int(comp["employee_esi"]), label=f"{label_prefix}.esi_employee",
+        ),
+        RecomputeClaim(
+            target="esi_employer", inputs={"gross_monthly": wb},
+            claimed_paise=int(comp["employer_esi"]), label=f"{label_prefix}.esi_employer",
+        ),
+    ]
 
 
 def check_ctc_compliance(
@@ -475,6 +512,31 @@ class PayrollService(BaseDomainService):
         return ecr.build_ecr(members)
 
     # ---- Mahsa contract -------------------------------------------------------------
+
+    def recompute_claims(
+        self, session: Session, as_of: date | None = None
+    ) -> list[RecomputeClaim]:
+        """Emit Prime-Directive claims (§0.4) for every active employee's PF/ESI/wage-base — the
+        payroll figures Mahsa can independently recompute. Mismatch → BLOCK; PT/TDS/LOP are not
+        yet ported so no claim is emitted for them. Mirrors ``build_snapshot``'s iteration."""
+        anchor = as_of or date(1970, 1, 1)
+        month = anchor.month
+        anchor_iso = anchor.isoformat()
+        claims: list[RecomputeClaim] = []
+        for emp in session.scalars(select(Employee).where(Employee.status == "active")).all():
+            structure = self._latest_structure(session, emp.id, anchor_iso)
+            if structure is None:
+                continue
+            comp = compute_components(
+                basic=structure.basic,
+                hra=structure.hra,
+                lta=structure.lta,
+                special_allowance=structure.special_allowance,
+                state=emp.state,
+                month=month,
+            )
+            claims.extend(payslip_recompute_claims(comp, label_prefix=f"payroll.emp{emp.id}"))
+        return claims
 
     def build_snapshot(self, session: Session, as_of: date | None = None) -> dict[str, Any]:
         anchor = as_of or date(1970, 1, 1)
