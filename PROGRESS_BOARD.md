@@ -38,7 +38,7 @@ Governing spec: `docs/MASTER_PLAN.md` (immutable). Detail log: `PROGRESS.md`.
 
 ## P1 · Platform (WS4 tenancy · WS5 RBAC · WS6 entitlements)
 - [x] WS4.1 tenancy schema+RLS · [~] WS4.7 red-team suite (DB/RLS layer; route-level awaits WS4.3) · [ ] WS4.2–4.6/4.8
-- [x] WS5.1 RBAC · [x] WS5.2 approval matrices · [ ] WS5.3   ·   [x] WS6.1 entitlements · [x] WS6.2 quantity gates · [x] WS6.3 upgrade triggers · [h] WS6.4 billing(Razorpay=Human)
+- [x] WS5.1 RBAC · [x] WS5.2 approval matrices · [x] WS5.3 per-role landing   ·   [x] WS6.1 entitlements · [x] WS6.2 quantity gates · [x] WS6.3 upgrade triggers · [h] WS6.4 billing(Razorpay=Human)
 - [x] WS4.4 per-tenant hash-chain + MCA audit-trail doc
 
 ## P2 · Product & UX (WS7 · WS8 · WS9)
