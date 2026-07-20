@@ -45,26 +45,31 @@ class Validation(BaseModel):
 
 class RecomputeClaim(BaseModel):
     """A figure Maisha computed, for Mahsa to independently recompute (§0.4). ``inputs`` fields
-    match the recompute path's arguments (see dif/src/recompute)."""
+    match the recompute path's arguments (see dif/src/recompute). A claim is either single-value
+    (``claimed_paise``) or multi-value (``claimed_values``: named paise, e.g. ITC set-off's
+    per-head cash + remaining credit, matched field-wise)."""
 
     target: str
     inputs: dict[str, Any] = Field(default_factory=dict)
-    claimed_paise: int
+    claimed_paise: int = 0
+    claimed_values: dict[str, int] | None = None
     label: str | None = None
 
 
 class RecomputeCheck(BaseModel):
     target: str
     label: str | None = None
-    claimed_paise: int
-    recomputed_paise: int | None = None  # None => Mahsa can't recompute → honest-pending (◐)
+    claimed_paise: int = 0
+    recomputed_paise: int | None = None  # None => single-value not recomputed → honest-pending (◐)
+    recomputed_values: dict[str, int] | None = None  # multi-value recompute (e.g. ITC set-off)
     matches: bool
     note: str
 
     @property
     def honest_pending(self) -> bool:
-        """True when Mahsa could not independently recompute this figure (render ◐, not ✕)."""
-        return self.recomputed_paise is None
+        """True when Mahsa could not independently recompute this figure (render ◐, not ✕) —
+        neither a single-value nor a multi-value recompute was produced."""
+        return self.recomputed_paise is None and self.recomputed_values is None
 
 
 class FoldResult(BaseModel):

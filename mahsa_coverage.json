@@ -11,6 +11,7 @@
     "gratuity_hybrid": {"ported": true},
     "interest_234b": {"ported": true},
     "interest_234c": {"ported": true},
+    "itc_setoff": {"ported": true},
     "itr_computation": {"ported": false},
     "late_fee_234e": {"ported": true},
     "payroll_components": {"ported": false},

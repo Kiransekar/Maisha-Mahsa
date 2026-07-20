@@ -18,20 +18,29 @@ pub mod gratuity_bonus;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::BTreeMap;
 
 /// A claim that a Python-computed figure equals what Mahsa independently recomputes. The live
 /// Prime-Directive gate (§0.4): the /fold caller sends these alongside the snapshot, Mahsa
 /// recomputes each to the paisa, and a mismatch BLOCKS. An unrecomputable target is left
 /// honest-pending (◐), never a block.
+///
+/// A claim is either **single-value** (`claimed_paise`, e.g. a TDS amount) or **multi-value**
+/// (`claimed_values`, a map of named paise, e.g. ITC set-off's per-head cash + remaining credit).
 #[derive(Debug, Clone, Deserialize)]
 pub struct RecomputeClaim {
-    /// Which recompute path (e.g. "tds_on_payment", "esi_employee", "gratuity_hybrid").
+    /// Which recompute path (e.g. "tds_on_payment", "itc_setoff").
     pub target: String,
     /// The path's inputs as a JSON object (fields match the recompute fn's arguments).
     #[serde(default)]
     pub inputs: Value,
-    /// The figure Maisha (Python) computed, in integer paise.
+    /// The figure Maisha (Python) computed, in integer paise (single-value claims).
+    #[serde(default)]
     pub claimed_paise: i64,
+    /// Named paise figures for a multi-value claim; when present this claim is checked field-wise
+    /// (subset match) against the multi-value recompute and `claimed_paise` is ignored.
+    #[serde(default)]
+    pub claimed_values: Option<BTreeMap<String, i64>>,
     /// Optional human label for the figure, surfaced in the block diagnostic / badges.
     #[serde(default)]
     pub label: Option<String>,
@@ -45,6 +54,9 @@ pub struct RecomputeCheck {
     pub claimed_paise: i64,
     /// `None` when Mahsa cannot recompute this target (unknown/unported) → honest-pending.
     pub recomputed_paise: Option<i64>,
+    /// Recomputed named paise for a multi-value target; `None` for single-value or unrecomputable.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recomputed_values: Option<BTreeMap<String, i64>>,
     /// True only when the target is recomputable AND matches the claim to the paisa.
     pub matches: bool,
     pub note: String,
@@ -131,22 +143,80 @@ fn recompute(target: &str, inp: &Value) -> Option<i64> {
     })
 }
 
-/// Recompute one claim and compare to the paisa.
+/// A GST head triplet [igst, cgst, sgst] read from `inp[key] = {igst, cgst, sgst}`.
+fn heads3(inp: &Value, key: &str) -> [i64; 3] {
+    let h = inp.get(key);
+    let g = |k: &str| h.and_then(|o| o.get(k)).and_then(Value::as_i64).unwrap_or(0);
+    [g("igst"), g("cgst"), g("sgst")]
+}
+
+/// Recompute a multi-value target — one that yields several named paise figures rather than one.
+/// Returns `None` for an unknown/unported target (→ honest-pending).
+fn recompute_multi(target: &str, inp: &Value) -> Option<BTreeMap<String, i64>> {
+    match target {
+        "itc_setoff" => {
+            let (cash, rem) = itc::itc_setoff(heads3(inp, "output"), heads3(inp, "credit"));
+            let mut m = BTreeMap::new();
+            for (i, head) in ["igst", "cgst", "sgst"].iter().enumerate() {
+                m.insert(format!("cash_{head}"), cash[i]);
+                m.insert(format!("credit_{head}"), rem[i]);
+            }
+            Some(m)
+        }
+        _ => None,
+    }
+}
+
+/// Recompute one claim and compare to the paisa. Multi-value claims (`claimed_values` set) are
+/// matched field-wise as a subset — every claimed key must equal its recomputed value.
 pub fn check_claim(claim: &RecomputeClaim) -> RecomputeCheck {
+    if let Some(want) = &claim.claimed_values {
+        let recomputed = recompute_multi(&claim.target, &claim.inputs);
+        let (matches, note) = match &recomputed {
+            Some(got) => {
+                let ok = want.iter().all(|(k, v)| got.get(k) == Some(v));
+                if ok {
+                    (true, "verified — recomputed to the paisa".to_string())
+                } else {
+                    (false, format!("MISMATCH — claimed {want:?}, Mahsa recomputed {got:?}"))
+                }
+            }
+            None => (
+                false,
+                "honest-pending — Mahsa cannot yet independently recompute this target".to_string(),
+            ),
+        };
+        return RecomputeCheck {
+            target: claim.target.clone(),
+            label: claim.label.clone(),
+            claimed_paise: 0,
+            recomputed_paise: None,
+            recomputed_values: recomputed,
+            matches,
+            note,
+        };
+    }
+
     let recomputed = recompute(&claim.target, &claim.inputs);
     let (matches, note) = match recomputed {
-        Some(r) if r == claim.claimed_paise => (true, "verified — recomputed to the paisa".to_string()),
+        Some(r) if r == claim.claimed_paise => {
+            (true, "verified — recomputed to the paisa".to_string())
+        }
         Some(r) => (
             false,
             format!("MISMATCH — Maisha claimed {}, Mahsa recomputed {}", claim.claimed_paise, r),
         ),
-        None => (false, "honest-pending — Mahsa cannot yet independently recompute this target".to_string()),
+        None => (
+            false,
+            "honest-pending — Mahsa cannot yet independently recompute this target".to_string(),
+        ),
     };
     RecomputeCheck {
         target: claim.target.clone(),
         label: claim.label.clone(),
         claimed_paise: claim.claimed_paise,
         recomputed_paise: recomputed,
+        recomputed_values: None,
         matches,
         note,
     }
@@ -157,9 +227,11 @@ pub fn check_claims(claims: &[RecomputeClaim]) -> Vec<RecomputeCheck> {
 }
 
 /// A recompute mismatch (recomputable AND wrong) — the Prime-Directive block trigger. An
-/// unrecomputable target (`recomputed_paise` is `None`) is honest-pending, never a block.
+/// unrecomputable target (nothing recomputed) is honest-pending, never a block.
 pub fn has_mismatch(checks: &[RecomputeCheck]) -> bool {
-    checks.iter().any(|c| c.recomputed_paise.is_some() && !c.matches)
+    checks
+        .iter()
+        .any(|c| (c.recomputed_paise.is_some() || c.recomputed_values.is_some()) && !c.matches)
 }
 
 /// Round integer paise to the nearest whole rupee, half up (mirror of Python `_round_rupee`).
@@ -184,7 +256,39 @@ mod claim_tests {
     use serde_json::json;
 
     fn claim(target: &str, inputs: Value, claimed: i64) -> RecomputeClaim {
-        RecomputeClaim { target: target.to_string(), inputs, claimed_paise: claimed, label: None }
+        RecomputeClaim {
+            target: target.to_string(),
+            inputs,
+            claimed_paise: claimed,
+            claimed_values: None,
+            label: None,
+        }
+    }
+
+    #[test]
+    fn multi_value_itc_setoff_verifies_and_mismatches() {
+        // IGST output 5000, IGST credit 8000 -> IGST cash 0, IGST credit remaining 3000.
+        let inputs = json!({"output": {"igst": 5000}, "credit": {"igst": 8000}});
+        let mut want = std::collections::BTreeMap::new();
+        want.insert("cash_igst".to_string(), 0i64);
+        want.insert("credit_igst".to_string(), 3000i64);
+        let ok = RecomputeClaim {
+            target: "itc_setoff".to_string(),
+            inputs: inputs.clone(),
+            claimed_paise: 0,
+            claimed_values: Some(want.clone()),
+            label: None,
+        };
+        let c = check_claim(&ok);
+        assert!(c.matches, "{}", c.note);
+        assert_eq!(c.recomputed_values.as_ref().unwrap()["cash_igst"], 0);
+
+        // A wrong claimed cash figure is a recomputable mismatch -> blocks.
+        want.insert("cash_igst".to_string(), 999);
+        let bad = RecomputeClaim { claimed_values: Some(want), ..ok };
+        let cb = check_claim(&bad);
+        assert!(!cb.matches);
+        assert!(has_mismatch(std::slice::from_ref(&cb)));
     }
 
     #[test]

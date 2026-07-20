@@ -20,6 +20,27 @@ def _days_between(later: str, earlier: str) -> int:
     return (date.fromisoformat(later) - date.fromisoformat(earlier)).days
 
 
+def itc_setoff_claim(
+    output: dict[str, int],
+    credit: dict[str, int],
+    cash: dict[str, int],
+    remaining_credit: dict[str, int],
+) -> RecomputeClaim:
+    """Multi-value recompute claim (§0.4) for a GSTR-3B ITC set-off: per-head cash payable and
+    remaining credit, matched field-wise by Mahsa (target ``itc_setoff``). Inputs are the exact
+    output + available-credit the set-off ran on."""
+    values: dict[str, int] = {}
+    for h in ("igst", "cgst", "sgst"):
+        values[f"cash_{h}"] = int(cash.get(h, 0))
+        values[f"credit_{h}"] = int(remaining_credit.get(h, 0))
+    return RecomputeClaim(
+        target="itc_setoff",
+        inputs={"output": dict(output), "credit": dict(credit)},
+        claimed_values=values,
+        label="gst.itc_setoff",
+    )
+
+
 class GstService(BaseDomainService):
     domain = "gst"
     keywords = ("gst", "gstr", "gstr-1", "gstr-3b", "itc", "e-invoice", "irn", "hsn", "gstin")
@@ -61,6 +82,10 @@ class GstService(BaseDomainService):
             "late_fee": comp["late_fee"],
             "interest": comp["interest"],
             "total_payable": comp["total_payable"],
+            # Compute-time claim (§0.4): Mahsa can independently recompute the ITC set-off.
+            "recompute_claim": itc_setoff_claim(
+                output, itc_available, comp["cash"], comp["remaining_credit"]
+            ),
         }
 
     # ---- GSTR-1 ---------------------------------------------------------------------

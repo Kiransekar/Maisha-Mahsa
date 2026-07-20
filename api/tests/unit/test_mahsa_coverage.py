@@ -10,6 +10,7 @@ PORTED = [
     "interest_234b",
     "interest_234c",
     "company_tax_115baa",
+    "itc_setoff",
 ]
 
 # A known-unported oracle target (present in the vectors, absent from PORTED).

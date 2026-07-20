@@ -51,3 +51,27 @@ def test_recompute_claims_skip_unfiled_and_on_time_returns(session):
     )
 
     assert svc.recompute_claims(session) == []
+
+
+def test_file_gstr3b_attaches_round_tripping_itc_setoff_claim(session):
+    svc = GstService()
+    res = svc.file_gstr3b(
+        session,
+        filing_period="2026-05",
+        due_date="2026-06-20",
+        output={"igst": 10000, "cgst": 5000, "sgst": 5000},
+        itc_available={"igst": 8000, "cgst": 6000, "sgst": 3000},
+        filed_date="2026-06-25",
+    )
+    claim = res["recompute_claim"]
+    assert claim.target == "itc_setoff"
+    # multi-value claim: per-head cash + remaining credit reconstruct the set-off exactly.
+    r = gst_calc.itc_setoff(claim.inputs["output"], claim.inputs["credit"])
+    flat = {}
+    for h in ("igst", "cgst", "sgst"):
+        flat[f"cash_{h}"] = r["cash"][h]
+        flat[f"credit_{h}"] = r["remaining_credit"][h]
+    assert claim.claimed_values == flat
+    assert claim.claimed_values["cash_igst"] == 1000
+    assert claim.claimed_values["cash_sgst"] == 2000
+    assert claim.claimed_paise == 0  # multi-value claim carries no single figure

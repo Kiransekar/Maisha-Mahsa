@@ -1,0 +1,39 @@
+# ITC set-off (Rule 88A) — a MULTI-VALUE recompute target: per-head cash payable + remaining
+# credit. Value from gst_calc.itc_setoff (cited primary source, §0.6(b)); ca_initials PENDING.
+# amounts are integer paise. Keys: cash_<head> / credit_<head>, heads igst/cgst/sgst.
+
+- id: itc_setoff_rule88a
+  statute: CGST Act
+  section: "49/49A/49B r/w Rule 88A"
+  source: "gst_calc.itc_setoff: IGST credit first, then CGST, then SGST; CGST/SGST never cross"
+  ca_initials: PENDING
+  ca_date: null
+  target: itc_setoff
+  # output igst 10000 / cgst 5000 / sgst 5000; credit igst 8000 / cgst 6000 / sgst 3000
+  inputs:
+    output: {igst: 10000, cgst: 5000, sgst: 5000}
+    credit: {igst: 8000, cgst: 6000, sgst: 3000}
+  expected:
+    cash_igst: 1000
+    cash_cgst: 0
+    cash_sgst: 2000
+    credit_igst: 0
+    credit_cgst: 0
+    credit_sgst: 0
+
+- id: itc_setoff_credit_carry_forward
+  statute: CGST Act
+  section: "49/49A/49B r/w Rule 88A"
+  source: "gst_calc.itc_setoff: excess IGST credit offsets all heads, remainder carries forward"
+  ca_initials: PENDING
+  ca_date: null
+  target: itc_setoff
+  # IGST credit 20000 covers all output (5000+3000+3000) -> cash nil, 9000 IGST credit remains
+  inputs:
+    output: {igst: 5000, cgst: 3000, sgst: 3000}
+    credit: {igst: 20000, cgst: 0, sgst: 0}
+  expected:
+    cash_igst: 0
+    cash_cgst: 0
+    cash_sgst: 0
+    credit_igst: 9000

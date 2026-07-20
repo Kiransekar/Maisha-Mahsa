@@ -24,6 +24,7 @@ import yaml
 
 from app.core import statutory_regime
 from app.core.statutory_wage import statutory_wage_base
+from app.domains.gst import gst_calc
 from app.domains.payables import payables_calc
 from app.domains.payroll import service as payroll_service
 from app.domains.payroll import statutory as payroll
@@ -89,6 +90,15 @@ def _company_tax_115baa(**kw: Any) -> int:
     return int(r["normal_tax"])
 
 
+def _itc_setoff(**kw: Any) -> dict[str, int]:
+    r = gst_calc.itc_setoff(kw["output"], kw["credit"])
+    flat: dict[str, int] = {}
+    for h in ("igst", "cgst", "sgst"):
+        flat[f"cash_{h}"] = int(r["cash"][h])
+        flat[f"credit_{h}"] = int(r["remaining_credit"][h])
+    return flat
+
+
 def _gratuity_hybrid(**kw: Any) -> int:
     kw = dict(kw)
     for key in ("doj", "exit_date", "boundary"):
@@ -111,6 +121,7 @@ TARGETS: dict[str, Callable[..., Any]] = {
     "interest_234b": _interest_234b,
     "interest_234c": _interest_234c,
     "company_tax_115baa": _company_tax_115baa,
+    "itc_setoff": _itc_setoff,
 }
 
 VECTOR_DIR = Path(__file__).parent / "vectors"

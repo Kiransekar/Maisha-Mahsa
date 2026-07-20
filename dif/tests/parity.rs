@@ -9,10 +9,16 @@
 //! skipped): an honest WS3.5-style report of what Mahsa cannot yet independently recompute.
 
 use mahsa::money::Paise;
-use mahsa::recompute::{gratuity_bonus, pf_esi, slab_tax, tds};
+use mahsa::recompute::{gratuity_bonus, itc, pf_esi, slab_tax, tds};
 use serde_yaml::Value;
 use std::collections::BTreeSet;
 use std::fs;
+
+fn heads(v: &Value, key: &str) -> [i64; 3] {
+    let h = v.get(key);
+    let g = |k: &str| h.and_then(|o| o.get(k)).and_then(Value::as_i64).unwrap_or(0);
+    [g("igst"), g("cgst"), g("sgst")]
+}
 
 fn vectors_dir() -> String {
     format!("{}/../api/tests/statutory_oracle/vectors", env!("CARGO_MANIFEST_DIR"))
@@ -48,7 +54,7 @@ fn ymd(v: &Value, key: &str) -> (i32, u32, u32) {
 const INCLUDED_KEYS: [&str; 3] = ["basic", "da", "retaining_allowance"];
 
 // The targets Rust recomputes so far (§WS3.1 port order).
-const PORTED: [&str; 8] = [
+const PORTED: [&str; 9] = [
     "esi",
     "statutory_wage_base",
     "tds_on_payment",
@@ -57,6 +63,7 @@ const PORTED: [&str; 8] = [
     "interest_234b",
     "interest_234c",
     "company_tax_115baa",
+    "itc_setoff",
 ];
 
 #[test]
@@ -176,6 +183,28 @@ fn rust_matches_oracle_vectors_to_the_paisa() {
                 let want = expected.as_i64().unwrap();
                 if got != want {
                     failures.push(format!("{id} company_tax_115baa: got {got} want {want}"));
+                }
+            }
+            "itc_setoff" => {
+                let (cash, rem) = itc::itc_setoff(heads(inputs, "output"), heads(inputs, "credit"));
+                let hd = ["igst", "cgst", "sgst"];
+                let get = |k: &str| -> Option<i64> {
+                    for (idx, h) in hd.iter().enumerate() {
+                        if k == format!("cash_{h}") {
+                            return Some(cash[idx]);
+                        }
+                        if k == format!("credit_{h}") {
+                            return Some(rem[idx]);
+                        }
+                    }
+                    None
+                };
+                for (k, v) in expected.as_mapping().unwrap() {
+                    let key = k.as_str().unwrap();
+                    let want = v.as_i64().unwrap();
+                    if get(key) != Some(want) {
+                        failures.push(format!("{id} itc_setoff[{key}]: got {:?} want {want}", get(key)));
+                    }
                 }
             }
             _ => unreachable!(),
