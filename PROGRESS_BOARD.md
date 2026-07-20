@@ -24,7 +24,7 @@ Governing spec: `docs/MASTER_PLAN.md` (immutable). Detail log: `PROGRESS.md`.
 - [x] WS1.C5 vault retention 8y from FY-end
 ### WS1.D — Missing sections & GST completeness
 - [x] WS1.D1 194Q/194T/TCS/206AA-AB (spec values in; TCS-goods/206AA floors BLOCKED-CA)
-- [ ] WS1.D2 QRMP · [ ] D3 CMP-08 · [x] D4 IMS · [ ] D5 late-fee caps · [ ] D6 surcharge · [x] D7 e-way · [x] D8 MSME Form-1
+- [x] WS1.D2 QRMP · [x] D3 CMP-08 · [x] D4 IMS · [ ] D5 late-fee caps(ported+Rust) · [ ] D6 surcharge(CA) · [x] D7 e-way · [x] D8 MSME Form-1
 ### WS1.E — Oracle & rule packs
 - [x] WS1.E1 oracle framework (seeded with defect vectors)
 - [~] WS1.E2 expand to 300+ CA-initialled vectors (21 seeded: 7 WS1.C + 6 WS1.A + 4 WS1.B-wage + 4 WS1.B-wiring/gratuity, all ca_initials PENDING)
@@ -42,7 +42,7 @@ Governing spec: `docs/MASTER_PLAN.md` (immutable). Detail log: `PROGRESS.md`.
 - [x] WS4.4 per-tenant hash-chain + MCA audit-trail doc
 
 ## P2 · Product & UX (WS7 · WS8 · WS9)
-- [ ] WS7.1–7.10 + WS7.V  · [ ] WS8.1–8.3  · [ ] WS9.1–9.2 · [x] WS9.3 draft-IRN honesty · [h] WS9.4 GSP (Human)
+- [ ] WS7.1–7.10 + WS7.V  · [~] WS8.1 audit pack (core slice) · [ ] WS8.2–8.3  · [ ] WS9.1 · [x] WS9.2 bank parsers · [x] WS9.3 · [h] WS9.4 GSP
 
 ## P3/P4 · Hardening, GTM (WS10 · WS11)
 - [ ] WS10.1–10.5  · [ ] WS11.1–11.3
