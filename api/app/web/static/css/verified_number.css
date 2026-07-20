@@ -1,0 +1,105 @@
+@import "tokens.css";
+
+/* Verified-Number chip + Working panel (WS7.2). Anti-silent-drift component (§WS7_UX_RESEARCH
+   T1): every figure a user can drill from "here's a number" to "here's why Mahsa stands behind
+   it" — inputs, formula/recompute, statutory citations, linked documents, the sealed verdict
+   hash, and a report-issue affordance. Built as a native <details>/<summary> disclosure — no JS,
+   no build step, accessible (keyboard-operable, screen-reader exposes expanded state) for free.
+
+   Colour rule (WS7.1 hard rule, restated): verification state uses the --c-verify* family
+   ONLY — never --c-green/--c-amber/--c-red (those mean money direction / cash health). The
+   overrides below are the actual fix for the diagnosed bug: app.css paints the legacy
+   .vmark--ok / .vmark--pending / .vmark--warn spans with money colours; we cannot edit app.css
+   (out of scope), so we win on specificity instead — every rule here is scoped under a
+   .vnum--<state> ancestor, which is strictly more specific than app.css's bare .vmark--* rules
+   and therefore applies regardless of stylesheet load order. */
+
+/* ---- Legacy badge re-paint (answer_card.html reuses the existing ✓/○/⚠ glyph + title so the
+   pre-WS7.2 badge-comprehension tests keep passing; only the colour and the "is it a chip"
+   affordance change here). Mapping per docs/WS7_DESIGN_TOKENS.md §3. ---- */
+.vnum--verified .vmark--ok { color: var(--c-verify); text-shadow: 0 0 8px var(--c-verify-glow); }
+.vnum--honest_pending .vmark--pending { color: var(--c-verify-pending); }
+.vnum--unbacked .vmark--warn { color: var(--c-verify-fail); }
+
+/* ---- The chip itself: a <details> whose <summary> is the clickable trigger. ---- */
+.vnum { display: inline-block; }
+.vnum > summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  border: 1px solid transparent;
+  transition: var(--transition);
+}
+.vnum > summary::-webkit-details-marker { display: none; }
+.vnum > summary::marker { content: ""; }
+.vnum > summary::after { content: "\203A"; opacity: 0.55; margin-left: 2px; transition: transform var(--transition); }
+.vnum[open] > summary::after { transform: rotate(90deg); }
+.vnum > summary:focus-visible { outline: 2px solid var(--c-brand); outline-offset: 2px; }
+
+.vnum--verified > summary { background: var(--c-verify-bg); }
+.vnum--verified > summary:hover { background: var(--c-verify-bg); filter: brightness(1.2); }
+.vnum--honest_pending > summary { background: var(--c-verify-pending-bg); }
+.vnum--honest_pending > summary:hover { background: var(--c-verify-pending-bg); filter: brightness(1.2); }
+.vnum--unbacked > summary { background: var(--c-verify-fail-bg); }
+.vnum--unbacked > summary:hover { background: var(--c-verify-fail-bg); filter: brightness(1.2); }
+
+.vnum-label { color: var(--c-text-muted); font-weight: 500; }
+.vnum-value { font-weight: 700; }
+
+/* The standalone chip glyph (used by the vnum_glyph macro when working_panel.html renders its
+   own summary — i.e. wherever a raw FigureVerdict/Verdict is available, not just answer_card's
+   pre-existing badge markup). Same verification family, canonical ✓/◐/✕ glyphs. */
+.vglyph--verified       { color: var(--c-verify); }
+.vglyph--honest_pending { color: var(--c-verify-pending); }
+.vglyph--unbacked       { color: var(--c-verify-fail); }
+
+/* ---- ◐ → ✓ lock-in micro-interaction. Applied by adding "vnum--lock-in" to the .vnum element
+   (e.g. an HTMX out-of-band swap once a background recompute resolves an honest-pending figure
+   to verified) — subtle, one-shot, respects reduced motion. ---- */
+@keyframes vnum-lock-in {
+  0%   { box-shadow: 0 0 0 0 var(--c-verify-glow); }
+  70%  { box-shadow: 0 0 0 10px rgba(0, 0, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0); }
+}
+.vnum--lock-in > summary { animation: vnum-lock-in 900ms ease-out 1; }
+@media (prefers-reduced-motion: reduce) {
+  .vnum--lock-in > summary { animation: none; }
+}
+
+/* ---- Working panel body: inputs -> formula/recompute -> citations -> documents -> verdict
+   hash -> report-issue. ---- */
+.vpanel {
+  margin-top: var(--sp-2);
+  padding: var(--sp-3) var(--sp-4);
+  border-radius: var(--radius-md);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border);
+  font-size: var(--fs-sm);
+  max-width: 480px;
+}
+.vpanel__section { margin-bottom: var(--sp-3); }
+.vpanel__section:last-of-type { margin-bottom: 0; }
+.vpanel__section h4 {
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--c-text-muted);
+  margin: 0 0 var(--sp-1);
+}
+.vpanel__row { display: flex; justify-content: space-between; gap: var(--sp-3); padding: 2px 0; }
+.vpanel__hash {
+  font-family: var(--font-mono);
+  font-size: var(--fs-xs);
+  color: var(--c-text-muted);
+  word-break: break-all;
+  margin: 0;
+}
+.vpanel__pending-note { color: var(--c-verify-pending); margin: 0; }
+.vpanel__docs { margin: 0; padding-left: var(--sp-4); }
+.vpanel__report { display: inline-flex; align-items: center; gap: 6px; margin-top: var(--sp-2); }

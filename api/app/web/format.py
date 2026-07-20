@@ -16,6 +16,20 @@ def is_money(key: str) -> bool:
     return key.endswith("_paise") or key in _MONEY_PAISE_KEYS
 
 
+def inr(paise: int) -> str:
+    """THE money renderer (§WS7.1). Every money surface — templates (via the ``rupees`` Jinja
+    filter), PDFs, API display — routes rupee formatting through here so grouping is always the
+    Indian lakh/crore system (``₹12,34,567.00``), never Western thousands. Delegates to the ported
+    ``Paise.format_inr`` (the Python mirror of ``dif/src/money.rs``). Never hand-assemble ``₹`` +
+    a value anywhere else; ``scripts/check_money_format.sh`` fails the build if you do."""
+    return Paise(int(paise)).format_inr()
+
+
+def inr_rupees(rupees: str | int | float) -> str:
+    """The same canonical renderer, from a rupee amount rather than integer paise."""
+    return Paise.from_rupees(rupees).format_inr()
+
+
 def humanize(key: str) -> str:
     base = key
     for suffix in ("_paise", "_rupees"):
@@ -31,12 +45,12 @@ def fmt_value(key: str, value: Any) -> str:
         return "yes" if value else "no"
     if key.endswith("_rupees"):
         try:
-            return Paise.from_rupees(value).format_inr()
+            return inr_rupees(value)
         except (ValueError, TypeError, ArithmeticError):
             return str(value)
     if is_money(key):
         try:
-            return Paise(int(value)).format_inr()
+            return inr(value)
         except (ValueError, TypeError):
             return str(value)
     return str(value)

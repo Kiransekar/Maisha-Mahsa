@@ -119,9 +119,13 @@ h1, h2, h3 { line-height: var(--lh-tight); margin: 0; letter-spacing: -0.01em; }
 .figrow__label { color: var(--c-text-muted); min-width: 180px; }
 .figrow__val { font-weight: 700; font-variant-numeric: tabular-nums; margin-left: auto; }
 .vmark { font-size: var(--fs-sm); }
-.vmark--ok { color: var(--c-green); }
-.vmark--pending { color: var(--c-text-muted); }
-.vmark--warn { color: var(--c-amber); }
+/* Verification shields are the trust family (teal/indigo/violet), STRICTLY separate from the
+   money-direction green/red/amber (docs/WS7_DESIGN_TOKENS.md §1 + WS7.V badge-comprehension gate).
+   Root fix for the diagnosed bug: repaint the base .vmark--* here so every bare usage
+   (audit.html, figures.html, recon.html) is fixed, not only the .vnum-wrapped answer card. */
+.vmark--ok { color: var(--c-verify); }
+.vmark--pending { color: var(--c-verify-pending); }
+.vmark--warn { color: var(--c-verify-fail); }
 .answer__cites { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
 .answer__verdict { margin-top: var(--sp-4); display: flex; align-items: center; gap: var(--sp-2); }
 
@@ -265,7 +269,7 @@ body::before {
 
 /* Answer card — accent rail + glass */
 .answer { border-left: 3px solid transparent; border-image: var(--metal-accent) 1; }
-.vmark--ok { text-shadow: 0 0 8px rgba(52,211,153,0.5); }
+.vmark--ok { text-shadow: 0 0 8px var(--c-verify-glow); }
 
 /* Status pills get a subtle inner bevel */
 .pill { box-shadow: var(--bevel-edge); }

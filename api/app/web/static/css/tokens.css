@@ -49,7 +49,8 @@
   /* Fine metallic grain (SVG fractal noise, very low opacity) */
   --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.025'/%3E%3C/svg%3E");
 
-  /* Brand + status accents (the Mahsa traffic-light is sacred: green/amber/red) */
+  /* Brand + status accents (the Mahsa traffic-light is sacred: green/amber/red).
+     These express MONEY DIRECTION and cash health only — up/down, safe/at-risk. */
   --c-brand: #818cf8;
   --c-brand-weak: #1e1b4b;
   --c-green: #34d399;
@@ -59,6 +60,44 @@
   --c-red: #f87171;
   --c-red-bg: #2a0f0f;
 
+  /* Verification family (§WS7.1) — the shield/trust state, a DISTINCT cool teal/indigo family
+     kept STRICTLY separate from the money-direction green/red above. A ✓/◐/✕ shield answers
+     one question — "did Mahsa independently recompute this figure to the paisa?" — NEVER "is
+     money up or down?". Conflating verification with money-direction is the documented way
+     trust products confuse users (docs/WS7_UX_RESEARCH.md T1 + badge-comprehension gate WS7.V),
+     so no --c-verify* value may equal a --c-green/--c-red value.
+       ✓ verified  = teal    (Mahsa recomputed & matched)
+       ◐ pending   = indigo  (honest-pending: Mahsa cannot yet recompute this target, §0.4)
+       ✕ unbacked  = violet  (no verified figure behind it / verdict blocked — NOT money-red) */
+  --c-verify: #2dd4bf;
+  --c-verify-bg: #042f2a;
+  --c-verify-pending: #818cf8;
+  --c-verify-pending-bg: #1e1b4b;
+  --c-verify-fail: #a78bfa;
+  --c-verify-fail-bg: #2e1065;
+  --c-verify-glow: rgba(45, 212, 191, 0.5);
+
   --nav-w: 232px;
   --transition: 160ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Tabular numerals — aligned, equal-width digits for money columns and any figure grid.
+   Money is right-aligned and stacked; proportional digits jitter the decimal point. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Light-theme companions for the verification family only (the shell stays Metallic Black;
+   these keep the teal/indigo/violet shields legible if a light surface ever renders them). */
+@media (prefers-color-scheme: light) {
+  :root {
+    --c-verify: #0f766e;
+    --c-verify-bg: #ccfbf1;
+    --c-verify-pending: #4f46e5;
+    --c-verify-pending-bg: #e0e7ff;
+    --c-verify-fail: #7c3aed;
+    --c-verify-fail-bg: #ede9fe;
+    --c-verify-glow: rgba(15, 118, 110, 0.35);
+  }
 }

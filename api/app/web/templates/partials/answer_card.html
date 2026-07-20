@@ -2,7 +2,17 @@
    mark (✓ recomputed by Mahsa / ○ shown as-is, not yet independently verifiable / ⚠ not
    fact-backed — see app.core.ask._badge + app.core.mahsa_coverage, Prime Directive §0.4),
    statutory citations, the Mahsa verdict, and provenance. Reused by /ask (page) and the
-   appbar (HTMX swap into #ask-result). #}
+   appbar (HTMX swap into #ask-result).
+
+   WS7.2: each figure's badge is now a Verified-Number chip — the exact ✓/○/⚠ glyph, title and
+   .vmark--* class are UNCHANGED (existing badge-comprehension tests pin them), but it's wrapped
+   in a <details> so it expands into the Working panel (inputs/formula/citations/documents/
+   verdict-hash/report-issue — partials/working_panel.html's vnum_body macro, reused not
+   duplicated). The money-green colour bug is fixed at root in app.css (base .vmark--* now paint
+   the verification family), so every bare usage is covered; verified_number.css keeps a
+   higher-specificity .vnum--<state> override as belt-and-suspenders. #}
+<link rel="stylesheet" href="/static/css/verified_number.css">
+{% from "partials/working_panel.html" import vnum_body %}
 <div class="answer">
   <div class="answer__prov">{{ answer.provenance }}</div>
   {% if answer.query %}<div class="answer__q">“{{ answer.query }}”</div>{% endif %}
@@ -17,13 +27,24 @@
     <div class="figrow">
       <span class="figrow__label">{{ f.label }}</span>
       <span class="figrow__val">{{ f.value }}</span>
-      {% if f.badge == "check" %}
-        <span class="vmark vmark--ok" title="recomputed by Mahsa">✓</span>
-      {% elif f.badge == "pending" %}
-        <span class="vmark vmark--pending" title="shown as-is — Mahsa cannot yet independently verify this figure">○</span>
-      {% else %}
-        <span class="vmark vmark--warn" title="not backed by a verified figure — pending review">⚠</span>
-      {% endif %}
+      {% set vstate = "verified" if f.badge == "check" else ("honest_pending" if f.badge == "pending" else "unbacked") %}
+      <details class="vnum vnum--{{ vstate }}">
+        <summary>
+          {% if f.badge == "check" %}
+            <span class="vmark vmark--ok" title="recomputed by Mahsa">✓</span>
+          {% elif f.badge == "pending" %}
+            <span class="vmark vmark--pending" title="shown as-is — Mahsa cannot yet independently verify this figure">○</span>
+          {% else %}
+            <span class="vmark vmark--warn" title="not backed by a verified figure — pending review">⚠</span>
+          {% endif %}
+        </summary>
+        {{ vnum_body({
+          "label": f.label, "value": f.value, "state": vstate,
+          "inputs": [], "formula": none, "note": none,
+          "citations": answer.citations, "documents": [],
+          "verdict_hash": none, "rule_pack_version": none,
+        }) }}
+      </details>
     </div>
     {% endfor %}
   </div>

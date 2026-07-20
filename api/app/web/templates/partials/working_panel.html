@@ -1,0 +1,117 @@
+{# Verified-Number chip + Working panel (WS7.2 — docs/WS7_UX_RESEARCH.md T1: silent number-drift
+   is the #1 MSME trust-killer; drill-to-source is the answer). Two things live here:
+
+   1. ``vnum_body(panel)`` — the panel body macro (inputs -> formula/recompute -> citations ->
+      linked documents -> the sealed Verdict hash -> report-an-issue). Import it to nest the
+      panel under a caller's own trigger — answer_card.html does this to keep its pre-existing
+      ✓/○/⚠ badge markup (and the tests that pin it) untouched while making it expandable.
+   2. The standalone render below (active when this partial is included directly with a
+      ``panel`` variable in context) — a full self-contained chip: <summary> glyph (canonical
+      ✓/◐/✕ per docs/MASTER_PLAN.md §9 WS7.1) + the same panel body. Use this wherever a raw
+      verdict is available and there's no pre-existing badge to preserve.
+
+   ``panel`` shape (driven from app.core.verify.FigureVerdict + app.core.verdict.Verdict + the
+   Citation list already produced by app.core.ask — NEVER fabricated in this template):
+     label            str    — figure name
+     value            str    — pre-formatted display value (already Indian-grouped upstream)
+     state            str    — "verified" | "honest_pending" | "unbacked"
+                                (verified <- FigureVerdict.verified; honest_pending <-
+                                FigureVerdict.honest_pending; unbacked <- neither, incl. blocked)
+     inputs           list[{label, value}]  — recompute inputs, [] if none recorded
+     formula          str|None              — recompute description, e.g. RecomputeCheck.note
+     note             str|None              — extra Mahsa note
+     citations        list[{rule_id, text, citation}]  — statute + section, [] if none
+     documents        list[{label, url}]    — linked source documents, [] if none
+     verdict_hash     str|None              — Verdict.hash; None => not yet sealed (honest)
+     rule_pack_version str|None
+#}
+
+{% macro vnum_glyph(state) -%}
+  {%- if state == "verified" -%}✓
+  {%- elif state == "honest_pending" -%}◐
+  {%- else -%}✕
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro vnum_title(state) -%}
+  {%- if state == "verified" -%}Mahsa recomputed this figure and it matched to the paisa.
+  {%- elif state == "honest_pending" -%}Mahsa cannot yet independently verify this figure.
+  {%- else -%}No verified figure behind this — unbacked, or the verdict was blocked.
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro vnum_body(panel) %}
+<div class="vpanel">
+  <div class="vpanel__section">
+    <h4>Inputs</h4>
+    {% if panel.inputs %}
+      {% for i in panel.inputs %}
+      <div class="vpanel__row"><span>{{ i.label }}</span><span class="tnum">{{ i.value }}</span></div>
+      {% endfor %}
+    {% else %}
+      <p class="muted">No inputs recorded for this figure yet.</p>
+    {% endif %}
+  </div>
+
+  <div class="vpanel__section">
+    <h4>How Mahsa computed this</h4>
+    {% if panel.state == "honest_pending" %}
+      <p class="vpanel__pending-note">◐ Mahsa cannot yet independently verify this figure — shown as-is, not endorsed.</p>
+    {% elif panel.formula %}
+      <p class="mono">{{ panel.formula }}</p>
+    {% else %}
+      <p class="muted">No recompute formula recorded.</p>
+    {% endif %}
+    {% if panel.note %}<p class="muted">{{ panel.note }}</p>{% endif %}
+  </div>
+
+  <div class="vpanel__section">
+    <h4>Citations</h4>
+    {% if panel.citations %}
+      {% for c in panel.citations %}
+      <span class="chip chip--red" title="{{ c.text }}">{{ c.rule_id }} · {{ c.citation }}</span>
+      {% endfor %}
+    {% else %}
+      <p class="muted">No statutory citation attached.</p>
+    {% endif %}
+  </div>
+
+  <div class="vpanel__section">
+    <h4>Linked documents</h4>
+    {% if panel.documents %}
+      <ul class="vpanel__docs">
+        {% for d in panel.documents %}<li><a href="{{ d.url }}">{{ d.label }}</a></li>{% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted">No documents linked.</p>
+    {% endif %}
+  </div>
+
+  <div class="vpanel__section">
+    <h4>Verdict</h4>
+    {% if panel.verdict_hash %}
+      <p class="vpanel__hash">{{ panel.verdict_hash }}</p>
+      {% if panel.rule_pack_version %}<p class="muted">Rule pack {{ panel.rule_pack_version }}</p>{% endif %}
+    {% else %}
+      <p class="muted">Not yet sealed into a Mahsa verdict.</p>
+    {% endif %}
+  </div>
+
+  <a class="btn vpanel__report"
+     href="mailto:support@maisha-mahsa.local?subject={{ ('Figure query: ' ~ panel.label) | urlencode }}&amp;body={{ ('Figure: ' ~ panel.label ~ '\nValue: ' ~ panel.value ~ '\nState: ' ~ panel.state ~ '\nVerdict hash: ' ~ (panel.verdict_hash or 'not sealed')) | urlencode }}">
+    Report an issue with this figure
+  </a>
+</div>
+{% endmacro %}
+
+{% if panel is defined %}
+<link rel="stylesheet" href="/static/css/verified_number.css">
+<details class="vnum vnum--{{ panel.state }}">
+  <summary>
+    <span class="vglyph vglyph--{{ panel.state }}" title="{{ vnum_title(panel.state) }}">{{ vnum_glyph(panel.state) }}</span>
+    <span class="vnum-label">{{ panel.label }}</span>
+    <span class="vnum-value tnum">{{ panel.value }}</span>
+  </summary>
+  {{ vnum_body(panel) }}
+</details>
+{% endif %}
