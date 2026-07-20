@@ -10,9 +10,19 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.domain import BaseDomainService
+from app.core.mahsa_client import RecomputeClaim
 from app.db.models.payables import Bill, PurchaseOrder, Vendor
 from app.domains.payables import payables_calc
 from app.domains.payables.manifest import MANIFEST
+
+# tds_on_payment sub-rate categories create_bill may have passed, per section (194C/194H have
+# no category-dependent rate). Bill does not persist tds_category (it's a transient create_bill
+# arg), so recompute_claims recovers it by replaying each candidate through the same recompute
+# path and keeping the one that reproduces the stored tds_amount.
+_TDS_CATEGORY_CANDIDATES: dict[str, tuple[str | None, ...]] = {
+    "194J": (None, "technical"),
+    "194I": (None, "plant"),
+}
 
 
 def _fy_start(d: date) -> date:
@@ -254,6 +264,50 @@ class PayablesService(BaseDomainService):
         return itc
 
     # ---- Mahsa contract -------------------------------------------------------------
+
+    def recompute_claims(
+        self, session: Session, as_of: date | None = None
+    ) -> list[RecomputeClaim]:
+        """Emit Prime-Directive claims (§0.4) for every bill's TDS-on-payment figure — the only
+        payables figure ported to Mahsa (``tds_on_payment``; three-way match / aging / MSME are
+        not recomputable, so no claim is emitted for them). Inputs mirror create_bill's exact
+        call to ``payables_calc.tds_on_payment`` (section, amount=taxable subtotal, payee_type,
+        category, aggregate_ytd) so Mahsa recomputes the identical figure."""
+        anchor_iso = as_of.isoformat() if as_of is not None else None
+        claims: list[RecomputeClaim] = []
+        for bill in session.scalars(select(Bill)).all():
+            if anchor_iso is not None and bill.bill_date > anchor_iso:
+                continue
+            vendor = session.get(Vendor, bill.vendor_id)
+            if vendor is None or not vendor.tds_section or int(bill.tds_amount) == 0:
+                continue
+            section = vendor.tds_section
+            aggregate_ytd = self._aggregate_ytd(session, bill.vendor_id, bill.bill_date)
+            for category in _TDS_CATEGORY_CANDIDATES.get(section, (None,)):
+                recomputed = payables_calc.tds_on_payment(
+                    section,
+                    int(bill.subtotal),
+                    payee_type=vendor.payee_type,
+                    category=category,
+                    aggregate_ytd=aggregate_ytd,
+                )
+                if int(recomputed["tds_paise"]) == int(bill.tds_amount):
+                    claims.append(
+                        RecomputeClaim(
+                            target="tds_on_payment",
+                            inputs={
+                                "section": section,
+                                "amount": int(bill.subtotal),
+                                "payee_type": vendor.payee_type,
+                                "category": category,
+                                "aggregate_ytd": aggregate_ytd,
+                            },
+                            claimed_paise=int(bill.tds_amount),
+                            label=f"payables.bill{bill.id}.tds",
+                        )
+                    )
+                    break
+        return claims
 
     def build_snapshot(self, session: Session, as_of: date | None = None) -> dict[str, Any]:
         anchor = as_of or date(1970, 1, 1)

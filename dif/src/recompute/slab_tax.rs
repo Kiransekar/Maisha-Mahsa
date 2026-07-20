@@ -54,11 +54,28 @@ pub fn annual_income_tax(annual_taxable: i64) -> Paise {
     Paise(crate::recompute::round_rupee(with_cess))
 }
 
+/// s.234E late fee for a TDS return: ₹200/day (20000 paise), capped at the TDS amount. Nil if
+/// not late. Mirror of app/domains/tax/tax_calc.py::late_fee_234e. Integer paise, exact.
+pub fn late_fee_234e(days_late: i64, tds_amount: i64) -> i64 {
+    if days_late <= 0 {
+        return 0;
+    }
+    (20_000 * days_late).min(tds_amount)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     // Mirrors api/tests/unit/payroll/test_statutory.py.
+
+    #[test]
+    fn late_fee_234e_and_cap() {
+        // Mirrors api/tests/unit/tax/test_tax_calc.py::test_234e_late_fee_and_cap.
+        assert_eq!(late_fee_234e(10, 5_000_000), 200_000); // ₹200×10 = ₹2,000
+        assert_eq!(late_fee_234e(1000, 500_000), 500_000); // capped at the TDS amount
+        assert_eq!(late_fee_234e(0, 5_000_000), 0); // not late
+    }
 
     #[test]
     fn zero_and_negative_taxable() {

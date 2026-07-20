@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.domain import BaseDomainService
+from app.core.mahsa_client import RecomputeClaim
 from app.db.models.payables import Bill
 from app.db.models.payroll import PayrollEntry, PayrollRun
 from app.db.models.tax import AdvanceTax, TdsEntry, TdsReturn
@@ -163,6 +164,34 @@ class TaxService(BaseDomainService):
                 late = 0
             worst = max(worst, late)
         return worst
+
+    def recompute_claims(
+        self, session: Session, as_of: date | None = None
+    ) -> list[RecomputeClaim]:
+        """Prime-Directive claims (§0.4) for every filed, late ``TdsReturn``'s s.234E late fee —
+        the only tax figure ported to Mahsa (``late_fee_234e``). ``inputs`` are the exact
+        arguments ``file_tds_return`` computed ``late_filing_fee`` on, so Mahsa recomputes the
+        identical value. Returns filed on time, or not yet filed, emit no claim. 234B/234C
+        interest and the 115BAA ITR path are not yet ported, so no claim is emitted for them
+        (they stay honest-pending elsewhere)."""
+        claims: list[RecomputeClaim] = []
+        for r in session.scalars(select(TdsReturn)).all():
+            if r.status != "filed" or not r.filed_date:
+                continue
+            filed = date.fromisoformat(r.filed_date)
+            due = date.fromisoformat(r.due_date)
+            days_late = max(0, (filed - due).days)
+            if days_late <= 0:
+                continue
+            claims.append(
+                RecomputeClaim(
+                    target="late_fee_234e",
+                    inputs={"days_late": days_late, "tds_amount": int(r.total_deducted)},
+                    claimed_paise=int(r.late_filing_fee),
+                    label=f"tax.tds_return{r.id}.late_fee_234e",
+                )
+            )
+        return claims
 
     # ---- ITR preparation & transfer pricing -----------------------------------------
 

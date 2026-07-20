@@ -73,3 +73,23 @@
   target: retention_until
   inputs: {upload_date: "2025-06-15", doc_type: "invoice"}  # FY ends 2026-03-31 -> +8y
   expected: "2034-03-31"
+
+- id: tds_194c_individual_1pct
+  statute: Income-tax Act
+  section: "194C"
+  source: "MMX-1.0 §WS1.C1 / payables_calc 194C: 1% for individual/HUF payee, 2% otherwise"
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_on_payment
+  inputs: {section: "194C", amount: 4000000, payee_type: "individual"}  # ₹40k > ₹30k single -> applies
+  expected: {applicable: true, tds_paise: 40000}  # 1% of ₹40,000 = ₹400
+
+- id: tds_194c_company_2pct
+  statute: Income-tax Act
+  section: "194C"
+  source: "MMX-1.0 §WS1.C1 / payables_calc 194C company rate 2%"
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_on_payment
+  inputs: {section: "194C", amount: 4000000, payee_type: "company"}
+  expected: {applicable: true, tds_paise: 80000}  # 2% of ₹40,000 = ₹800

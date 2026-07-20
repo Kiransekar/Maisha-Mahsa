@@ -1,0 +1,42 @@
+# WS1 — s.234E TDS-return late fee (₹200/day, capped at the TDS amount). Values mirror
+# app/domains/tax/tax_calc.py::late_fee_234e (cited primary source, §0.6(b)); ca_initials
+# PENDING until CA sign-off. Amounts are integer paise (₹200/day = 20000 paise).
+
+- id: late_fee_234e_ten_days
+  statute: Income-tax Act 1961
+  section: "234E"
+  source: "app/domains/tax/tax_calc.py::late_fee_234e (₹200/day, capped at the TDS amount)"
+  ca_initials: PENDING
+  ca_date: null
+  target: late_fee_234e
+  # 10 days late on ₹1,00,000 TDS: min(20000×10 = 200000, 10000000) = 200000 paise (₹2,000)
+  inputs:
+    days_late: 10
+    tds_amount: 10000000
+  expected: 200000
+
+- id: late_fee_234e_capped_at_tds
+  statute: Income-tax Act 1961
+  section: "234E"
+  source: "app/domains/tax/tax_calc.py::late_fee_234e (fee capped at the TDS amount)"
+  ca_initials: PENDING
+  ca_date: null
+  target: late_fee_234e
+  # 1000 days late on ₹5,000 TDS: min(20000×1000 = 20000000, 500000) = 500000 paise (capped)
+  inputs:
+    days_late: 1000
+    tds_amount: 500000
+  expected: 500000
+
+- id: late_fee_234e_not_late
+  statute: Income-tax Act 1961
+  section: "234E"
+  source: "app/domains/tax/tax_calc.py::late_fee_234e (nil when not late)"
+  ca_initials: PENDING
+  ca_date: null
+  target: late_fee_234e
+  # not late -> nil fee
+  inputs:
+    days_late: 0
+    tds_amount: 5000000
+  expected: 0

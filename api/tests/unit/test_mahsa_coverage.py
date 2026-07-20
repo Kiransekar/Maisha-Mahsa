@@ -1,7 +1,7 @@
 from app.core.mahsa_coverage import badge_state, is_recomputed, load_coverage
 
-# The four targets Rust recomputes today (dif/tests/parity.rs PORTED, §WS3.1).
-PORTED = ["esi", "statutory_wage_base", "tds_on_payment", "gratuity_hybrid"]
+# The targets Rust recomputes today (dif/tests/parity.rs PORTED, §WS3.1).
+PORTED = ["esi", "statutory_wage_base", "tds_on_payment", "gratuity_hybrid", "late_fee_234e"]
 
 # A known-unported oracle target (present in the vectors, absent from PORTED).
 UNPORTED = ["itr_computation", "retention_until"]

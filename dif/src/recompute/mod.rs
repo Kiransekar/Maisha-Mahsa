@@ -84,9 +84,16 @@ fn recompute(target: &str, inp: &Value) -> Option<i64> {
         "pf_employer" => pf_esi::pf_employer(gi(inp, "basic_monthly")).0,
         "eps_employer" => pf_esi::eps_employer(gi(inp, "basic_monthly")).0,
         "annual_income_tax" => slab_tax::annual_income_tax(gi(inp, "annual_taxable")).0,
+        "late_fee_234e" => slab_tax::late_fee_234e(gi(inp, "days_late"), gi(inp, "tds_amount")),
         "tds_on_payment" => {
             let ytd = inp.get("aggregate_ytd").and_then(Value::as_i64).unwrap_or(0);
-            tds::tds_on_payment(gs(inp, "section")?, gi(inp, "amount"), gs(inp, "category"), ytd)
+            tds::tds_on_payment(
+                gs(inp, "section")?,
+                gi(inp, "amount"),
+                gs(inp, "payee_type").unwrap_or("company"),
+                gs(inp, "category"),
+                ytd,
+            )
                 .tds_paise
                 .0
         }

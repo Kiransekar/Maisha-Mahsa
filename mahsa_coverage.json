@@ -9,6 +9,7 @@
     "form_name": {"ported": false},
     "gratuity_hybrid": {"ported": true},
     "itr_computation": {"ported": false},
+    "late_fee_234e": {"ported": true},
     "payroll_components": {"ported": false},
     "regime_for": {"ported": false},
     "retention_until": {"ported": false},

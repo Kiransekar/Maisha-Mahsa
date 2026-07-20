@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.domain import BaseDomainService
+from app.core.mahsa_client import RecomputeClaim
 from app.db.models.gst import GstReturn, ItcRegister
 from app.domains.gst import gst_calc
 from app.domains.gst.manifest import MANIFEST
@@ -83,6 +84,41 @@ class GstService(BaseDomainService):
         }
 
     # ---- Mahsa contract -------------------------------------------------------------
+
+    def recompute_claims(
+        self, session: Session, as_of: date | None = None
+    ) -> list[RecomputeClaim]:
+        """Prime-Directive claims (§0.4) for filed GSTR-3B interest — the GST figure Mahsa can
+        independently reconstruct (``interest_3b`` in ``dif/src/recompute/gst_fees.rs``). Inputs
+        (cash_tax = persisted ``tax_payable``, days_late from filed/due dates) are exactly what
+        ``file_gstr3b`` computed the interest on, so Mahsa recomputes the identical figure and
+        BLOCKs on any mismatch.
+
+        ``late_fee_3b`` is deliberately NOT claimed: its ``is_nil`` flag (nil vs regular return —
+        different rate and cap) is a caller-supplied argument that is not persisted on
+        ``GstReturn``, and ``tax_payable == 0`` is only a proxy for it (a return can have zero
+        cash after full ITC set-off yet not be a NIL return). Rather than emit a claim on a
+        guessed input that could falsely BLOCK a correct late fee, the late fee stays
+        honest-pending. GSTR-1 / ITC set-off are likewise not single-value recompute targets."""
+        claims: list[RecomputeClaim] = []
+        returns = session.scalars(
+            select(GstReturn).where(GstReturn.return_type == "GSTR-3B")
+        ).all()
+        for ret in returns:
+            if not ret.filed_date:
+                continue
+            days_late = max(0, _days_between(ret.filed_date, ret.due_date))
+            if days_late <= 0:
+                continue
+            claims.append(
+                RecomputeClaim(
+                    target="interest_3b",
+                    inputs={"cash_tax": int(ret.tax_payable), "days_late": days_late},
+                    claimed_paise=int(ret.interest),
+                    label=f"gst.return{ret.id}.interest_3b",
+                )
+            )
+        return claims
 
     def build_snapshot(self, session: Session, as_of: date | None = None) -> dict[str, Any]:
         anchor = as_of or date(1970, 1, 1)

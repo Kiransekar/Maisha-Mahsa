@@ -9,7 +9,7 @@
 //! skipped): an honest WS3.5-style report of what Mahsa cannot yet independently recompute.
 
 use mahsa::money::Paise;
-use mahsa::recompute::{gratuity_bonus, pf_esi, tds};
+use mahsa::recompute::{gratuity_bonus, pf_esi, slab_tax, tds};
 use serde_yaml::Value;
 use std::collections::BTreeSet;
 use std::fs;
@@ -47,8 +47,9 @@ fn ymd(v: &Value, key: &str) -> (i32, u32, u32) {
 
 const INCLUDED_KEYS: [&str; 3] = ["basic", "da", "retaining_allowance"];
 
-// The four targets Rust recomputes so far (§WS3.1 port order).
-const PORTED: [&str; 4] = ["esi", "statutory_wage_base", "tds_on_payment", "gratuity_hybrid"];
+// The targets Rust recomputes so far (§WS3.1 port order).
+const PORTED: [&str; 5] =
+    ["esi", "statutory_wage_base", "tds_on_payment", "gratuity_hybrid", "late_fee_234e"];
 
 #[test]
 fn rust_matches_oracle_vectors_to_the_paisa() {
@@ -106,9 +107,10 @@ fn rust_matches_oracle_vectors_to_the_paisa() {
             "tds_on_payment" => {
                 let section = inputs.get("section").and_then(Value::as_str).unwrap();
                 let amount = i(inputs, "amount");
+                let payee = inputs.get("payee_type").and_then(Value::as_str).unwrap_or("company");
                 let category = inputs.get("category").and_then(Value::as_str);
                 let ytd = i_or(inputs, "aggregate_ytd", 0);
-                let got = tds::tds_on_payment(section, amount, category, ytd);
+                let got = tds::tds_on_payment(section, amount, payee, category, ytd);
                 let want_appl = expected.get("applicable").and_then(Value::as_bool).unwrap();
                 let want_tds = expected.get("tds_paise").and_then(Value::as_i64).unwrap();
                 if got.applicable != want_appl || got.tds_paise != Paise(want_tds) {
@@ -129,6 +131,13 @@ fn rust_matches_oracle_vectors_to_the_paisa() {
                 let want = expected.as_i64().unwrap();
                 if got.0 != want {
                     failures.push(format!("{id} gratuity_hybrid: got {} want {want}", got.0));
+                }
+            }
+            "late_fee_234e" => {
+                let got = slab_tax::late_fee_234e(i(inputs, "days_late"), i(inputs, "tds_amount"));
+                let want = expected.as_i64().unwrap();
+                if got != want {
+                    failures.push(format!("{id} late_fee_234e: got {got} want {want}"));
                 }
             }
             _ => unreachable!(),

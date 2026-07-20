@@ -69,6 +69,10 @@ def _payroll_components(**kw: Any) -> dict[str, int]:
     return payroll_service.compute_components(**kw)
 
 
+def _late_fee_234e(**kw: Any) -> int:
+    return int(tax_calc.late_fee_234e(**kw))
+
+
 def _gratuity_hybrid(**kw: Any) -> int:
     kw = dict(kw)
     for key in ("doj", "exit_date", "boundary"):
@@ -87,6 +91,7 @@ TARGETS: dict[str, Callable[..., Any]] = {
     "statutory_wage_base": _wage_base,
     "payroll_components": _payroll_components,
     "gratuity_hybrid": _gratuity_hybrid,
+    "late_fee_234e": _late_fee_234e,
 }
 
 VECTOR_DIR = Path(__file__).parent / "vectors"
