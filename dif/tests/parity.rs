@@ -48,8 +48,16 @@ fn ymd(v: &Value, key: &str) -> (i32, u32, u32) {
 const INCLUDED_KEYS: [&str; 3] = ["basic", "da", "retaining_allowance"];
 
 // The targets Rust recomputes so far (§WS3.1 port order).
-const PORTED: [&str; 5] =
-    ["esi", "statutory_wage_base", "tds_on_payment", "gratuity_hybrid", "late_fee_234e"];
+const PORTED: [&str; 8] = [
+    "esi",
+    "statutory_wage_base",
+    "tds_on_payment",
+    "gratuity_hybrid",
+    "late_fee_234e",
+    "interest_234b",
+    "interest_234c",
+    "company_tax_115baa",
+];
 
 #[test]
 fn rust_matches_oracle_vectors_to_the_paisa() {
@@ -138,6 +146,36 @@ fn rust_matches_oracle_vectors_to_the_paisa() {
                 let want = expected.as_i64().unwrap();
                 if got != want {
                     failures.push(format!("{id} late_fee_234e: got {got} want {want}"));
+                }
+            }
+            "interest_234b" => {
+                let got = slab_tax::interest_234b(
+                    i(inputs, "assessed_tax"),
+                    i(inputs, "advance_paid"),
+                    i(inputs, "months"),
+                );
+                let want = expected.as_i64().unwrap();
+                if got != want {
+                    failures.push(format!("{id} interest_234b: got {got} want {want}"));
+                }
+            }
+            "interest_234c" => {
+                let paid: Vec<i64> = inputs
+                    .get("cumulative_paid")
+                    .and_then(Value::as_sequence)
+                    .map(|a| a.iter().map(|v| v.as_i64().unwrap_or(0)).collect())
+                    .unwrap_or_default();
+                let got = slab_tax::interest_234c(i(inputs, "total_liability"), &paid);
+                let want = expected.as_i64().unwrap();
+                if got != want {
+                    failures.push(format!("{id} interest_234c: got {got} want {want}"));
+                }
+            }
+            "company_tax_115baa" => {
+                let got = slab_tax::company_tax_115baa(i(inputs, "total_income"));
+                let want = expected.as_i64().unwrap();
+                if got != want {
+                    failures.push(format!("{id} company_tax_115baa: got {got} want {want}"));
                 }
             }
             _ => unreachable!(),

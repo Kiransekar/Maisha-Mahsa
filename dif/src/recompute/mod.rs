@@ -84,6 +84,18 @@ fn recompute(target: &str, inp: &Value) -> Option<i64> {
         "pf_employer" => pf_esi::pf_employer(gi(inp, "basic_monthly")).0,
         "eps_employer" => pf_esi::eps_employer(gi(inp, "basic_monthly")).0,
         "annual_income_tax" => slab_tax::annual_income_tax(gi(inp, "annual_taxable")).0,
+        "interest_234b" => {
+            slab_tax::interest_234b(gi(inp, "assessed_tax"), gi(inp, "advance_paid"), gi(inp, "months"))
+        }
+        "interest_234c" => {
+            let paid: Vec<i64> = inp
+                .get("cumulative_paid")
+                .and_then(Value::as_array)
+                .map(|a| a.iter().map(|v| v.as_i64().unwrap_or(0)).collect())
+                .unwrap_or_default();
+            slab_tax::interest_234c(gi(inp, "total_liability"), &paid)
+        }
+        "company_tax_115baa" => slab_tax::company_tax_115baa(gi(inp, "total_income")),
         "late_fee_234e" => slab_tax::late_fee_234e(gi(inp, "days_late"), gi(inp, "tds_amount")),
         "tds_on_payment" => {
             let ytd = inp.get("aggregate_ytd").and_then(Value::as_i64).unwrap_or(0);

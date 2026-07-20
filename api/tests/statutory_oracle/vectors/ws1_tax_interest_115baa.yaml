@@ -1,0 +1,54 @@
+# s.234B / s.234C interest and s.115BAA company tax — recomputable single figures (§WS3.1
+# extension). Values computed from the existing Python tax_calc (cited primary source, §0.6(b));
+# ca_initials PENDING. amounts are integer paise.
+
+- id: interest_234b_applies
+  statute: Income-tax Act
+  section: "234B"
+  source: "tax_calc.interest_234b: 1%/month on shortfall (rounded down to ₹100) when advance < 90%"
+  ca_initials: PENDING
+  ca_date: null
+  target: interest_234b
+  # assessed ₹5L, advance ₹1L (<90% of ₹5L), 5 months -> shortfall ₹4L × 1% × 5 = ₹20,000
+  inputs: {assessed_tax: 50000000, advance_paid: 10000000, months: 5}
+  expected: 2000000
+
+- id: interest_234b_relief_above_90pct
+  statute: Income-tax Act
+  section: "234B"
+  source: "tax_calc.interest_234b: no interest when advance >= 90% of assessed"
+  ca_initials: PENDING
+  ca_date: null
+  target: interest_234b
+  inputs: {assessed_tax: 50000000, advance_paid: 45000000, months: 5}
+  expected: 0
+
+- id: interest_234c_full_shortfall
+  statute: Income-tax Act
+  section: "234C"
+  source: "tax_calc.interest_234c: total ₹20,200 on ₹4,00,000 liability, nothing paid (test_234c)"
+  ca_initials: PENDING
+  ca_date: null
+  target: interest_234c
+  inputs: {total_liability: 40000000, cumulative_paid: [0, 0, 0, 0]}
+  expected: 2020000
+
+- id: interest_234c_on_schedule_nil
+  statute: Income-tax Act
+  section: "234C"
+  source: "tax_calc.interest_234c: nil when each installment reaches its relief floor"
+  ca_initials: PENDING
+  ca_date: null
+  target: interest_234c
+  inputs: {total_liability: 40000000, cumulative_paid: [6000000, 18000000, 30000000, 40000000]}
+  expected: 0
+
+- id: company_tax_115baa_1cr
+  statute: Income-tax Act
+  section: "115BAA"
+  source: "MMX-1.0 §WS1.C4 (22% + 10% surcharge + 4% cess = 25.168%); tax_calc.itr_computation normal_tax"
+  ca_initials: PENDING
+  ca_date: null
+  target: company_tax_115baa
+  inputs: {total_income: 1000000000}  # ₹1,00,00,000 -> 25.168% = ₹25,16,800
+  expected: 251680000

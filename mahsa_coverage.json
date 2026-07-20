@@ -5,9 +5,12 @@
     "targets_from": "api/tests/statutory_oracle/vectors/*.yaml"
   },
   "targets": {
+    "company_tax_115baa": {"ported": true},
     "esi": {"ported": true},
     "form_name": {"ported": false},
     "gratuity_hybrid": {"ported": true},
+    "interest_234b": {"ported": true},
+    "interest_234c": {"ported": true},
     "itr_computation": {"ported": false},
     "late_fee_234e": {"ported": true},
     "payroll_components": {"ported": false},

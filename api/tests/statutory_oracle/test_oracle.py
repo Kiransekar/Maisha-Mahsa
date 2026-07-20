@@ -73,6 +73,22 @@ def _late_fee_234e(**kw: Any) -> int:
     return int(tax_calc.late_fee_234e(**kw))
 
 
+def _interest_234b(**kw: Any) -> int:
+    r = tax_calc.interest_234b(kw["assessed_tax"], kw["advance_paid"], months=kw["months"])
+    return int(r["interest"])
+
+
+def _interest_234c(**kw: Any) -> int:
+    return int(tax_calc.interest_234c(kw["total_liability"], kw["cumulative_paid"])["total_234c"])
+
+
+def _company_tax_115baa(**kw: Any) -> int:
+    r = tax_calc.itr_computation(
+        entity_type="company", gross_total_income=kw["total_income"], regime_115baa=True
+    )
+    return int(r["normal_tax"])
+
+
 def _gratuity_hybrid(**kw: Any) -> int:
     kw = dict(kw)
     for key in ("doj", "exit_date", "boundary"):
@@ -92,6 +108,9 @@ TARGETS: dict[str, Callable[..., Any]] = {
     "payroll_components": _payroll_components,
     "gratuity_hybrid": _gratuity_hybrid,
     "late_fee_234e": _late_fee_234e,
+    "interest_234b": _interest_234b,
+    "interest_234c": _interest_234c,
+    "company_tax_115baa": _company_tax_115baa,
 }
 
 VECTOR_DIR = Path(__file__).parent / "vectors"
