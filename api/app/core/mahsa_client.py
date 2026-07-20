@@ -43,6 +43,30 @@ class Validation(BaseModel):
     triggered: list[TriggeredRule] = Field(default_factory=list)
 
 
+class RecomputeClaim(BaseModel):
+    """A figure Maisha computed, for Mahsa to independently recompute (§0.4). ``inputs`` fields
+    match the recompute path's arguments (see dif/src/recompute)."""
+
+    target: str
+    inputs: dict[str, Any] = Field(default_factory=dict)
+    claimed_paise: int
+    label: str | None = None
+
+
+class RecomputeCheck(BaseModel):
+    target: str
+    label: str | None = None
+    claimed_paise: int
+    recomputed_paise: int | None = None  # None => Mahsa can't recompute → honest-pending (◐)
+    matches: bool
+    note: str
+
+    @property
+    def honest_pending(self) -> bool:
+        """True when Mahsa could not independently recompute this figure (render ◐, not ✕)."""
+        return self.recomputed_paise is None
+
+
 class FoldResult(BaseModel):
     global_intent: list[float]
     global_dims: list[str]
@@ -51,6 +75,7 @@ class FoldResult(BaseModel):
     validation: Validation
     shape: ResponseShape
     rules_version: str
+    recompute: list[RecomputeCheck] = Field(default_factory=list)
 
     def verdict(self, figures: list[Figure], *, org_id: str) -> Verdict:
         """Seal the Mahsa-recomputed ``figures`` into a Verdict for UI badges / PDF seals /
@@ -85,6 +110,7 @@ class MahsaClient:
         domain: str | None = None,
         query: str | None = None,
         rules_version: str | None = None,
+        recompute_claims: list[RecomputeClaim] | None = None,
     ) -> FoldResult:
         payload: dict[str, Any] = {"snapshot": snapshot}
         if domain is not None:
@@ -93,6 +119,11 @@ class MahsaClient:
             payload["query"] = query
         if rules_version is not None:
             payload["rules_version"] = rules_version
+        if recompute_claims:
+            # Prime-Directive claims: Mahsa recomputes each and BLOCKs on a mismatch (§0.4).
+            payload["recompute_claims"] = [
+                c.model_dump(exclude_none=True) for c in recompute_claims
+            ]
 
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             try:

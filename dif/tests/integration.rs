@@ -330,3 +330,57 @@ async fn fold_without_domain_runs_global_only() {
     assert!(v["domain_intent"].is_null());
     assert_eq!(v["shape"]["layout"], "global");
 }
+
+#[tokio::test]
+async fn fold_recompute_mismatch_blocks() {
+    // Prime-Directive gate (§0.4): a claimed figure Mahsa recomputes differently must BLOCK.
+    // 194J TDS on ₹50,000 is 10% = ₹5,000 (500000 paise); claim a wrong ₹9,999.99.
+    let (status, v) = post_fold(json!({
+        "snapshot": { "cash": 50000000, "monthly_burn": 2000000, "monthly_revenue": 3000000 },
+        "recompute_claims": [
+            { "target": "tds_on_payment", "inputs": { "section": "194J", "amount": 5000000 },
+              "claimed_paise": 999999, "label": "payables.tds_194j" }
+        ]
+    }))
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(v["validation"]["status"], "red");
+    assert_eq!(v["shape"]["requires_approval"], true);
+    assert!(v["validation"]["triggered"].as_array().unwrap()
+        .iter().any(|t| t["id"] == "MAHSA-PARITY-001"));
+    let checks = v["recompute"].as_array().unwrap();
+    assert_eq!(checks[0]["matches"], false);
+    assert_eq!(checks[0]["recomputed_paise"], 500000);
+}
+
+#[tokio::test]
+async fn fold_recompute_correct_claim_does_not_block() {
+    // A correct claim verifies to the paisa and adds no MAHSA-PARITY block.
+    let (status, v) = post_fold(json!({
+        "snapshot": { "cash": 50000000, "monthly_burn": 2000000, "monthly_revenue": 3000000 },
+        "recompute_claims": [
+            { "target": "esi_employee", "inputs": { "gross_monthly": 2000100 }, "claimed_paise": 15100 }
+        ]
+    }))
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(v["recompute"][0]["matches"], true);
+    assert!(!v["validation"]["triggered"].as_array().unwrap()
+        .iter().any(|t| t["id"] == "MAHSA-PARITY-001"));
+}
+
+#[tokio::test]
+async fn fold_unrecomputable_claim_is_honest_pending_not_blocked() {
+    // A target Mahsa cannot recompute stays honest-pending (◐) — it must NOT block.
+    let (status, v) = post_fold(json!({
+        "snapshot": { "cash": 50000000, "monthly_burn": 2000000, "monthly_revenue": 3000000 },
+        "recompute_claims": [
+            { "target": "itr_computation", "inputs": {}, "claimed_paise": 251680000 }
+        ]
+    }))
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(v["recompute"][0]["recomputed_paise"].is_null());
+    assert!(!v["validation"]["triggered"].as_array().unwrap()
+        .iter().any(|t| t["id"] == "MAHSA-PARITY-001"));
+}

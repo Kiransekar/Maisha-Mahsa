@@ -3,9 +3,10 @@
 
 use crate::fold::fold;
 use crate::intent::{IntentVec, GLOBAL_DIMS};
+use crate::recompute::{check_claims, has_mismatch, RecomputeCheck};
 use crate::snapshot::{Domain, FoldRequest};
 use crate::unfold::{unfold, ResponseShape};
-use crate::validate::{validate, RuleSet, Validation};
+use crate::validate::{validate, RuleSet, Severity, TriggeredRule, Validation, ValidationStatus};
 use axum::{
     extract::{DefaultBodyLimit, State},
     routing::{get, post},
@@ -36,6 +37,8 @@ pub struct FoldResponse {
     pub validation: Validation,
     pub shape: ResponseShape,
     pub rules_version: String,
+    /// Per-claim recomputation results (§0.4). Empty when the request sent no claims.
+    pub recompute: Vec<RecomputeCheck>,
 }
 
 pub fn build_router(rules: RuleSet) -> Router {
@@ -65,7 +68,41 @@ async fn fold_handler(
 ) -> Json<FoldResponse> {
     let domain = req.domain.as_deref().and_then(Domain::parse);
     let f = fold(&req.snapshot, domain);
-    let v = validate(&f.global, &req.snapshot, domain, &st.rules);
+    let mut v = validate(&f.global, &req.snapshot, domain, &st.rules);
+
+    // Prime-Directive gate (§0.4): Mahsa independently recomputes every claimed figure. A
+    // recomputable mismatch BLOCKS (the figure never reaches a human as ✓); an unrecomputable
+    // target stays honest-pending. Escalate the verdict BEFORE unfold so the shape reflects it.
+    let recompute = check_claims(&req.recompute_claims);
+    if has_mismatch(&recompute) {
+        let diag = recompute
+            .iter()
+            .filter(|c| c.recomputed_paise.is_some() && !c.matches)
+            .map(|c| {
+                format!(
+                    "{}: claimed {} vs recomputed {}",
+                    c.label.clone().unwrap_or_else(|| c.target.clone()),
+                    c.claimed_paise,
+                    c.recomputed_paise.unwrap(),
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("; ");
+        v.triggered.insert(
+            0,
+            TriggeredRule {
+                id: "MAHSA-PARITY-001".to_string(),
+                domain: domain.map(|d| d.as_str().to_string()).unwrap_or_else(|| "global".to_string()),
+                severity: Severity::Block,
+                description: format!("Recomputation mismatch — figure blocked pending correction. {diag}"),
+                statute: "Mahsa Prime Directive".to_string(),
+                section: "MMX-1.0 §0.4".to_string(),
+                action: "block".to_string(),
+            },
+        );
+        v.status = ValidationStatus::Red;
+    }
+
     let shape = unfold(&f, &v);
     Json(FoldResponse {
         global_intent: f.global,
@@ -75,5 +112,6 @@ async fn fold_handler(
         validation: v,
         shape,
         rules_version: st.rules.version.clone(),
+        recompute,
     })
 }

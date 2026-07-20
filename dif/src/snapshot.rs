@@ -186,6 +186,10 @@ pub struct FoldRequest {
     pub snapshot: Snapshot,
     #[serde(default)]
     pub rules_version: Option<String>,
+    /// Prime-Directive claims: figures Maisha computed, for Mahsa to independently recompute
+    /// and block on mismatch (§0.4). Empty (the default) preserves the prior /fold behaviour.
+    #[serde(default)]
+    pub recompute_claims: Vec<crate::recompute::RecomputeClaim>,
 }
 
 #[cfg(test)]
