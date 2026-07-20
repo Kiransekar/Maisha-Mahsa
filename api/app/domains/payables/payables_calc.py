@@ -90,6 +90,131 @@ def tds_on_payment(
     return {"applicable": True, "rate": rate, "tds_paise": tds}
 
 
+# ---- WS1.D1: 194Q / 194T / TCS s.394 / 206AA-206AB overlay -------------------------------
+#
+# NEW sections, kept separate from the ported ``tds_on_payment`` / ``_TDS_SECTIONS`` engine
+# (194C/J/H/I) so the Py↔Rust recompute parity on that engine is untouched. Values that MMX-1.0
+# §WS1.D1 states explicitly are inlined below; values it does NOT state are parameters with a
+# ``None`` default that RAISES when the rule fires — never a silent wrong (or zero) deduction.
+# See docs/SPEC-WS1D1.md.
+
+# §WS1.D1: 194Q applies to purchases *exceeding* ₹50 lakh from a vendor in the FY. The same
+# ₹50L crossing governs the TDS-primacy interplay with TCS 206C(1H)/s.394.
+_PURCHASE_TDS_THRESHOLD = 5000000_00  # ₹50,00,000 (MMX-1.0 §WS1.D1)
+_RATE_194Q = Decimal("0.1")  # 0.1% (MMX-1.0 §WS1.D1)
+_RATE_194T = Decimal("10")  # 10% (MMX-1.0 §WS1.D1)
+_THRESHOLD_194T = 20000_00  # ₹20,000 partner-payment threshold (MMX-1.0 §WS1.D1)
+
+
+def _excess_over_threshold(amount: int, aggregate_ytd: int, threshold: int) -> int:
+    """Incremental portion of this ``amount`` that lands *above* ``threshold`` given the FY
+    running total ``aggregate_ytd`` already booked before it. Exact, in paise. Strictly-above
+    semantics: at an aggregate of exactly ``threshold`` the excess is 0 (boundary excluded)."""
+    prior_taxed = max(0, aggregate_ytd - threshold)
+    new_taxed = max(0, aggregate_ytd + amount - threshold)
+    return new_taxed - prior_taxed
+
+
+def tds_194q(amount: int, *, aggregate_ytd: int = 0) -> dict[str, Any]:
+    """194Q — buyer's TDS @0.1% on purchase value *exceeding* ₹50L per vendor per FY (MMX-1.0
+    §WS1.D1). ``amount`` is this purchase (taxable value, ex-GST); ``aggregate_ytd`` is the FY
+    running purchase total from this vendor booked before it. TDS falls only on the slice above
+    ₹50L. When 194Q bites, TCS 206C(1H)/s.394 does NOT — TDS primacy — surfaced as
+    ``tcs_206c_1h_suppressed``."""
+    amount = int(amount)
+    base = _excess_over_threshold(amount, int(aggregate_ytd), _PURCHASE_TDS_THRESHOLD)
+    applies = base > 0
+    tds = _round_rupee(Decimal(base) * _RATE_194Q / 100) if applies else 0
+    return {
+        "applicable": applies,
+        "section": "194Q",
+        "rate": _RATE_194Q,
+        "taxable_paise": base,
+        "tds_paise": tds,
+        # TDS primacy: 194Q liability displaces the seller's 206C(1H)/s.394 collection.
+        "tcs_206c_1h_suppressed": applies,
+    }
+
+
+def tds_194t(amount: int, *, aggregate_ytd: int = 0) -> dict[str, Any]:
+    """194T — TDS @10% on partner remuneration/interest/commission *exceeding* ₹20,000 in the FY
+    (MMX-1.0 §WS1.D1). Once the FY aggregate crosses ₹20,000 the tax is on the full payment
+    ``amount``. Strictly-above: an aggregate of exactly ₹20,000 does not trigger."""
+    amount = int(amount)
+    applies = (int(aggregate_ytd) + amount) > _THRESHOLD_194T
+    tds = _round_rupee(Decimal(amount) * _RATE_194T / 100) if applies else 0
+    return {
+        "applicable": applies,
+        "section": "194T",
+        "rate": _RATE_194T,
+        "tds_paise": tds,
+    }
+
+
+def tcs_394_goods(
+    amount: int, *, aggregate_ytd: int = 0, rate: Decimal | str | None = None,
+    threshold: int | None = None,
+) -> dict[str, Any]:
+    """TCS on sale of goods — Income-tax Act 2025 s.394 (ex-206C(1H)). STRUCTURE ONLY: the rate
+    and the receipt threshold are statutory and are NOT stated in MMX-1.0 §WS1.D1 → BLOCKED-CA.
+    Both must be supplied from a CA-initialled oracle vector (§0.6); a fired rule with either
+    missing RAISES rather than collect the wrong amount. Same 'excess over threshold' mechanic
+    as 194Q."""
+    if rate is None:
+        raise ValueError("TCS s.394 rate is BLOCKED-CA (§0.6): supply the CA-sourced rate")
+    if threshold is None:
+        raise ValueError(
+            "TCS s.394 threshold is BLOCKED-CA (§0.6): supply the CA-sourced threshold"
+        )
+    amount = int(amount)
+    rate_d = Decimal(str(rate))
+    base = _excess_over_threshold(amount, int(aggregate_ytd), int(threshold))
+    applies = base > 0
+    tcs = _round_rupee(Decimal(base) * rate_d / 100) if applies else 0
+    return {
+        "applicable": applies,
+        "section": "394",
+        "rate": rate_d,
+        "taxable_paise": base,
+        "tcs_paise": tcs,
+    }
+
+
+def apply_higher_rate(
+    base_rate: Decimal | str,
+    pan_available: bool,
+    is_non_filer: bool,
+    *,
+    no_pan_rate: Decimal | str | None = None,
+    non_filer_rate: Decimal | str | None = None,
+) -> Decimal:
+    """206AA / 206AB higher-rate overlay (MMX-1.0 §WS1.D1). Pure rate resolver a caller applies
+    on top of any section's base rate — deliberately NOT baked into ``tds_on_payment``.
+
+    Effective rate = the highest of ``base_rate`` and each triggered statutory floor:
+      • no PAN → 206AA floor  • non-filer → 206AB floor (both can stack; the higher wins).
+
+    The 206AA/206AB floor rates (e.g. the fixed percent, or 'twice the applicable rate') are
+    statutory and are NOT stated in MMX-1.0 §WS1.D1 → BLOCKED-CA. When an overlay fires its
+    floor must be supplied (CA-sourced, §0.6); a missing floor RAISES rather than silently
+    under-deduct. With PAN present and a filer, no statutory number is needed and ``base_rate``
+    passes through unchanged."""
+    rate = Decimal(str(base_rate))
+    if not pan_available:
+        if no_pan_rate is None:
+            raise ValueError(
+                "206AA no-PAN floor is BLOCKED-CA (§0.6): supply CA-sourced no_pan_rate"
+            )
+        rate = max(rate, Decimal(str(no_pan_rate)))
+    if is_non_filer:
+        if non_filer_rate is None:
+            raise ValueError(
+                "206AB non-filer floor is BLOCKED-CA (§0.6): supply CA-sourced non_filer_rate"
+            )
+        rate = max(rate, Decimal(str(non_filer_rate)))
+    return rate
+
+
 def three_way_match(
     po_amount: int, bill_amount: int, *, grn_amount: int | None = None, tolerance_pct: float = 5.0
 ) -> dict[str, Any]:

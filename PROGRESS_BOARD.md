@@ -23,8 +23,8 @@ Governing spec: `docs/MASTER_PLAN.md` (immutable). Detail log: `PROGRESS.md`.
 - [x] WS1.C4 115BAA 25.168% + MAT excluded
 - [x] WS1.C5 vault retention 8y from FY-end
 ### WS1.D — Missing sections & GST completeness
-- [ ] WS1.D1 194Q/194T/TCS/206AA-AB
-- [ ] WS1.D2 QRMP  · [ ] D3 CMP-08 · [ ] D4 IMS · [ ] D5 late-fee caps · [ ] D6 surcharge ladder · [ ] D7 e-way · [x] D8 MSME Form-1
+- [x] WS1.D1 194Q/194T/TCS/206AA-AB (spec values in; TCS-goods/206AA floors BLOCKED-CA)
+- [ ] WS1.D2 QRMP · [ ] D3 CMP-08 · [x] D4 IMS · [ ] D5 late-fee caps · [ ] D6 surcharge · [x] D7 e-way · [x] D8 MSME Form-1
 ### WS1.E — Oracle & rule packs
 - [x] WS1.E1 oracle framework (seeded with defect vectors)
 - [~] WS1.E2 expand to 300+ CA-initialled vectors (21 seeded: 7 WS1.C + 6 WS1.A + 4 WS1.B-wage + 4 WS1.B-wiring/gratuity, all ca_initials PENDING)
