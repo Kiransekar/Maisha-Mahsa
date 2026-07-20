@@ -37,7 +37,7 @@ Governing spec: `docs/MASTER_PLAN.md` (immutable). Detail log: `PROGRESS.md`.
 - [x] WS3.3 kill default-healthy · [x] WS3.4 verdict object · [x] WS3.5 honest-state wiring (coverage json + tri-state badges)
 
 ## P1 · Platform (WS4 tenancy · WS5 RBAC · WS6 entitlements)
-- [ ] WS4.1–4.8  · [ ] WS5.1–5.3  · [ ] WS6.1–6.4
+- [x] WS4.1 tenancy schema + RLS (live red-team proven) · [ ] WS4.2–4.8  · [ ] WS5.1–5.3  · [ ] WS6.1–6.4
 
 ## P2 · Product & UX (WS7 · WS8 · WS9)
 - [ ] WS7.1–7.10 + WS7.V  · [ ] WS8.1–8.3  · [ ] WS9.1–9.2 · [x] WS9.3 draft-IRN honesty · [h] WS9.4 GSP (Human)

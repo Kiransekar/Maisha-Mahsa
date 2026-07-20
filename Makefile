@@ -58,9 +58,10 @@ lint: gates ## ruff + mypy + clippy + statutory grep-gates (warnings are errors)
 	cd api && .venv/bin/ruff check . && .venv/bin/mypy app evals
 	cd dif && $(CARGO) clippy --all-targets -- -D warnings
 
-gates: ## MMX-1.0 grep-gates (QG.3): truncate-then-round, draft-IRN honesty, etc.
+gates: ## MMX-1.0 grep-gates (QG.3): truncate-then-round, draft-IRN honesty, RLS coverage, etc.
 	bash scripts/check_no_truncate_round.sh
 	bash scripts/check_no_draft_irn.sh
+	bash scripts/check_rls_coverage.sh
 
 fmt: ## Format Rust + Python
 	cd dif && $(CARGO) fmt
