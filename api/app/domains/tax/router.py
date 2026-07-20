@@ -9,10 +9,11 @@ from sqlalchemy.orm import Session
 
 from app.core.loop import run_loop
 from app.core.mahsa_client import MahsaClient
+from app.core.verify import verify_figure
 from app.db.session import get_session
 from app.deps import get_mahsa
 from app.domains.tax.schemas import Interest234cInput, TdsReturnInput, TdsReturnResult
-from app.domains.tax.service import TaxService
+from app.domains.tax.service import TaxService, interest_234c_claim
 from app.domains.tax.tax_calc import interest_234c
 
 router = APIRouter(prefix="/api/tax", tags=["tax"])
@@ -39,8 +40,17 @@ def tds_summary(month: str, db: Session = Depends(get_session)) -> dict:
 
 
 @router.post("/advance-tax/234c")
-def compute_234c(body: Interest234cInput) -> dict:
-    return interest_234c(body.total_liability, body.cumulative_paid)
+async def compute_234c(
+    body: Interest234cInput, mahsa: MahsaClient = Depends(get_mahsa)
+) -> dict:
+    # Golden Rule: the s.234C figure reaches the caller only after Mahsa independently
+    # recomputes it. A mismatch blocks; Mahsa unreachable raises (never silently unverified).
+    result = interest_234c(body.total_liability, body.cumulative_paid)
+    claim = interest_234c_claim(
+        body.total_liability, body.cumulative_paid, result["total_234c"]
+    )
+    verdict = await verify_figure(mahsa, claim)
+    return {**result, "verified": verdict.verified, "mahsa_blocked": verdict.blocked}
 
 
 @router.post("/fold")
