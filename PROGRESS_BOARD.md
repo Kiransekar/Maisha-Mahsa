@@ -33,7 +33,7 @@ Governing spec: `docs/MASTER_PLAN.md` (immutable). Detail log: `PROGRESS.md`.
 ## P0/P3 · WS2 state packs · WS3 Mahsa recomputation
 - [ ] WS2.1–2.4
 - [x] WS3.1 Rust recompute port (6 paths, parity harness; itr/regime/retention still Python-only)
-- [~] WS3.2 parity gate (vector-parity live via tests/parity.rs; randomized Py↔Rust fuzz TODO)
+- [x] WS3.2 parity gate — vector-parity (tests/parity.rs) + live /fold recompute BLOCK + randomized Py↔Rust fuzz (tests/integration/test_parity_fuzz.py, ~5100 seeded paise-granular cases/run over 9 targets incl. multi-value itc)
 - [x] WS3.3 kill default-healthy · [x] WS3.4 verdict object · [x] WS3.5 honest-state wiring (coverage json + tri-state badges)
 
 ## P1 · Platform (WS4 tenancy · WS5 RBAC · WS6 entitlements)
