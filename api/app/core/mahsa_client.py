@@ -8,6 +8,8 @@ from typing import Any
 import httpx
 from pydantic import BaseModel, Field
 
+from app.core.verdict import Figure, Verdict, build_verdict
+
 
 class Banner(BaseModel):
     severity: str
@@ -49,6 +51,12 @@ class FoldResult(BaseModel):
     validation: Validation
     shape: ResponseShape
     rules_version: str
+
+    def verdict(self, figures: list[Figure], *, org_id: str) -> Verdict:
+        """Seal the Mahsa-recomputed ``figures`` into a Verdict for UI badges / PDF seals /
+        audit chain. The rule-pack version comes from this validated result; ``org_id`` MUST be
+        the session-context org (§0.8), never a request-body value."""
+        return build_verdict(figures, self.rules_version, org_id=org_id)
 
 
 class MahsaError(RuntimeError):

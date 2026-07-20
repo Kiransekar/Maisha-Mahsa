@@ -3,14 +3,26 @@
 //! early_pay_discount_capture, vendor_concentration, recurring_spend, dispute_rate.
 //!
 //! The Python service computes each health signal (AP aging, MSME ageing, 3-way match
-//! coverage, concentration) and passes it via the snapshot `metrics` bag. Missing signals
-//! default to healthy.
+//! coverage, concentration) and passes it via the snapshot `metrics` bag. A missing signal
+//! folds to `0.0` (worst): an absent domain signal is "unknown", never healthy (§0.4).
 
 use crate::intent::IntentVec;
 use crate::snapshot::Snapshot;
 
+/// The health signals this fold expects in the snapshot `metrics` bag (drives completeness).
+pub const EXPECTED_SIGNALS: &[&str] = &[
+    "ap_turnover",
+    "msme_compliance",
+    "tds_deposit_status",
+    "po_coverage",
+    "early_pay_discount_capture",
+    "vendor_concentration",
+    "recurring_spend",
+    "dispute_rate",
+];
+
 fn health(s: &Snapshot, key: &str) -> f64 {
-    s.metric(key).unwrap_or(1.0).clamp(0.0, 1.0)
+    s.metric(key).unwrap_or(0.0).clamp(0.0, 1.0)
 }
 
 pub fn fold_payables(s: &Snapshot) -> IntentVec {
@@ -32,11 +44,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn defaults_to_healthy_and_is_deterministic() {
+    fn absent_signals_fold_degraded_not_healthy() {
+        // §0.4: an absent domain signal is unknown, never healthy.
         let s = Snapshot::default();
         let v = fold_payables(&s);
         assert!(v.is_normalized());
-        assert_eq!(v.score(), 100.0);
+        assert_eq!(v.score(), 0.0);
         assert_eq!(v, fold_payables(&s));
     }
 

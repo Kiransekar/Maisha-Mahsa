@@ -5,6 +5,10 @@
 use crate::intent::IntentVec;
 use crate::snapshot::Snapshot;
 
+/// Metric-bag health signals the global fold expects (the other dimensions derive from
+/// typed fields). Drives the completeness check in fold/mod.rs when no domain is supplied.
+pub const EXPECTED_SIGNALS: &[&str] = &["tax_efficiency"];
+
 /// Smoothly map a "more is better" value onto `[0,1]` saturating at `good`.
 fn ramp_up(value: f64, good: f64) -> f64 {
     if good <= 0.0 {
@@ -38,8 +42,9 @@ pub fn fold_global(s: &Snapshot) -> IntentVec {
     let concentration_penalty = s.largest_account_share.clamp(0.0, 1.0);
     let risk_exposure = (liquidity * 0.6 + invert(concentration_penalty) * 0.4).clamp(0.0, 1.0);
 
-    // tax_efficiency: proxy from the metric bag (set by the tax domain); neutral default.
-    let tax_efficiency = s.metric("tax_efficiency").unwrap_or(0.5).clamp(0.0, 1.0);
+    // tax_efficiency: proxy from the metric bag (set by the tax domain). Absent = unknown =
+    // worst (0.0), never assume efficient (§0.4).
+    let tax_efficiency = s.metric("tax_efficiency").unwrap_or(0.0).clamp(0.0, 1.0);
 
     // compliance: overdue filings drag the score; each overdue filing costs 0.2.
     let compliance = (1.0 - s.overdue_filings as f64 * 0.2).clamp(0.0, 1.0);

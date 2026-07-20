@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.core.domain import BaseDomainService
 from app.core.mahsa_client import MahsaClient, MahsaError
+from app.core.mahsa_coverage import badge_state
 from app.core.router import DomainRouter
 from app.llm.client import build_client
 from app.llm.maisha import ClaimProducer, MaishaGenerator
@@ -32,6 +33,11 @@ class Figure:
     label: str
     value: str
     verified: bool  # the number is backed by a deterministic fact (Golden Rule, made visible)
+    # Tri-state honest-state mark (Prime Directive §0.4 — never ✓ without Mahsa recomputation):
+    # "check" = Mahsa (Rust) independently recomputed this to the paisa; "pending" = a real,
+    # fact-backed figure Mahsa can't yet independently verify (shown as-is, not hidden);
+    # "warn" = not even backed by a deterministic fact.
+    badge: str
 
 
 @dataclass(frozen=True)
@@ -65,13 +71,27 @@ def _build_snapshot(
         return service.build_snapshot(session)
 
 
+def _badge(target: str, fact_backed: bool) -> str:
+    """"warn" if the figure isn't even backed by a deterministic fact (the more severe,
+    genuinely-unbacked case); otherwise driven by mahsa_coverage.badge_state — "check" only
+    when Mahsa independently recomputed ``target``, else "pending" (honest, shown as-is)."""
+    if not fact_backed:
+        return "warn"
+    return "check" if badge_state(target) == "verified" else "pending"
+
+
 def _figures(facts: dict[str, Any], claim: ActionClaim | None) -> list[Figure]:
     if claim is not None and claim.claims and not claim.abstained:
         allowed = allowed_values(facts)
-        return [Figure(humanize(k), fmt_value(k, v), v in allowed) for k, v in claim.claims.items()]
-    # No LLM draft (or it abstained): show the deterministic facts, all verified by construction.
+        return [
+            Figure(humanize(k), fmt_value(k, v), v in allowed, _badge(k, v in allowed))
+            for k, v in claim.claims.items()
+        ]
+    # No LLM draft (or it abstained): the deterministic facts are all fact-backed ("verified"
+    # in that sense), but that alone doesn't earn a ✓ — the badge still asks mahsa_coverage
+    # whether Rust independently recomputed each one.
     return [
-        Figure(humanize(k), fmt_value(k, v), True)
+        Figure(humanize(k), fmt_value(k, v), True, _badge(k, True))
         for k, v in sorted(facts.items())
         if k != "as_of"
     ]

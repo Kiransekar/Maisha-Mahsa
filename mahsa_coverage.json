@@ -1,0 +1,18 @@
+{
+  "_note": "GENERATED from dif/tests/parity.rs PORTED array + api/tests/statutory_oracle/vectors/*.yaml oracle targets. ported=true iff the target is in parity.rs's PORTED list (Rust independently recomputes it and the parity gate asserts it to the paisa). Regenerate by re-running WS3.5a's derivation whenever PORTED or the oracle vectors change — do not hand-edit ported values without updating both sources of truth.",
+  "source": {
+    "ported_from": "dif/tests/parity.rs::PORTED",
+    "targets_from": "api/tests/statutory_oracle/vectors/*.yaml"
+  },
+  "targets": {
+    "esi": {"ported": true},
+    "form_name": {"ported": false},
+    "gratuity_hybrid": {"ported": true},
+    "itr_computation": {"ported": false},
+    "payroll_components": {"ported": false},
+    "regime_for": {"ported": false},
+    "retention_until": {"ported": false},
+    "statutory_wage_base": {"ported": true},
+    "tds_on_payment": {"ported": true}
+  }
+}

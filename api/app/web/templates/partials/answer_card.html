@@ -1,4 +1,6 @@
-{# The Maisha answer card — renders the harness pipeline: figures with verified marks,
+{# The Maisha answer card — renders the harness pipeline: figures with a tri-state honest
+   mark (✓ recomputed by Mahsa / ○ shown as-is, not yet independently verifiable / ⚠ not
+   fact-backed — see app.core.ask._badge + app.core.mahsa_coverage, Prime Directive §0.4),
    statutory citations, the Mahsa verdict, and provenance. Reused by /ask (page) and the
    appbar (HTMX swap into #ask-result). #}
 <div class="answer">
@@ -15,8 +17,10 @@
     <div class="figrow">
       <span class="figrow__label">{{ f.label }}</span>
       <span class="figrow__val">{{ f.value }}</span>
-      {% if f.verified %}
-        <span class="vmark vmark--ok" title="recomputed by a deterministic engine">✓</span>
+      {% if f.badge == "check" %}
+        <span class="vmark vmark--ok" title="recomputed by Mahsa">✓</span>
+      {% elif f.badge == "pending" %}
+        <span class="vmark vmark--pending" title="shown as-is — Mahsa cannot yet independently verify this figure">○</span>
       {% else %}
         <span class="vmark vmark--warn" title="not backed by a verified figure — pending review">⚠</span>
       {% endif %}

@@ -4,14 +4,17 @@ and degrades cleanly when a domain can't be classified."""
 from __future__ import annotations
 
 from datetime import date
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
+from jinja2 import Environment, FileSystemLoader
 from sqlalchemy.orm import Session
 
-from app.core.ask import answer_query
+from app.core.ask import Answer, Figure, _badge, answer_query
 from app.core.mahsa_client import FoldResult, ResponseShape, TriggeredRule, Validation
+from app.core.mahsa_coverage import load_coverage
 from app.db.models.gst import GstReturn
 from app.domains import build_registry
 from app.llm.schema import ActionClaim
@@ -117,3 +120,44 @@ async def test_answer_query_unroutable_abstains(session: Session) -> None:
     assert answer.domain is None
     assert answer.abstained is True
     assert answer.figures == []
+
+
+# ---- WS3.5b: honest-state badge, tri-state driven off mahsa_coverage (§0.4) ----------------
+
+# Pull a ported and an unported target straight from the coverage map itself (not a literal
+# guess) so this test tracks mahsa_coverage.json rather than assuming any specific target.
+_COVERAGE_TARGETS = load_coverage()["targets"]
+_PORTED_TARGET = next(name for name, e in _COVERAGE_TARGETS.items() if e["ported"])
+_UNPORTED_TARGET = next(name for name, e in _COVERAGE_TARGETS.items() if not e["ported"])
+
+_TEMPLATES_DIR = Path(__file__).resolve().parents[3] / "app" / "web" / "templates"
+_env = Environment(loader=FileSystemLoader(str(_TEMPLATES_DIR)), autoescape=True)
+
+
+def test_badge_is_coverage_driven_not_hardcoded() -> None:
+    # A fact-backed figure whose key IS a Mahsa-recomputed target -> "check".
+    assert _badge(_PORTED_TARGET, fact_backed=True) == "check"
+    # A fact-backed figure whose key is a known-but-not-yet-ported target -> "pending".
+    assert _badge(_UNPORTED_TARGET, fact_backed=True) == "pending"
+    # An unknown target defaults to "pending" too (mahsa_coverage's own honest default),
+    # never "check" by omission.
+    assert _badge("not_a_real_target", fact_backed=True) == "pending"
+    # Not even fact-backed -> "warn", regardless of what mahsa_coverage says.
+    assert _badge(_PORTED_TARGET, fact_backed=False) == "warn"
+
+
+def test_answer_card_renders_hollow_circle_for_pending_and_check_for_recomputed() -> None:
+    figures = [
+        Figure("Recomputed figure", "₹1.00", True, _badge(_PORTED_TARGET, True)),
+        Figure("Pending figure", "₹2.00", True, _badge(_UNPORTED_TARGET, True)),
+        Figure("Unbacked figure", "₹3.00", False, _badge(_PORTED_TARGET, False)),
+    ]
+    answer = Answer(
+        query="q", domain="payroll", figures=figures, provenance="test",
+    )
+    html = _env.get_template("partials/answer_card.html").render(answer=answer)
+
+    assert "✓" in html  # recomputed by Mahsa
+    assert "○" in html  # honest-pending: shown as-is, not yet independently verifiable
+    assert "⚠" in html  # genuinely unbacked
+    assert "Mahsa cannot yet independently verify this figure" in html
