@@ -3,7 +3,8 @@
 Feature registry (every domain-manifest feature + a small platform baseline) → a
 cumulative plan map (Basics ⊂ Startup ⊂ Growth) stored as DATA in ``plans.yaml`` →
 enforcement helpers: :func:`is_entitled`, the middleware-shaped :func:`guard`, the
-statutory-grace override, and a :func:`quantity_gate` stub.
+statutory-grace override, and :func:`quantity_gate` (WS6.2 — headcount/seats/entities
+soft-warn -> grace -> block-with-upgrade progression).
 
 Design invariants
 -----------------
@@ -225,7 +226,7 @@ def guard(plan: str, feature: str) -> GuardDecision:
     )
 
 
-# --- quantity gates (stub — full engine is WS6.2) ----------------------------
+# --- quantity gates (WS6.2) ---------------------------------------------------
 
 
 class GateState(enum.StrEnum):
@@ -259,10 +260,15 @@ class GateDecision:
 def quantity_gate(
     kind: str, current: int, plan: str, *, warn_ratio: float = 0.8, grace_band: int = 2
 ) -> GateDecision:
-    """Soft-warn → grace → block for a countable resource (WS6.2 stub).
+    """Soft-warn → grace → block for a countable resource (headcount/seats/entities, WS6.2).
 
     ``warn_ratio`` of the limit → SOFT_WARN; over the limit but within ``grace_band`` →
-    GRACE (still allowed); beyond that → BLOCK-with-upgrade. The ceiling is always visible.
+    GRACE (still allowed); beyond that → BLOCK-with-upgrade. The ceiling and reason are
+    ALWAYS visible on the returned :class:`GateDecision` (``visible`` is always True, at
+    every state including OK) — a locked/approaching limit is never hidden from the caller.
+    ``upsell`` names the lowest plan whose ceiling clears ``current``, surfaced once the
+    gate actually matters (GRACE/BLOCK), skipping a plan whose ceiling still can't absorb
+    the count (e.g. entities can skip Startup straight to Growth).
     """
     if kind not in QUANTITY_LIMITS:
         raise ValueError(f"unknown quantity gate {kind!r}; expected {sorted(QUANTITY_LIMITS)}")
