@@ -16,8 +16,10 @@
         <a class="nav__item {{ 'is-active' if nav_active == key }}" href="{{ href }}"
            {% if nav_active == key %}aria-current="page"{% endif %}>{{ label }}</a>
       {% endmacro %}
+      {{ navitem('today', '/today', 'Today') }}
       {{ navitem('dashboard', '/', 'Dashboard') }}
       {{ navitem('ask', '/ask', 'Ask Maisha') }}
+      {{ navitem('inbox', '/inbox', 'Exception Inbox') }}
       {{ navitem('approvals', '/approvals', 'Approvals') }}
       {{ navitem('cfo', '/cfo', 'CFO Strategy') }}
       {{ navitem('investor', '/investor', 'Investor Update') }}

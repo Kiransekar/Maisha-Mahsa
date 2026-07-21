@@ -1,0 +1,52 @@
+/* WS7.5 Exception Inbox — extends the Metallic Black theme. Money direction stays in the
+   green/red family; the ✕ on a blocked figure uses the verification family (verified_number.css),
+   never money-red. */
+
+.inbox-offline { color: var(--c-amber); }
+
+.qsec { margin-bottom: var(--sp-6); }
+.qsec__head { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-3); }
+.qsec__head h2 { font-size: var(--fs-md); margin: 0; }
+.qsec__count {
+  min-width: 22px; text-align: center; padding: 1px 7px; border-radius: 999px;
+  font-size: var(--fs-xs); font-weight: 700; background: var(--c-brand-weak); color: var(--c-brand);
+}
+.qsec__count.is-zero { background: var(--c-surface-2); color: var(--c-text-muted); }
+.qsec__stub { font-size: var(--fs-xs); background: var(--c-surface-2); color: var(--c-text-muted); }
+.qsec__empty { padding: var(--sp-3) 0; }
+.qsec__stubnote { font-size: var(--fs-xs); font-style: italic; }
+
+.qbulk__bar {
+  display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;
+  padding: var(--sp-3); margin-bottom: var(--sp-3);
+  background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius-md);
+}
+
+.ex-item {
+  display: flex; align-items: flex-start; gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4); margin-bottom: var(--sp-2);
+  background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius-md);
+  box-shadow: var(--bevel-top);
+}
+.ex-item__check { padding-top: 2px; }
+.ex-item__glyph { font-size: 1.1rem; line-height: 1.4; }
+.ex-item__body { flex: 1 1 auto; min-width: 0; }
+.ex-item__what { font-weight: 600; margin: 0 0 var(--sp-1); }
+.ex-item__when, .ex-item__detail { font-size: var(--fs-sm); margin: 0 0 var(--sp-1); }
+.ex-item__impact { font-size: var(--fs-sm); margin: var(--sp-1) 0 0; }
+.ex-item__action { flex: 0 0 auto; align-self: center; }
+
+.bulk-preview {
+  padding: var(--sp-4); margin-bottom: var(--sp-5);
+  background: var(--c-surface-2); border: 1px solid var(--c-brand); border-radius: var(--radius-md);
+}
+.bulk-preview.is-committed { border-color: var(--c-green); }
+.bulk-preview h3 { margin: 0 0 var(--sp-3); font-size: var(--fs-base); }
+.bulk-preview__table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.bulk-preview__table th, .bulk-preview__table td {
+  text-align: left; padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--c-border);
+}
+.bulk-preview__table .num { text-align: right; }
+.bulk-preview__skipped { margin-top: var(--sp-3); font-size: var(--fs-sm); }
+.bulk-preview__confirm { margin-top: var(--sp-4); }
+.inbox-toast { color: var(--c-text-muted); margin-bottom: var(--sp-3); }

@@ -56,7 +56,9 @@ from app.domains.vault.router import router as vault_router
 from app.llm.tools import enrich
 from app.web.actions import actions_for, find_action
 from app.web.charts import sparkline
+from app.web.exceptions_router import router as inbox_router
 from app.web.format import fact_rows, humanize
+from app.web.today_router import router as today_router
 
 _WEB = Path(__file__).parent / "web"
 templates = Jinja2Templates(directory=str(_WEB / "templates"))
@@ -176,6 +178,8 @@ def create_app() -> FastAPI:
     app.include_router(expense_router)
     app.include_router(vault_router)
     app.include_router(cfo_router)
+    app.include_router(today_router)
+    app.include_router(inbox_router)
 
     registry = build_registry()
 

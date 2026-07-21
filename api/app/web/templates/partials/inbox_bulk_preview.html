@@ -1,0 +1,50 @@
+{# WS7.5 bulk-op PREVIEW (dry-run). Lists the exact rows that will change and the total ₹
+   impact BEFORE anything commits — never a silent bulk mutation. Confirm re-posts the same
+   ids with confirm=true; only then does the router seal decisions to the audit chain. #}
+{% if toast %}<p class="inbox-toast">{{ toast }}</p>{% endif %}
+{% if preview and (preview.rows or preview.skipped) %}
+<div class="bulk-preview {{ 'is-committed' if preview.committed }}">
+  <h3>
+    {% if preview.committed %}
+      Applied — {{ preview.rows | length }} {{ preview.action }} decision(s) sealed.
+    {% else %}
+      Preview — nothing has changed yet
+    {% endif %}
+  </h3>
+
+  {% if preview.rows %}
+  <table class="bulk-preview__table">
+    <thead><tr><th>Item</th><th>What will change</th><th class="num">₹ impact</th></tr></thead>
+    <tbody>
+      {% for r in preview.rows %}
+      <tr>
+        <td>{{ r.what }}</td>
+        <td class="muted">{{ r.will }}</td>
+        <td class="num tnum">{% if r.impact_paise is not none %}{{ r.impact_paise | rupees }}{% else %}—{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr><td colspan="2"><strong>Total impact</strong></td>
+      <td class="num tnum"><strong>{{ preview.total_impact_paise | rupees }}</strong></td></tr>
+    </tfoot>
+  </table>
+  {% endif %}
+
+  {% if preview.skipped %}
+  <p class="muted bulk-preview__skipped">
+    Skipped (not eligible for a bulk {{ preview.action }}):
+    {% for r in preview.skipped %}{{ r.what }}{{ "; " if not loop.last }}{% endfor %}
+  </p>
+  {% endif %}
+
+  {% if not preview.committed and preview.rows %}
+  <form class="bulk-preview__confirm" hx-post="/inbox/bulk" hx-target="#bulk-preview" hx-swap="innerHTML">
+    {% for id in preview.eligible_ids %}<input type="hidden" name="ids" value="{{ id }}">{% endfor %}
+    <input type="hidden" name="action" value="{{ preview.action }}">
+    <input type="hidden" name="confirm" value="true">
+    <button type="submit" class="btn btn--primary">Confirm — {{ preview.action }} {{ preview.rows | length }} item(s)</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}

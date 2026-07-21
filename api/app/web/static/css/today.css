@@ -1,0 +1,69 @@
+/* WS7.3 — Today view. Layout only; colours come from tokens.css. Verification state (◐ indigo)
+   is kept in the --c-verify* family, money impact (cost) in the sacred money-red — the two are
+   never mixed (WS7.1 rule). */
+
+.today-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-2);
+}
+.today-strip > .vnum {
+  flex: 1 1 220px;
+  min-width: 200px;
+}
+.today-note { margin-bottom: var(--sp-5); }
+
+.today-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.today-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-md);
+}
+.today-item--overdue { border-left: 3px solid var(--c-red); }
+.today-item__main { min-width: 0; }
+.today-item__title {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  font-weight: 600;
+  text-transform: capitalize;
+}
+.today-item__what { color: var(--c-text-muted); margin-top: 2px; }
+.today-item__conseq { margin-top: 4px; display: flex; align-items: baseline; gap: var(--sp-2); flex-wrap: wrap; }
+.today-item__action { white-space: nowrap; flex: 0 0 auto; }
+
+/* money impact — the cost — in the money family (red), never the verify family */
+.today-cost { color: var(--c-red); font-weight: 600; }
+/* verification pending — the ◐ note — in the verify family (indigo), never money-red */
+.vpending { color: var(--c-verify-pending); font-size: var(--fs-sm); }
+
+.today-avoided {
+  margin-top: var(--sp-6);
+  padding: var(--sp-4);
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border);
+  border-radius: var(--radius-lg);
+  max-width: 420px;
+}
+.today-avoided__head { display: flex; align-items: center; gap: var(--sp-2); }
+.today-avoided__label { font-weight: 600; }
+.today-avoided__value { font-size: var(--fs-xl); font-weight: 700; margin-top: 4px; }
+.today-avoided__basis { margin-top: 4px; }
+/* the estimate badge — deliberately NOT a ✓/teal verified pill; neutral + indigo pending hue */
+.today-est {
+  background: var(--c-verify-pending-bg);
+  color: var(--c-verify-pending);
+  border: 1px solid var(--c-verify-pending);
+}
+
+.today-foot { margin-top: var(--sp-6); }

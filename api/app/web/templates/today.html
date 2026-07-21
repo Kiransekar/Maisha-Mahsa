@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}Today · {{ settings.app_name }}{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="/static/css/today.css">
+
+<div class="topbar">
+  <h1>Today</h1>
+  <span class="muted">as of {{ as_of }}</span>
+</div>
+
+{% if not mahsa_up %}
+<div class="banner banner--red" role="alert">
+  Mahsa sidecar unreachable — the Needs-you queue can't be recomputed right now, so it may be
+  incomplete. Cash and deadlines below are direct reads and remain accurate.
+</div>
+{% endif %}
+
+{# ── 1 · CASH STRIP ─────────────────────────────────────────────────────────────── #}
+<div class="section-title">Cash</div>
+<div class="today-strip">
+  {% for panel in cash_strip %}
+    {% with panel=panel %}{% include "partials/working_panel.html" %}{% endwith %}
+  {% endfor %}
+</div>
+<p class="muted today-note">◐ = honest-pending: shown as-is, not yet independently sealed by Mahsa.</p>
+
+{# ── 2 · NEEDS-YOU QUEUE ────────────────────────────────────────────────────────── #}
+<div class="section-title">Needs you ({{ needs_you|length }})</div>
+{% if needs_you_empty %}
+<p class="muted today-empty">Nothing needs you right now. You're clear.</p>
+{% else %}
+<div class="today-list">
+  {% for item in needs_you %}
+  <div class="today-item">
+    <div class="today-item__main">
+      <div class="today-item__title">{{ item.title }}
+        <span class="pill pill--{{ item.color }}">{{ item.domain|upper }}</span>
+      </div>
+      <div class="today-item__what">{{ item.what }}</div>
+      <div class="today-item__conseq vpending">◐ {{ item.consequence }}</div>
+    </div>
+    <a class="btn today-item__action" href="{{ item.action_href }}">{{ item.action_label }} →</a>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{# ── 3 · TROUBLE RADAR ──────────────────────────────────────────────────────────── #}
+<div class="section-title">Trouble radar ({{ trouble|length }})</div>
+{% if trouble %}
+<div class="today-list">
+  {% for t in trouble %}
+  <div class="today-item {{ 'today-item--overdue' if t.overdue }}">
+    <div class="today-item__main">
+      <div class="today-item__title">{{ t.what }}
+        {% if t.overdue %}<span class="pill pill--red">OVERDUE</span>{% endif %}
+      </div>
+      <div class="today-item__what">{{ t.when }}</div>
+      <div class="today-item__conseq">
+        {% if t.consequence_paise is not none %}
+          <span class="today-cost tnum">{{ t.consequence_paise | rupees }}</span>
+          {% if t.consequence_kind == "recorded" %}
+            <span class="muted today-conseq-note">recorded penalty for this form</span>
+          {% elif t.consequence_kind == "accruing" %}
+            <span class="vpending">◐ late fee accruing (statutory estimate)</span>
+          {% else %}
+            <span class="vpending">◐ up to, if missed (statutory cap)</span>
+          {% endif %}
+        {% else %}
+          <span class="vpending">◐ late fee accrues — ₹ amount pending</span>
+        {% endif %}
+      </div>
+    </div>
+    <a class="btn today-item__action" href="{{ t.action_href }}">{{ t.action_label }} →</a>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p class="muted today-empty">No deadlines or risks on the radar. You're clear.</p>
+{% endif %}
+
+{# ── PENALTIES-AVOIDED COUNTER (explicit ESTIMATE, badge-backed) ─────────────────── #}
+<div class="today-avoided">
+  <div class="today-avoided__head">
+    <span class="today-avoided__label">Penalties avoided</span>
+    <span class="pill today-est">EST.</span>
+  </div>
+  <div class="today-avoided__value tnum">{{ penalties_avoided.amount_paise | rupees }}</div>
+  <div class="muted today-avoided__basis">
+    Estimated, not a sealed figure — {{ penalties_avoided.basis }}.
+  </div>
+</div>
+
+<p class="muted today-foot">
+  Mahsa is the gatekeeper. Every ✓ figure is recomputed by the Rust DIF core; a ◐ figure is
+  shown honestly as pending, never endorsed as verified.
+</p>
+{% endblock %}

@@ -42,7 +42,7 @@ Governing spec: `docs/MASTER_PLAN.md` (immutable). Detail log: `PROGRESS.md`.
 - [x] WS4.4 per-tenant hash-chain + MCA audit-trail doc
 
 ## P2 · Product & UX (WS7 · WS8 · WS9)
-- [x] WS7 UX research · [x] WS7.1 design tokens+lakh/crore · [x] WS7.2 Verified-Number chip · [ ] WS7.3–7.9 · [h] WS7.10 i18n (deferred, English-only for now) · [ ] WS7.V  · [~] WS8.1 audit pack (core slice) · [ ] WS8.2–8.3  · [ ] WS9.1 · [x] WS9.2 bank parsers · [x] WS9.3 · [h] WS9.4 GSP
+- [x] WS7 UX research · [x] WS7.1 design tokens+lakh/crore · [x] WS7.2 Verified-Number chip · [x] WS7.3 Today view · [x] WS7.5 Exception Inbox · [ ] WS7.4/7.6-7.9 · [h] WS7.10 i18n (deferred, English-only for now) · [ ] WS7.V  · [~] WS8.1 audit pack (core slice) · [ ] WS8.2–8.3  · [ ] WS9.1 · [x] WS9.2 bank parsers · [x] WS9.3 · [h] WS9.4 GSP
 
 ## P3/P4 · Hardening, GTM (WS10 · WS11)
 - [ ] WS10.1–10.5  · [ ] WS11.1–11.3

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% from "partials/working_panel.html" import vnum_glyph %}
+{% block title %}Exception Inbox · {{ settings.app_name }}{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="/static/css/verified_number.css">
+<link rel="stylesheet" href="/static/css/exception_inbox.css">
+
+{% macro inbox_item(item, selectable) %}
+<article class="ex-item">
+  {% if selectable %}
+    <label class="ex-item__check"><input type="checkbox" name="ids" value="{{ item.id }}" aria-label="select item"></label>
+  {% elif item.verify_state %}
+    <span class="ex-item__glyph vglyph vglyph--{{ item.verify_state }}">{{ vnum_glyph(item.verify_state) }}</span>
+  {% endif %}
+  <div class="ex-item__body">
+    <p class="ex-item__what">{{ item.what }}</p>
+    {% if item.when %}<p class="ex-item__when muted">{{ item.when }}</p>{% endif %}
+    {% if item.detail %}<p class="ex-item__detail muted">{{ item.detail }}</p>{% endif %}
+    <p class="ex-item__impact">
+      {% if item.impact_paise is not none %}
+        {{ item.impact_label }} <span class="tnum">{{ item.impact_paise | rupees }}</span>
+      {% else %}
+        <span class="muted">{{ item.impact_label }}</span>
+      {% endif %}
+    </p>
+  </div>
+  <a class="btn ex-item__action" href="/d/{{ item.domain }}">{{ item.action_label }}</a>
+</article>
+{% endmacro %}
+
+<div class="page-head"><h1>Exception Inbox</h1></div>
+<p class="muted" style="margin-bottom:var(--sp-5)">
+  Everything that needs a decision, ranked by rupee impact. Each item states what happened,
+  the ₹ at stake, and one next action. Bulk actions always show a preview of exactly what will
+  change before anything is sealed.
+  {% if not mahsa_up %}<br><strong class="inbox-offline">Mahsa is offline — blocked figures and
+  pending approvals can't be loaded right now.</strong>{% endif %}
+</p>
+
+<div id="bulk-preview"></div>
+
+{% for q in inbox.queues %}
+<section class="qsec">
+  <header class="qsec__head">
+    <h2>{{ q.label }}</h2>
+    <span class="qsec__count {{ 'is-zero' if q.count == 0 }}">{{ q.count }}</span>
+    {% if q.source is none %}<span class="chip qsec__stub" title="{{ q.stub_note }}">not wired yet</span>{% endif %}
+  </header>
+
+  {% if q.count == 0 %}
+    <p class="qsec__empty muted">{{ q.empty }}</p>
+    {% if q.stub_note %}<p class="qsec__stubnote muted">◐ {{ q.stub_note }}</p>{% endif %}
+  {% elif q.key == "awaiting_approval" %}
+    <form class="qbulk" hx-post="/inbox/bulk" hx-target="#bulk-preview" hx-swap="innerHTML">
+      <div class="qbulk__bar">
+        <span class="muted">Select items, then preview a bulk decision:</span>
+        <button type="submit" name="action" value="approve" class="btn btn--primary">Preview bulk approve</button>
+        <button type="submit" name="action" value="reject" class="btn">Preview bulk reject</button>
+      </div>
+      {% for item in q.items %}{{ inbox_item(item, selectable=True) }}{% endfor %}
+    </form>
+  {% else %}
+    {% for item in q.items %}{{ inbox_item(item, selectable=False) }}{% endfor %}
+  {% endif %}
+</section>
+{% endfor %}
+{% endblock %}
