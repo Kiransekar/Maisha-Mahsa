@@ -9,17 +9,25 @@ from sqlalchemy.orm import Session
 
 from app.core.loop import run_loop
 from app.core.mahsa_client import MahsaClient
+from app.core.rbac import Capability
+from app.core.rbac_deps import require
 from app.db.models.payables import Vendor
 from app.db.session import get_session
 from app.deps import get_mahsa
 from app.domains.payables.schemas import BillResult, NewBill, NewVendor
 from app.domains.payables.service import PayablesService
 
-router = APIRouter(prefix="/api/payables", tags=["payables"])
+# WS5.1: `read` capability baseline on EVERY route in this router; mutations add
+# `write`, approvals add `approve_payment`, statutory filings use the WS5.2 hard gate.
+router = APIRouter(
+    prefix="/api/payables",
+    tags=["payables"],
+    dependencies=[Depends(require(Capability.READ))],
+)
 _service = PayablesService()
 
 
-@router.post("/vendors")
+@router.post("/vendors", dependencies=[Depends(require(Capability.WRITE))])
 def create_vendor(body: NewVendor, db: Session = Depends(get_session)) -> dict[str, int]:
     vendor = Vendor(
         name=body.name,
@@ -35,7 +43,7 @@ def create_vendor(body: NewVendor, db: Session = Depends(get_session)) -> dict[s
     return {"id": vendor.id}
 
 
-@router.post("/bills")
+@router.post("/bills", dependencies=[Depends(require(Capability.WRITE))])
 def create_bill(body: NewBill, db: Session = Depends(get_session)) -> BillResult:
     try:
         result = _service.create_bill(

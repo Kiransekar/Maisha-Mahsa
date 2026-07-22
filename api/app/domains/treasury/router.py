@@ -10,12 +10,20 @@ from sqlalchemy.orm import Session
 
 from app.core.loop import run_loop
 from app.core.mahsa_client import MahsaClient
+from app.core.rbac import Capability
+from app.core.rbac_deps import require
 from app.db.models.treasury import BankAccount
 from app.db.session import get_session
 from app.deps import get_mahsa
 from app.domains.treasury.service import TreasuryService
 
-router = APIRouter(prefix="/api/treasury", tags=["treasury"])
+# WS5.1: `read` capability baseline on EVERY route in this router; mutations add
+# `write`, approvals add `approve_payment`, statutory filings use the WS5.2 hard gate.
+router = APIRouter(
+    prefix="/api/treasury",
+    tags=["treasury"],
+    dependencies=[Depends(require(Capability.READ))],
+)
 _service = TreasuryService()
 
 
@@ -26,7 +34,7 @@ class NewAccount(BaseModel):
     opening_balance_paise: int = 0
 
 
-@router.post("/accounts")
+@router.post("/accounts", dependencies=[Depends(require(Capability.WRITE))])
 def create_account(body: NewAccount, db: Session = Depends(get_session)) -> dict[str, int]:
     acct = BankAccount(
         bank_name=body.bank_name,
@@ -40,7 +48,7 @@ def create_account(body: NewAccount, db: Session = Depends(get_session)) -> dict
     return {"id": acct.id}
 
 
-@router.post("/accounts/{account_id}/import")
+@router.post("/accounts/{account_id}/import", dependencies=[Depends(require(Capability.WRITE))])
 async def import_statement(
     account_id: int, file: UploadFile, db: Session = Depends(get_session)
 ) -> dict[str, int]:

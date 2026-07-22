@@ -9,13 +9,21 @@ from sqlalchemy.orm import Session
 
 from app.core.loop import run_loop
 from app.core.mahsa_client import MahsaClient
+from app.core.rbac import Capability
+from app.core.rbac_deps import require, require_filing
 from app.db.session import get_session
 from app.deps import get_mahsa
 from app.domains.gst.gst_calc import validate_gstin
 from app.domains.gst.schemas import Gstr1Input, Gstr3bInput, Gstr3bResult
 from app.domains.gst.service import GstService
 
-router = APIRouter(prefix="/api/gst", tags=["gst"])
+# WS5.1: `read` capability baseline on EVERY route in this router; mutations add
+# `write`, approvals add `approve_payment`, statutory filings use the WS5.2 hard gate.
+router = APIRouter(
+    prefix="/api/gst",
+    tags=["gst"],
+    dependencies=[Depends(require(Capability.READ))],
+)
 _service = GstService()
 
 
@@ -24,7 +32,7 @@ def check_gstin(gstin: str) -> dict[str, bool]:
     return {"valid": validate_gstin(gstin)}
 
 
-@router.post("/gstr3b")
+@router.post("/gstr3b", dependencies=[Depends(require_filing("gstr3b"))])
 def file_gstr3b(body: Gstr3bInput, db: Session = Depends(get_session)) -> Gstr3bResult:
     result = _service.file_gstr3b(
         db,

@@ -30,6 +30,8 @@ from app.core.cfo import DomainHealth, collect_health
 from app.core.mahsa_client import MahsaClient, MahsaError
 from app.core.mahsa_coverage import badge_state
 from app.core.overview import collect_kpis, upcoming_deadlines
+from app.core.rbac import Capability
+from app.core.rbac_deps import require
 from app.db.session import get_session
 from app.deps import get_mahsa
 from app.domains import build_registry
@@ -38,7 +40,10 @@ from app.web.actions import actions_for
 from app.web.exceptions_router import _snapshot
 from app.web.format import fmt_value, humanize
 
-router = APIRouter(prefix="/api", tags=["domains"])
+# WS5.1: `read` baseline on every route; the Audit Room additionally needs `view_audit`.
+router = APIRouter(
+    prefix="/api", tags=["domains"], dependencies=[Depends(require(Capability.READ))]
+)
 
 _registry = build_registry()
 
@@ -177,7 +182,7 @@ async def domain_json(
     }
 
 
-@router.get("/audit")
+@router.get("/audit", dependencies=[Depends(require(Capability.VIEW_AUDIT))])
 async def audit_json(
     db: Session = Depends(get_session),
     limit: int = Query(50, ge=1, le=200),

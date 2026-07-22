@@ -206,3 +206,84 @@ def test_confirm_seals_decisions_to_the_audit_chain(live, session):
 
     # The approval is resolved, so it drops out of the pending inbox.
     assert TREASURY_ID not in [i["id"] for i in live.get("/api/inbox").json()["items"]]
+
+
+# ── (f) fix:bulk-rows — decisions carry row identity end-to-end ───────────────
+def test_two_rows_one_domain_seal_two_distinguishable_decisions(live, session, monkeypatch):
+    """Two previewed rows in ONE domain must seal two decisions that name their rows — never
+    two byte-identical domain-level entries. Mutation check: if row identity is dropped from
+    the confirm loop, the two audit queries collapse into identical strings and the per-row
+    ``item_id`` asserts fail."""
+    from sqlalchemy import select
+
+    from app.db.models.shared import Decision
+    from app.web import api_bulk
+    from app.web.exceptions import InboxItem
+
+    def _two_rows_one_domain(approvals, blocked):
+        return [
+            InboxItem(
+                id=rid,
+                queue="awaiting_approval",
+                what=f"{rid} needs sign-off",
+                when=None,
+                impact_paise=None,
+                impact_label="Sign-off pending (₹ not quantified)",
+                action_label="Review & approve",
+                domain="treasury",
+                selectable=True,
+            )
+            for rid in ("approval:treasury", "approval:treasury:sweep")
+        ]
+
+    monkeypatch.setattr(api_bulk, "build_items", _two_rows_one_domain)
+    before = len(load_chain(session))
+
+    body = live.post(
+        "/api/inbox/bulk",
+        json={
+            "action": "approve",
+            "ids": ["approval:treasury", "approval:treasury:sweep"],
+            "confirm": True,
+        },
+    ).json()
+
+    assert body["committed"] is True
+    assert body["committed_count"] == 2  # rows actually decided, not domains touched
+
+    chain = load_chain(session)
+    assert len(chain) == before + 2
+    q1, q2 = chain[-2].query, chain[-1].query
+    assert q1 != q2, "two rows in one domain must be distinguishable in the audit log"
+    assert "[row approval:treasury]" in (q1 or "")
+    assert "[row approval:treasury:sweep]" in (q2 or "")
+
+    decided = [r.item_id for r in session.scalars(select(Decision)).all()]
+    assert decided == ["approval:treasury", "approval:treasury:sweep"]
+
+
+def test_confirm_rejects_ids_outside_the_preview(live, session):
+    """Confirm processes exactly the previewed ids: a stray id is rejected with a reason and
+    never decided — no audit entry, no Decision row names it."""
+    from sqlalchemy import select
+
+    from app.db.models.shared import Decision
+
+    stray = "approval:no-such-domain"
+    before = len(load_chain(session))
+
+    body = live.post(
+        "/api/inbox/bulk",
+        json={"action": "approve", "ids": [TREASURY_ID, stray], "confirm": True},
+    ).json()
+
+    assert body["committed_count"] == 1  # only the previewed row was decided
+    assert [r["id"] for r in body["rows"]] == [TREASURY_ID]
+    skipped = {s["id"]: s for s in body["skipped"]}
+    assert stray in skipped and skipped[stray]["reason"].strip()
+
+    chain = load_chain(session)
+    assert len(chain) == before + 1
+    assert "[row approval:treasury]" in (chain[-1].query or "")
+    assert all(stray not in (e.query or "") for e in chain), "stray id must never be decided"
+    assert [r.item_id for r in session.scalars(select(Decision)).all()] == [TREASURY_ID]

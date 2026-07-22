@@ -71,8 +71,9 @@ def interest_234c(total_liability: int, cumulative_paid: list[int]) -> dict[str,
 
 def interest_234b(assessed_tax: int, advance_paid: int, *, months: int) -> dict[str, Any]:
     """s.234B interest: when advance tax paid is below 90% of assessed tax, 1%/month (simple)
-    on the shortfall — assessed tax rounded down to the nearest ₹100 (s.288A) — from 1 Apr of
-    the assessment year to the date of payment (``months``)."""
+    on the shortfall — the SHORTFALL (the interest base per s.234B(1)) rounded down to the
+    nearest ₹100 (Rule 119A(c), Income-tax Rules 1962) — from 1 Apr of the assessment year to
+    the date of payment (``months``)."""
     if assessed_tax <= 0 or months <= 0:
         return {"applicable": False, "shortfall": 0, "interest": 0, "months": months}
     if Decimal(advance_paid) >= Decimal(assessed_tax) * Decimal("0.9"):

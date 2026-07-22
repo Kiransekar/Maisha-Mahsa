@@ -18,8 +18,9 @@ from sqlalchemy.orm import Session
 
 from app.core.domain import BaseDomainService
 from app.core.mahsa_client import MahsaClient, MahsaError
-from app.core.mahsa_coverage import badge_state
+from app.core.mahsa_coverage import is_recomputed
 from app.core.router import DomainRouter
+from app.core.verify import FigureVerdict
 from app.llm.client import build_client
 from app.llm.maisha import ClaimProducer, MaishaGenerator
 from app.llm.retry import allowed_values, generate_verified
@@ -38,6 +39,11 @@ class Figure:
     # fact-backed figure Mahsa can't yet independently verify (shown as-is, not hidden);
     # "warn" = not even backed by a deterministic fact.
     badge: str
+    # The SAME FigureVerdict type app.core.verify's on-demand recompute path uses (WS7.2 follow-on,
+    # WS7-E2E-OPEN item 4b) — `badge` above is a thin projection of this, not a second source of
+    # truth. Threaded per-figure so the UI (and any future SPA consumer) can key off .verified /
+    # .honest_pending / .blocked directly instead of parsing the display string.
+    verdict: FigureVerdict
 
 
 @dataclass(frozen=True)
@@ -71,27 +77,51 @@ def _build_snapshot(
         return service.build_snapshot(session)
 
 
+def _verdict(target: str, fact_backed: bool) -> FigureVerdict:
+    """The figure's FigureVerdict (app.core.verify — the same type the on-demand recompute path
+    returns), built from the two signals already on hand here: is the number backed by a
+    deterministic fact at all, and has Mahsa ever independently recomputed ``target``
+    (mahsa_coverage, sourced from dif/tests/parity.rs PORTED). No new Mahsa call — this is the
+    single place both ``.badge`` and the richer verdict are derived from, so they cannot drift.
+    A number that isn't even fact-backed is BLOCKED outright (never shown as pending, let alone
+    verified, per §0.4); a fact-backed number Mahsa hasn't ported yet is honest-pending, never
+    upgraded to verified by omission."""
+    if not fact_backed:
+        return FigureVerdict(verified=False, blocked=True, honest_pending=False)
+    if is_recomputed(target):
+        return FigureVerdict(verified=True, blocked=False, honest_pending=False)
+    return FigureVerdict(verified=False, blocked=False, honest_pending=True)
+
+
 def _badge(target: str, fact_backed: bool) -> str:
     """"warn" if the figure isn't even backed by a deterministic fact (the more severe,
-    genuinely-unbacked case); otherwise driven by mahsa_coverage.badge_state — "check" only
-    when Mahsa independently recomputed ``target``, else "pending" (honest, shown as-is)."""
-    if not fact_backed:
+    genuinely-unbacked case); otherwise "check" only when Mahsa independently recomputed
+    ``target``, else "pending" (honest, shown as-is). Thin projection of ``_verdict`` — that
+    is the single source of truth, this just maps it to the display-string API callers pin."""
+    v = _verdict(target, fact_backed)
+    if v.blocked:
         return "warn"
-    return "check" if badge_state(target) == "verified" else "pending"
+    return "check" if v.verified else "pending"
 
 
 def _figures(facts: dict[str, Any], claim: ActionClaim | None) -> list[Figure]:
     if claim is not None and claim.claims and not claim.abstained:
         allowed = allowed_values(facts)
         return [
-            Figure(humanize(k), fmt_value(k, v), v in allowed, _badge(k, v in allowed))
+            Figure(
+                humanize(k),
+                fmt_value(k, v),
+                v in allowed,
+                _badge(k, v in allowed),
+                _verdict(k, v in allowed),
+            )
             for k, v in claim.claims.items()
         ]
     # No LLM draft (or it abstained): the deterministic facts are all fact-backed ("verified"
     # in that sense), but that alone doesn't earn a ✓ — the badge still asks mahsa_coverage
     # whether Rust independently recomputed each one.
     return [
-        Figure(humanize(k), fmt_value(k, v), True, _badge(k, True))
+        Figure(humanize(k), fmt_value(k, v), True, _badge(k, True), _verdict(k, True))
         for k, v in sorted(facts.items())
         if k != "as_of"
     ]

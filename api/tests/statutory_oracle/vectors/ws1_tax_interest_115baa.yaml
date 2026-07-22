@@ -28,6 +28,32 @@
   inputs: {assessed_tax: 50000000, advance_paid: 10000000, months: 5}
   expected: 2000000
 
+- id: interest_234b_rule_119a_rounddown_exercised
+  statute: Income-tax Rules
+  section: "Rule 119A(c)"
+  provenance: primary
+  citation_url: https://indiankanoon.org/doc/143209285/
+  citation_locator: >-
+    Rule 119A, Income-tax Rules, 1962, clause (c) — "the amount of tax, penalty or other sum in
+    respect of which such interest is to be calculated shall be rounded off to the nearest
+    multiple of one hundred rupees and for this purpose any fraction of one hundred rupees
+    shall be ignored".
+  source: >-
+    The interest BASE under s.234B(1) is the shortfall ("the amount by which the advance tax
+    paid ... falls short of the assessed tax"); Rule 119A(c) rounds that base down to the
+    nearest ₹100. This vector exists because the 2026-07-22 adversarial verify found the
+    round-down was not exercised by ANY test in either engine (every prior input's shortfall
+    was already a ₹100 multiple, so deleting the rounding line stayed green). Here the raw
+    shortfall ₹1,00,050 is NOT a multiple: base rounds to ₹1,00,000; ₹1,00,000 × 1% × 3 =
+    ₹3,000. Without the round-down the figure would be ₹3,001.50 -> ₹3,002 — a distinguishing
+    output, so this vector kills that mutation in both engines via parity replay.
+  ca_initials: OWNER
+  ca_date: 2026-07-22
+  target: interest_234b
+  # assessed ₹1,00,050, nothing paid, 3 months -> base ₹1,00,000 (rounded down) × 1% × 3 = ₹3,000
+  inputs: {assessed_tax: 10005000, advance_paid: 0, months: 3}
+  expected: 300000
+
 - id: interest_234b_relief_above_90pct
   statute: Income-tax Act
   section: "234B"

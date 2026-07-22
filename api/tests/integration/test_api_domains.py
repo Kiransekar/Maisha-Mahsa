@@ -18,7 +18,10 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.core.audit_store import append
+from app.core.betterauth import get_principal
 from app.core.mahsa_client import MahsaClient
+from app.core.principal import Principal
+from app.core.rbac import Role
 from app.db.models.shared import AuditLog
 from app.db.session import get_session
 from app.deps import get_mahsa
@@ -32,6 +35,12 @@ def _client(session: Session, mahsa_url: str) -> TestClient:
     app.include_router(router)
     app.dependency_overrides[get_session] = lambda: session
     app.dependency_overrides[get_mahsa] = lambda: MahsaClient(mahsa_url)
+    # WS5.1: these routes are capability-gated. This file tests the payload semantics, not
+    # RBAC — override the one auth seam with an Owner (same pattern as test_api_bulk.py);
+    # the matrix itself is proven over real signed tokens in test_rbac_matrix.py.
+    app.dependency_overrides[get_principal] = lambda: Principal(
+        user_id="u-owner", org_id="org-7", role=Role.OWNER, email="owner@example.com"
+    )
     return TestClient(app)
 
 

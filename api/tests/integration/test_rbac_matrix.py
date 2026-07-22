@@ -132,6 +132,9 @@ def _bearer(auth_server, role: Role) -> dict[str, str]:
             "exp": now + 900,
             "activeOrganizationId": "org-7",
             "role": role.value,  # maps 1:1 via principal.BETTER_AUTH_ROLE_MAP
+            # Top tier, so a WS6 entitlement 402 can never masquerade as (or mask) an RBAC
+            # outcome anywhere in this matrix — this file isolates the capability layer.
+            "plan": "growth",
         },
         auth_server.priv_pem,
         algorithm="EdDSA",
@@ -318,3 +321,321 @@ def test_unauthenticated_request_to_a_gated_route_is_401_not_403(client) -> None
     check. 401 (who are you) is the correct answer, not 403 (you may not)."""
     response = client.get("/api/approvals")
     assert response.status_code == 401
+
+
+# --------------------------------------------------------------------------------------------
+# EVERY /api ROUTE x EVERY ROLE (fix:rbac-api)
+#
+# The four-route matrix above stays as-is (it proves the deep semantics — first-failing-gate,
+# no-mutation-on-denial, attribution — over a live Mahsa). This section is the COVERAGE guard:
+# every route under /api must declare its capability via app.core.rbac_deps, and every
+# (role, route) pair is exercised over real HTTP with a real signed token.
+# --------------------------------------------------------------------------------------------
+
+_FILING_DETAIL = "statutory filing: requires Owner or Admin regardless of matrix_config"
+
+#: gate name -> (roles allowed through it, the 403 detail a denied caller sees).
+#: `filing` is the WS5.2 HARD gate (approval_matrix.decide_approval): Owner/Admin ONLY — note
+#: it is STRICTER than the `approve_filing` capability (which Approver also holds).
+GATES: dict[str, tuple[frozenset[Role], str]] = {
+    "read": (
+        frozenset({Role.OWNER, Role.ADMIN, Role.ACCOUNTANT, Role.APPROVER, Role.CA}),
+        "missing capability: read",
+    ),
+    "write": (
+        frozenset({Role.OWNER, Role.ADMIN, Role.ACCOUNTANT}),
+        "missing capability: write",
+    ),
+    "approve_payment": (
+        frozenset({Role.OWNER, Role.ADMIN, Role.APPROVER}),
+        "missing capability: approve_payment",
+    ),
+    "view_audit": (
+        frozenset({Role.OWNER, Role.ADMIN, Role.ACCOUNTANT, Role.APPROVER, Role.CA}),
+        "missing capability: view_audit",
+    ),
+    "filing": (frozenset({Role.OWNER, Role.ADMIN}), _FILING_DETAIL),
+}
+
+#: THE TABLE — every /api route, with its gates IN THE ORDER THE APP CHECKS THEM (router-level
+#: baseline first, then route-level). Written out by hand, not derived from the app: a new /api
+#: route fails the coverage test below until a human adds a row here and a gate on the route.
+API_ROUTE_GATES: dict[str, tuple[str, ...]] = {
+    # SPA surface (app/web/api_*.py)
+    "GET /api/today": ("read",),
+    "GET /api/inbox": ("read",),
+    "POST /api/inbox/bulk": ("read",),  # + in-handler approve_payment on confirm=true (above)
+    "GET /api/approvals": ("read",),
+    "POST /api/approvals/{domain}/decide": ("approve_payment",),
+    "GET /api/health/connections": ("read",),
+    "GET /api/domains": ("read",),
+    "GET /api/domains/{domain}": ("read",),
+    "GET /api/audit": ("read", "view_audit"),
+    # treasury
+    "POST /api/treasury/accounts": ("read", "write"),
+    "POST /api/treasury/accounts/{account_id}/import": ("read", "write"),
+    "GET /api/treasury/cash": ("read",),
+    "GET /api/treasury/metrics": ("read",),
+    "POST /api/treasury/fold": ("read",),
+    # payroll
+    "POST /api/payroll/employees": ("read", "write"),
+    "POST /api/payroll/employees/{employee_id}/salary": ("read", "write"),
+    "GET /api/payroll/preview": ("read",),
+    "POST /api/payroll/runs": ("read", "write"),
+    "POST /api/payroll/fold": ("read",),
+    "GET /api/payroll/lwf": ("read",),
+    # gst — filing a GSTR-3B is a statutory filing: WS5.2 hard gate, not a capability check
+    "GET /api/gst/validate-gstin": ("read",),
+    "POST /api/gst/gstr3b": ("read", "filing"),
+    "POST /api/gst/gstr1": ("read",),  # builds the return payload; files nothing
+    "GET /api/gst/itc/reconcile": ("read",),
+    "POST /api/gst/fold": ("read",),
+    # revenue
+    "POST /api/revenue/customers": ("read", "write"),
+    "POST /api/revenue/invoices": ("read", "write"),
+    "GET /api/revenue/ar-aging": ("read",),
+    "GET /api/revenue/dunning": ("read",),
+    "POST /api/revenue/fold": ("read",),
+    # payables
+    "POST /api/payables/vendors": ("read", "write"),
+    "POST /api/payables/bills": ("read", "write"),
+    "GET /api/payables/ap-aging": ("read",),
+    "GET /api/payables/itc": ("read",),
+    "POST /api/payables/fold": ("read",),
+    # tax — filing a TDS return is a statutory filing
+    "POST /api/tax/tds-returns": ("read", "filing"),
+    "GET /api/tax/tds-summary": ("read",),
+    "POST /api/tax/advance-tax/234c": ("read",),
+    "POST /api/tax/fold": ("read",),
+    # ledger
+    "POST /api/ledger/accounts": ("read", "write"),
+    "POST /api/ledger/journal": ("read", "write"),
+    "GET /api/ledger/trial-balance": ("read",),
+    "GET /api/ledger/pnl": ("read",),
+    "GET /api/ledger/balance-sheet": ("read",),
+    "POST /api/ledger/fold": ("read",),
+    # compliance — marking a deadline filed is a statutory filing
+    "POST /api/compliance/deadlines": ("read", "write"),
+    "POST /api/compliance/seed": ("read", "write"),
+    "POST /api/compliance/deadlines/{deadline_id}/file": ("read", "filing"),
+    "GET /api/compliance/alerts": ("read",),
+    "POST /api/compliance/fold": ("read",),
+    # equity (entitlement 402s sit BEHIND the rbac gates and are tested elsewhere)
+    "POST /api/equity/shareholders": ("read", "write"),
+    "GET /api/equity/cap-table": ("read",),
+    "POST /api/equity/safe/convert": ("read", "write"),
+    "POST /api/equity/snapshot": ("read", "write"),
+    "POST /api/equity/fold": ("read",),
+    # forecast (project/scenario/unit-economics are pure compute — read)
+    "POST /api/forecast/project": ("read",),
+    "POST /api/forecast/scenario": ("read",),
+    "POST /api/forecast/unit-economics": ("read",),
+    "POST /api/forecast/forecasts": ("read", "write"),
+    "POST /api/forecast/fold": ("read",),
+    # expense
+    "POST /api/expense/claims": ("read", "write"),
+    "POST /api/expense/claims/{claim_id}/approve": ("read", "approve_payment"),
+    "GET /api/expense/analytics": ("read",),
+    "POST /api/expense/parse-receipt": ("read",),
+    "POST /api/expense/fold": ("read",),
+    # vault
+    "POST /api/vault/documents": ("read", "write"),
+    "GET /api/vault/search": ("read",),
+    "POST /api/vault/fold": ("read",),
+}
+
+#: Marker a route's declared gates must carry, per gate name (the `filing` gate is declared by
+#: require_filing, whose marker capability is approve_filing).
+_GATE_MARKER = {
+    "read": Capability.READ,
+    "write": Capability.WRITE,
+    "approve_payment": Capability.APPROVE_PAYMENT,
+    "view_audit": Capability.VIEW_AUDIT,
+    "filing": Capability.APPROVE_FILING,
+}
+
+
+def _deployed_api_routes() -> dict[str, list[Capability]]:
+    """Every (method, path) under /api on the REAL app, with the capability markers its
+    dependencies declare (see app.core.rbac_deps.require / require_filing)."""
+    from fastapi.routing import APIRoute
+
+    from app.main import app as real_app
+
+    def _walk(routes):
+        for r in routes:
+            if isinstance(r, APIRoute):
+                yield r.methods, r.path, r.dependant
+            elif type(r).__name__ == "_IncludedRouter":  # FastAPI's lazy include node
+                for ctx in r.effective_route_contexts():
+                    if ctx.dependant is not None:
+                        yield ctx.methods, ctx.path, ctx.dependant
+
+    deployed: dict[str, list[Capability]] = {}
+    for methods, path, dependant in _walk(real_app.routes):
+        if not path.startswith("/api"):
+            continue
+        for method in sorted(set(methods) - {"HEAD"}):
+            caps = [
+                cap
+                for dep in dependant.dependencies
+                if (cap := getattr(dep.call, "required_capability", None)) is not None
+            ]
+            deployed[f"{method} {path}"] = caps
+    return deployed
+
+
+def test_every_api_route_is_declared_and_gated() -> None:
+    """The coverage guard. A new /api route fails here twice over: once for not being in
+    API_ROUTE_GATES (a human must decide its capability), and once if it carries no
+    rbac_deps marker (it was added to the table but never actually gated)."""
+    deployed = _deployed_api_routes()
+
+    assert set(deployed) == set(API_ROUTE_GATES), (
+        f"routes only in app: {sorted(set(deployed) - set(API_ROUTE_GATES))}; "
+        f"routes only in table: {sorted(set(API_ROUTE_GATES) - set(deployed))}"
+    )
+    for route_id, gate_names in API_ROUTE_GATES.items():
+        expected_markers = [_GATE_MARKER[g] for g in gate_names]
+        assert deployed[route_id] == expected_markers, (
+            f"{route_id}: declares {deployed[route_id]}, table expects {expected_markers}"
+        )
+
+
+def _call(client: TestClient, route_id: str, headers: dict[str, str]) -> Response:
+    method, _, path = route_id.partition(" ")
+    for param, value in (
+        ("{domain}", "treasury"),
+        ("{account_id}", "1"),
+        ("{employee_id}", "1"),
+        ("{deadline_id}", "1"),
+        ("{claim_id}", "1"),
+    ):
+        path = path.replace(param, value)
+    if method == "GET":
+        return client.get(path, headers=headers)
+    # An empty JSON body: enough to reach the dependency gates. For a PERMITTED caller the
+    # route may then 422/400/404 on the body — that is fine; what it must never do is 401/403.
+    return client.post(path, json={}, headers=headers)
+
+
+def test_full_api_matrix_every_route_x_every_role(client, auth_server) -> None:
+    """Both directions for all of API_ROUTE_GATES x Role, real HTTP, real signed tokens.
+
+    Denied: 403 naming the FIRST gate the role fails (router baseline before route gate).
+    Permitted: anything but 401/402/403 — the caller got past authn + authz (a 422 for the
+    garbage body is the route doing its job). One test, ~400 requests, one client."""
+    failures: list[str] = []
+    for role in Role:
+        headers = _bearer(auth_server, role)
+        for route_id, gate_names in API_ROUTE_GATES.items():
+            denied_details = [
+                GATES[g][1] for g in gate_names if role not in GATES[g][0]
+            ]
+            response = _call(client, route_id, headers)
+            if denied_details:
+                if response.status_code != 403:
+                    failures.append(
+                        f"{role.value} on {route_id}: expected 403, "
+                        f"got {response.status_code}: {response.text[:120]}"
+                    )
+                elif response.json()["detail"] != denied_details[0]:
+                    failures.append(
+                        f"{role.value} on {route_id}: expected detail "
+                        f"{denied_details[0]!r}, got {response.json()['detail']!r}"
+                    )
+            elif response.status_code in (401, 402, 403):
+                failures.append(
+                    f"{role.value} on {route_id}: must be PERMITTED past auth, "
+                    f"got {response.status_code}: {response.text[:120]}"
+                )
+    assert not failures, "\n".join(failures)
+
+
+# --------------------------------------------------------------------------------------------
+# The HTMX surface carries the SAME decision (fix:rbac-api): approve/mutate routes are gated
+# with the same deps, and a decision is attributed to the verified caller.
+# --------------------------------------------------------------------------------------------
+
+
+def test_htmx_decide_denies_accountant_and_attributes_to_the_verified_caller(
+    client, auth_server, session
+) -> None:
+    """Spec negative: an Accountant must NOT be able to approve — on the HTMX form route too.
+    And when an Approver does decide, the sealed Decision names the JWT's subject, not
+    ``settings.default_user_id``."""
+    denied = client.post(
+        "/approvals/treasury/decide",
+        data={"decision": "approved"},
+        headers=_bearer(auth_server, Role.ACCOUNTANT),
+    )
+    assert denied.status_code == 403
+    assert denied.json()["detail"] == "missing capability: approve_payment"
+
+    decided = client.post(
+        "/approvals/treasury/decide",
+        data={"decision": "approved"},
+        headers=_bearer(auth_server, Role.APPROVER),
+    )
+    assert decided.status_code == 200
+
+    from sqlalchemy import select
+
+    from app.db.models.shared import Decision
+
+    row = session.scalars(select(Decision).order_by(Decision.id.desc()).limit(1)).first()
+    assert row is not None and row.user_id == "user-approver"
+
+
+def test_htmx_bulk_preview_open_to_accountant_commit_is_not(client, auth_server) -> None:
+    """The HTMX /inbox/bulk mirrors the JSON route's preview/commit split exactly."""
+    headers = _bearer(auth_server, Role.ACCOUNTANT)
+    preview = client.post(
+        "/inbox/bulk",
+        data={"action": "approve", "ids": ["approval:treasury"]},
+        headers=headers,
+    )
+    assert preview.status_code == 200
+
+    commit = client.post(
+        "/inbox/bulk",
+        data={"action": "approve", "ids": ["approval:treasury"], "confirm": "true"},
+        headers=headers,
+    )
+    assert commit.status_code == 403
+    assert "approve_payment" in commit.json()["detail"]
+
+
+def test_htmx_action_submit_requires_write(client, auth_server) -> None:
+    """CA (read-only) cannot mutate through the drawer form; Accountant (write) can."""
+    denied = client.post(
+        "/d/ledger/action/create-account",
+        data={"code": "1000", "name": "Cash", "account_type": "asset"},
+        headers=_bearer(auth_server, Role.CA),
+    )
+    assert denied.status_code == 403
+    assert denied.json()["detail"] == "missing capability: write"
+
+    allowed = client.post(
+        "/d/ledger/action/create-account",
+        data={"code": "1000", "name": "Cash", "account_type": "asset"},
+        headers=_bearer(auth_server, Role.ACCOUNTANT),
+    )
+    assert allowed.status_code == 200
+    assert "created" in allowed.text
+
+
+def test_statutory_filing_hard_gate_is_stricter_than_the_capability(
+    client, auth_server
+) -> None:
+    """The Approver HOLDS approve_filing (rbac) and is still refused a statutory filing route:
+    WS5.2's hard gate admits Owner/Admin only and cannot be configured away. Paired with the
+    allow direction: Admin gets past the gate (422 on the empty body, never 403)."""
+    denied = client.post(
+        "/api/gst/gstr3b", json={}, headers=_bearer(auth_server, Role.APPROVER)
+    )
+    assert denied.status_code == 403
+    assert denied.json()["detail"] == _FILING_DETAIL
+
+    allowed = client.post("/api/gst/gstr3b", json={}, headers=_bearer(auth_server, Role.ADMIN))
+    assert allowed.status_code == 422  # past both gates; the empty body is the only objection

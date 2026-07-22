@@ -5,7 +5,7 @@
 - id: itc_setoff_rule88a
   statute: CGST Act
   section: "49/49A/49B r/w Rule 88A"
-  source: "gst_calc.itc_setoff: IGST credit first, then CGST, then SGST; CGST/SGST never cross"
+  source: "gst_calc.itc_setoff: IGST credit first, remainder per Rule 88A; CGST/SGST never cross"
   provenance: primary
   citation_url: "https://cbic-gst.gov.in/pdf/Circular-98-17-2019-GST.pdf"
   citation_locator: >-
@@ -46,8 +46,9 @@
     towards the payment of central tax and State tax or Union territory tax, as the case may be,
     in any order". The unutilised remainder stays in the electronic credit ledger -- rule 88A
     provides no lapse or forfeiture, hence carry-forward.
-  # Order-invariance note: the "in any order" discretion IS exercised here (engine applies IGST
-  # credit to CGST before SGST), but the expected values are invariant under either order --
+  # Order-invariance note: the "in any order" discretion IS exercised here (engine allocates
+  # cash-minimizingly, CGST-first tie-break), but the expected values are invariant under any
+  # allocation --
   # IGST credit remaining after IGST output (15000) exceeds total CGST+SGST output (6000), so
   # both heads are fully discharged and 9000 remains either way. Nothing chosen is load-bearing.
   ca_initials: PENDING
@@ -62,3 +63,101 @@
     cash_cgst: 0
     cash_sgst: 0
     credit_igst: 9000
+
+# ---- fix:itc-order (defect #8) — the Rule 88A "in any order and in any proportion" discretion
+# IS load-bearing in the two vectors below: the old hardcoded IGST->CGST-before-SGST order and
+# the cash-minimizing allocation produce DIFFERENT figures. The statute permits any allocation;
+# which one the engine picks is a CHOICE, hence provenance=interpretation (§0.6, owner decision
+# 2026-07-22: documented interpretation, ca_initials OWNER, no external CA).
+
+- id: itc_setoff_cash_minimizing_beats_fixed_order
+  statute: CGST Act
+  section: "49(5)/49A/49B r/w Rule 88A"
+  source: "gst_calc.itc_setoff: cash-minimizing allocation of remaining IGST credit (Rule 88A discretion)"
+  provenance: interpretation
+  citation_url: "https://cbic-gst.gov.in/pdf/Circular-98-17-2019-GST.pdf"
+  citation_locator: >-
+    Circular No. 98/17/2019-GST dated 23.04.2019 (fetched 2026-07-22), para 3: rule 88A "allows
+    utilization of input tax credit of Integrated tax towards the payment of Central tax and
+    State tax, or as the case may be, Union territory tax, in any order subject to the condition
+    that the entire input tax credit on account of Integrated tax is completely exhausted first
+    before the input tax credit on account of Central tax or State / Union territory tax can be
+    utilized"; para 4 table: IGST credit -> CGST/SGST "(II) - In any order and in any
+    proportion", "(III) Input tax Credit on account of Integrated tax to be completely exhausted
+    mandatorily". CGST Rules 2017 rule 88A (Notification No. 16/2019-Central Tax, 29.03.2019):
+    remainder "may be utilised towards the payment of central tax and State tax or Union
+    territory tax, as the case may be, in any order".
+  # The CHOICE this vector locks (Rule 88A leaves the allocation to the taxpayer):
+  alternatives_considered:
+    - "CHOSEN — cash-minimizing allocation: remaining IGST credit covers each head's uncovered
+       need (liability minus its own credit) first, CGST before SGST on the tie-break (total
+       cash is invariant to the tie-break; only the per-head split moves), then any leftover
+       IGST credit is exhausted against remaining liability CGST-first (Rule 88A mandatory
+       exhaustion; displaced own credit carries forward). Minimizes total cash outgo — the
+       CFO-correct use of the discretion the rule explicitly grants. Here: IGST 15000 covers
+       CGST need 8000 then SGST need 7000 of 8000; own credits fill the rest; cash 1000."
+    - "REJECTED — fixed IGST->CGST-then-SGST order (the pre-fix engine behaviour and the GSTN
+       portal's default suggestion): IGST 15000 -> CGST 10000 then SGST 5000, stranding the
+       CGST credit 2000 (no CGST liability left, no IGST liability) and paying 3000 cash —
+       2000 paise MORE cash for the same inputs. Permitted but cash-suboptimal."
+    - "REJECTED — proportional split (remaining IGST credit pro-rata to CGST:SGST liability):
+       7500/7500 here -> CGST covered (7500+2000 v 10000 leaves 500 cash), SGST 7500+2000 v
+       10000 leaves 500 cash -> total cash 1000, same total as chosen (invariant) but the
+       per-head split depends on a ratio computation with rounding; rejected for needing a
+       rounding convention where the needs-first rule needs none."
+    - "REJECTED — SGST-first (mirror tie-break): same total cash by invariance; CGST-first kept
+       to match the s.49 head order and the pre-existing engine convention."
+  ca_initials: OWNER
+  ca_date: 2026-07-22
+  target: itc_setoff
+  # output cgst 10000 / sgst 10000; credit igst 15000, cgst 2000, sgst 2000 (paise).
+  # Old fixed order: cash_sgst 3000, credit_cgst 2000 stranded. New: cash_sgst 1000, all used.
+  inputs:
+    output: {igst: 0, cgst: 10000, sgst: 10000}
+    credit: {igst: 15000, cgst: 2000, sgst: 2000}
+  expected:
+    cash_igst: 0
+    cash_cgst: 0
+    cash_sgst: 1000
+    credit_igst: 0
+    credit_cgst: 0
+    credit_sgst: 0
+
+- id: itc_setoff_igst_prefers_uncovered_sgst_need
+  statute: CGST Act
+  section: "49(5)/49A/49B r/w Rule 88A"
+  source: "gst_calc.itc_setoff: remaining IGST credit routed to the head whose own credit is scarce"
+  provenance: interpretation
+  citation_url: "https://cbic-gst.gov.in/pdf/Circular-98-17-2019-GST.pdf"
+  citation_locator: >-
+    Circular No. 98/17/2019-GST dated 23.04.2019 (fetched 2026-07-22), para 4 table row (II):
+    IGST credit after IGST liability -> Central tax / State tax "In any order and in any
+    proportion"; rows (IV)-(VII) with "Not permitted" cells: CGST credit -> State tax and SGST
+    credit -> Central tax are forbidden (CGST Act s.49(5)(c)/(d) provisos), which is exactly why
+    routing IGST credit to the credit-scarce head is cash-cheaper.
+  alternatives_considered:
+    - "CHOSEN — cash-minimizing (needs-first) allocation, as in
+       itc_setoff_cash_minimizing_beats_fixed_order: CGST need is 1000 (10000 - 9000 own
+       credit), SGST need is 10000; IGST 6000 covers CGST 1000 then SGST 5000; own CGST credit
+       9000 clears the rest of CGST; SGST pays 5000 cash. Total cash 5000."
+    - "REJECTED — fixed IGST->CGST-first order (pre-fix engine): IGST 6000 all to CGST, own
+       CGST credit covers only 4000 of the rest (5000 stranded, s.49(5)(d) proviso blocks
+       CGST->SGST), SGST pays 10000 cash. Total cash 10000 — double the chosen allocation."
+    - "REJECTED — proportional and SGST-first variants: totals differ from CHOSEN only when the
+       allocation wastes IGST credit on a head whose own credit already covers it; both reach
+       the same 5000 total here but were rejected for the reasons recorded in the vector above."
+  ca_initials: OWNER
+  ca_date: 2026-07-22
+  target: itc_setoff
+  # output cgst 10000 / sgst 10000; credit igst 6000, cgst 9000, sgst 0 (paise).
+  # Old fixed order: cash 10000 with 5000 cgst credit stranded. New: cash 5000, nothing stranded.
+  inputs:
+    output: {igst: 0, cgst: 10000, sgst: 10000}
+    credit: {igst: 6000, cgst: 9000, sgst: 0}
+  expected:
+    cash_igst: 0
+    cash_cgst: 0
+    cash_sgst: 5000
+    credit_igst: 0
+    credit_cgst: 0
+    credit_sgst: 0

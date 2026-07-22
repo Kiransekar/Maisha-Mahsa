@@ -11,17 +11,25 @@ from app.core.entitlement_deps import entitlement_payload, require_feature
 from app.core.entitlements import GuardDecision
 from app.core.loop import run_loop
 from app.core.mahsa_client import MahsaClient
+from app.core.rbac import Capability
+from app.core.rbac_deps import require
 from app.db.models.payroll import Employee
 from app.db.session import get_session
 from app.deps import get_mahsa
 from app.domains.payroll.schemas import NewEmployee, PayrollRunResult, SalaryInput
 from app.domains.payroll.service import PayrollService, compute_components
 
-router = APIRouter(prefix="/api/payroll", tags=["payroll"])
+# WS5.1: `read` capability baseline on EVERY route in this router; mutations add
+# `write`, approvals add `approve_payment`, statutory filings use the WS5.2 hard gate.
+router = APIRouter(
+    prefix="/api/payroll",
+    tags=["payroll"],
+    dependencies=[Depends(require(Capability.READ))],
+)
 _service = PayrollService()
 
 
-@router.post("/employees")
+@router.post("/employees", dependencies=[Depends(require(Capability.WRITE))])
 def create_employee(body: NewEmployee, db: Session = Depends(get_session)) -> dict[str, int]:
     emp = Employee(
         employee_code=body.employee_code,
@@ -36,7 +44,7 @@ def create_employee(body: NewEmployee, db: Session = Depends(get_session)) -> di
     return {"id": emp.id}
 
 
-@router.post("/employees/{employee_id}/salary")
+@router.post("/employees/{employee_id}/salary", dependencies=[Depends(require(Capability.WRITE))])
 def set_salary(employee_id: int, body: SalaryInput, db: Session = Depends(get_session)) -> dict:
     try:
         structure = _service.set_salary_structure(
@@ -83,7 +91,10 @@ def preview(
     )
 
 
-@router.post("/runs", dependencies=[Depends(require_feature("payroll_run"))])
+@router.post(
+    "/runs",
+    dependencies=[Depends(require(Capability.WRITE)), Depends(require_feature("payroll_run"))],
+)
 def run(month_year: str, db: Session = Depends(get_session)) -> PayrollRunResult:
     run_date = datetime.now(UTC).date().isoformat()
     result = _service.run_payroll(db, month_year, run_date)

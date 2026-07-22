@@ -64,7 +64,8 @@ pub fn late_fee_234e(days_late: i64, tds_amount: i64) -> i64 {
 }
 
 /// s.234B interest (paise): 1%/month on the shortfall when advance tax < 90% of assessed tax,
-/// the shortfall rounded DOWN to the nearest ₹100 (s.288A). Mirror of tax_calc.py::interest_234b
+/// the shortfall rounded DOWN to the nearest ₹100 (Rule 119A(c), Income-tax Rules 1962).
+/// Mirror of tax_calc.py::interest_234b
 /// (returns just the interest figure). Exact integer paise.
 pub fn interest_234b(assessed_tax: i64, advance_paid: i64, months: i64) -> i64 {
     if assessed_tax <= 0 || months <= 0 {
@@ -166,6 +167,17 @@ mod tests {
         // advance >= 90% of assessed -> no interest.
         assert_eq!(interest_234b(50_000_000, 45_000_000, 5), 0);
         assert_eq!(interest_234b(0, 0, 5), 0);
+    }
+
+    #[test]
+    fn i234b_rule_119a_rounding_exercised() {
+        // Mirrors test_interest_234b.py::test_shortfall_rounded_down_to_hundred. The raw
+        // shortfall ₹1,00,050 is NOT a ₹100 multiple — Rule 119A(c) rounds the interest base
+        // DOWN to ₹1,00,000; a prior test used an input already on the boundary, leaving the
+        // rounding line unlocked (deleting it stayed green). ₹1,00,000 × 1% × 1 = ₹1,000.
+        assert_eq!(interest_234b(10_005_000, 0, 1), 100_000);
+        // Paired: shortfall exactly on the ₹100 boundary passes through unchanged.
+        assert_eq!(interest_234b(10_005_000, 5_000, 1), 100_000);
     }
 
     #[test]

@@ -9,16 +9,24 @@ from sqlalchemy.orm import Session
 
 from app.core.loop import run_loop
 from app.core.mahsa_client import MahsaClient
+from app.core.rbac import Capability
+from app.core.rbac_deps import require
 from app.db.session import get_session
 from app.deps import get_mahsa
 from app.domains.expense.schemas import ClaimResult, NewClaim, ReceiptText
 from app.domains.expense.service import ExpenseService
 
-router = APIRouter(prefix="/api/expense", tags=["expense"])
+# WS5.1: `read` capability baseline on EVERY route in this router; mutations add
+# `write`, approvals add `approve_payment`, statutory filings use the WS5.2 hard gate.
+router = APIRouter(
+    prefix="/api/expense",
+    tags=["expense"],
+    dependencies=[Depends(require(Capability.READ))],
+)
 _service = ExpenseService()
 
 
-@router.post("/claims")
+@router.post("/claims", dependencies=[Depends(require(Capability.WRITE))])
 def submit_claim(body: NewClaim, db: Session = Depends(get_session)) -> ClaimResult:
     result = _service.submit_claim(
         db,
@@ -35,7 +43,9 @@ def submit_claim(body: NewClaim, db: Session = Depends(get_session)) -> ClaimRes
     return ClaimResult(**result)
 
 
-@router.post("/claims/{claim_id}/approve")
+@router.post(
+    "/claims/{claim_id}/approve", dependencies=[Depends(require(Capability.APPROVE_PAYMENT))]
+)
 def approve(claim_id: int, approver: str, db: Session = Depends(get_session)) -> dict[str, str]:
     try:
         _service.approve_claim(

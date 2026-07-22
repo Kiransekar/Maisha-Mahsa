@@ -12,19 +12,27 @@ const PF_WAGE_CEILING: i64 = 1_500_000;
 /// ESI gross ceiling: ₹21,000 in paise. Gross above this => ESI not applicable.
 const ESI_WAGE_CEILING: i64 = 2_100_000;
 
-/// s.2(y) statutory wage base. `included` = Basic+DA+retaining; `excluded` = every other money
-/// component (overtime included); `in_kind` = value of remuneration in kind. Mirror of
-/// `statutory_wage_base`: add back excluded excess over 50% of total; count in-kind up to 15% of
-/// the money wage base; round half-up to whole paise.
+/// s.2(y) statutory wage base. `included` = the inclusion limb PLUS any component outside the
+/// closed (a)-(k) exclusion list (special_allowance, unknown keys — defects #6/#7);
+/// `excluded_addback` = clause (a)-(i) exclusions, the exact span the FIRST PROVISO aggregates;
+/// `excluded_terminal` = clauses (j)-(k) (gratuity, retrenchment/ex-gratia) — excluded from
+/// wages but OUTSIDE the add-back span (defect #5); `in_kind` = value of remuneration in kind.
+/// Mirror of Python `statutory_wage_base`: add back the (a)-(i) excess over 50% of all
+/// remuneration; count in-kind up to 15% of the money wage base; round half-up to whole paise.
 ///
 /// Exact arithmetic: `base_u` carries the base as (paise × 200), so the ½-paise remainder from
 /// the 50% cap and the 15% in-kind fraction stay exact until the single half-up round at the end.
-pub fn statutory_wage_base(included: i64, excluded: i64, in_kind: i64) -> Paise {
-    let total = included + excluded;
+pub fn statutory_wage_base(
+    included: i64,
+    excluded_addback: i64,
+    excluded_terminal: i64,
+    in_kind: i64,
+) -> Paise {
+    let total = included + excluded_addback + excluded_terminal;
     let mut base_u = included * 200;
-    // Second proviso: add back the excluded excess over 50% of total remuneration.
-    if excluded * 2 > total {
-        base_u += excluded * 200 - total * 100;
+    // First proviso: add back the clause (a)-(i) excess over 50% of all remuneration.
+    if excluded_addback * 2 > total {
+        base_u += excluded_addback * 200 - total * 100;
     }
     // Remuneration in kind counts up to 15% of the wage base (interpretation BLOCKED-CA §0.7).
     let fifteen = base_u * 3 / 20;
@@ -136,19 +144,27 @@ mod tests {
     // ---- s.2(y) wage base (mirrors ws1b_wage_base.yaml oracle vectors) ----
     #[test]
     fn wage_base_compliant_no_addback() {
-        // Basic ₹30k, HRA ₹15k, special ₹5k; excluded ₹20k = 40% <= 50% -> base ₹30k
-        assert_eq!(statutory_wage_base(3_000_000, 2_000_000, 0), Paise(3_000_000));
+        // Basic ₹30k, HRA ₹20k; excluded ₹20k = 40% <= 50% -> base ₹30k
+        assert_eq!(statutory_wage_base(3_000_000, 2_000_000, 0, 0), Paise(3_000_000));
     }
 
     #[test]
     fn wage_base_addback_when_basic_underweighted() {
-        // Basic ₹20k, excluded ₹40k > ₹30k cap -> add back ₹10k -> ₹30k
-        assert_eq!(statutory_wage_base(2_000_000, 4_000_000, 0), Paise(3_000_000));
+        // Basic ₹20k, (a)-(i) excluded ₹40k > ₹30k cap -> add back ₹10k -> ₹30k
+        assert_eq!(statutory_wage_base(2_000_000, 4_000_000, 0, 0), Paise(3_000_000));
+    }
+
+    #[test]
+    fn wage_base_terminal_outside_addback_span() {
+        // Defect #5: Basic ₹20k, HRA ₹25k, gratuity ₹15k. All remuneration ₹60k, cap ₹30k;
+        // the (a)-(i) aggregate is ₹25k <= ₹30k -> NO add-back -> base ₹20k. Under the old
+        // one-bucket reading gratuity drove a false ₹10k add-back (-> ₹30k).
+        assert_eq!(statutory_wage_base(2_000_000, 2_500_000, 1_500_000, 0), Paise(2_000_000));
     }
 
     #[test]
     fn wage_base_in_kind_capped_15pct() {
         // Basic ₹30k, in-kind ₹10k; countable = min(₹10k, 15% of ₹30k = ₹4,500) -> ₹34,500
-        assert_eq!(statutory_wage_base(3_000_000, 0, 1_000_000), Paise(3_450_000));
+        assert_eq!(statutory_wage_base(3_000_000, 0, 0, 1_000_000), Paise(3_450_000));
     }
 }

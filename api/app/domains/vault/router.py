@@ -9,16 +9,24 @@ from sqlalchemy.orm import Session
 
 from app.core.loop import run_loop
 from app.core.mahsa_client import MahsaClient
+from app.core.rbac import Capability
+from app.core.rbac_deps import require
 from app.db.session import get_session
 from app.deps import get_mahsa
 from app.domains.vault.schemas import IngestDocument, IngestResult
 from app.domains.vault.service import VaultService
 
-router = APIRouter(prefix="/api/vault", tags=["vault"])
+# WS5.1: `read` capability baseline on EVERY route in this router; mutations add
+# `write`, approvals add `approve_payment`, statutory filings use the WS5.2 hard gate.
+router = APIRouter(
+    prefix="/api/vault",
+    tags=["vault"],
+    dependencies=[Depends(require(Capability.READ))],
+)
 _service = VaultService()
 
 
-@router.post("/documents")
+@router.post("/documents", dependencies=[Depends(require(Capability.WRITE))])
 def ingest(body: IngestDocument, db: Session = Depends(get_session)) -> IngestResult:
     result = _service.ingest(
         db,

@@ -55,19 +55,37 @@ def _heads(d: dict[str, int]) -> dict[str, int]:
 
 
 def itc_setoff(output: dict[str, int], credit: dict[str, int]) -> dict[str, dict[str, int]]:
-    """Apply input-tax credit against output tax in the statutory order (Rule 88A):
-    IGST credit first (→IGST, →CGST, →SGST), then CGST credit (→CGST, →IGST), then SGST
-    credit (→SGST, →IGST). CGST and SGST credit may never cross. Returns the remaining
-    cash payable per head and the unutilised credit. All paise."""
+    """Apply input-tax credit against output tax (CGST Act s.49(5)/49A/49B r/w Rule 88A).
+
+    Order applied:
+      1. IGST credit → IGST liability (Rule 88A: "shall first be utilised").
+      2. Remaining IGST credit → CGST/SGST liability. Rule 88A r/w Circular No. 98/17/2019-GST
+         permits this "in any order and in any proportion", and the IGST credit must be
+         "completely exhausted mandatorily" before any CGST/SGST credit is used. We choose the
+         CASH-MINIMIZING split: first cover each head's uncovered need (liability minus its own
+         credit) — CGST before SGST when the credit cannot cover both (total cash is invariant
+         to that tie-break, only the per-head split moves) — then exhaust any leftover IGST
+         credit against remaining liability, CGST first (displaced own credit carries forward).
+         Interpretation choice recorded in ws1d_itc_setoff.yaml (ca_initials: OWNER).
+      3. CGST credit → CGST then IGST; SGST credit → SGST then IGST. CGST and SGST credit
+         never cross (s.49(5)(c)/(d) provisos).
+
+    Deterministic, clock-free, integer paise. Returns the remaining cash payable per head and
+    the unutilised credit."""
     out = _heads(output)
     cr = _heads(credit)
 
-    def apply(src: str, dst: str) -> None:
+    def apply(src: str, dst: str, cap: int | None = None) -> None:
         amt = min(cr[src], out[dst])
+        if cap is not None:
+            amt = min(amt, cap)
         cr[src] -= amt
         out[dst] -= amt
 
     apply("igst", "igst")
+    # Rule 88A cash-minimizing allocation: uncovered needs first, then mandatory exhaustion.
+    apply("igst", "cgst", cap=max(0, out["cgst"] - cr["cgst"]))
+    apply("igst", "sgst", cap=max(0, out["sgst"] - cr["sgst"]))
     apply("igst", "cgst")
     apply("igst", "sgst")
     apply("cgst", "cgst")
@@ -220,8 +238,10 @@ def build_gstr1(lines: list[dict], *, filing_period: str) -> dict[str, Any]:
 
 # Composition levy rates (CGST+SGST combined) by business category.
 _COMPOSITION_RATES = {
-    "trader": Decimal("0.01"), "manufacturer": Decimal("0.01"),
-    "restaurant": Decimal("0.05"), "service": Decimal("0.06"),
+    "trader": Decimal("0.01"),
+    "manufacturer": Decimal("0.01"),
+    "restaurant": Decimal("0.05"),
+    "service": Decimal("0.06"),
 }
 
 
@@ -312,23 +332,35 @@ def einvoice_payload(
         "BuyerDtls": {"Gstin": (buyer_gstin or "URP").upper()},
         "ItemList": [
             {
-                "SlNo": "1", "HsnCd": hsn or "", "Qty": item_count,
-                "AssAmt": _to_rupees(taxable), "GstRt": _gst_rate(taxable, igst, cgst, sgst),
-                "IgstAmt": _to_rupees(igst), "CgstAmt": _to_rupees(cgst),
-                "SgstAmt": _to_rupees(sgst), "TotItemVal": _to_rupees(total),
+                "SlNo": "1",
+                "HsnCd": hsn or "",
+                "Qty": item_count,
+                "AssAmt": _to_rupees(taxable),
+                "GstRt": _gst_rate(taxable, igst, cgst, sgst),
+                "IgstAmt": _to_rupees(igst),
+                "CgstAmt": _to_rupees(cgst),
+                "SgstAmt": _to_rupees(sgst),
+                "TotItemVal": _to_rupees(total),
             }
         ],
         "ValDtls": {
-            "AssVal": _to_rupees(taxable), "IgstVal": _to_rupees(igst),
-            "CgstVal": _to_rupees(cgst), "SgstVal": _to_rupees(sgst),
+            "AssVal": _to_rupees(taxable),
+            "IgstVal": _to_rupees(igst),
+            "CgstVal": _to_rupees(cgst),
+            "SgstVal": _to_rupees(sgst),
             "TotInvVal": _to_rupees(total),
         },
         # The data the signed QR encodes (the IRP returns a JWT-signed version of this).
         "QrData": {
-            "SellerGstin": seller_gstin.upper(), "BuyerGstin": buyer_gstin or "URP",
-            "DocNo": doc_no, "DocTyp": doc_type, "DocDt": dt,
-            "TotInvVal": _to_rupees(total), "ItemCnt": item_count,
-            "MainHsnCode": hsn or "", "Irn": irn,
+            "SellerGstin": seller_gstin.upper(),
+            "BuyerGstin": buyer_gstin or "URP",
+            "DocNo": doc_no,
+            "DocTyp": doc_type,
+            "DocDt": dt,
+            "TotInvVal": _to_rupees(total),
+            "ItemCnt": item_count,
+            "MainHsnCode": hsn or "",
+            "Irn": irn,
             # rendered under/beside the QR image wherever this data is shown as a caption
             "Caption": DRAFT_IRN_LABEL,
         },
@@ -340,11 +372,41 @@ def einvoice_payload(
 
 # 2-letter → numeric GST state codes (place of supply). Unknown codes pass through.
 _STATE_CODES = {
-    "JK": "01", "HP": "02", "PB": "03", "CH": "04", "UK": "05", "HR": "06", "DL": "07",
-    "RJ": "08", "UP": "09", "BR": "10", "SK": "11", "AR": "12", "NL": "13", "MN": "14",
-    "MZ": "15", "TR": "16", "ML": "17", "AS": "18", "WB": "19", "JH": "20", "OR": "21",
-    "CG": "22", "MP": "23", "GJ": "24", "MH": "27", "KA": "29", "GA": "30", "KL": "32",
-    "TN": "33", "PY": "34", "AN": "35", "TG": "36", "AP": "37", "LD": "31", "LA": "38",
+    "JK": "01",
+    "HP": "02",
+    "PB": "03",
+    "CH": "04",
+    "UK": "05",
+    "HR": "06",
+    "DL": "07",
+    "RJ": "08",
+    "UP": "09",
+    "BR": "10",
+    "SK": "11",
+    "AR": "12",
+    "NL": "13",
+    "MN": "14",
+    "MZ": "15",
+    "TR": "16",
+    "ML": "17",
+    "AS": "18",
+    "WB": "19",
+    "JH": "20",
+    "OR": "21",
+    "CG": "22",
+    "MP": "23",
+    "GJ": "24",
+    "MH": "27",
+    "KA": "29",
+    "GA": "30",
+    "KL": "32",
+    "TN": "33",
+    "PY": "34",
+    "AN": "35",
+    "TG": "36",
+    "AP": "37",
+    "LD": "31",
+    "LA": "38",
 }
 
 
@@ -381,9 +443,12 @@ def gstr1_json(
         item = {
             "num": 1,
             "itm_det": {
-                "txval": _to_rupees(taxable), "rt": rt,
-                "iamt": _to_rupees(igst), "camt": _to_rupees(cgst),
-                "samt": _to_rupees(sgst), "csamt": 0,
+                "txval": _to_rupees(taxable),
+                "rt": rt,
+                "iamt": _to_rupees(igst),
+                "camt": _to_rupees(cgst),
+                "samt": _to_rupees(sgst),
+                "csamt": 0,
             },
         }
         buyer = ln.get("gstin")
@@ -392,7 +457,10 @@ def gstr1_json(
                 "inum": ln.get("invoice_no"),
                 "idt": _to_ddmmyyyy(ln["idt"]) if ln.get("idt") else "",
                 "val": _to_rupees(ln.get("val", taxable + igst + cgst + sgst)),
-                "pos": pos, "rchrg": "N", "inv_typ": "R", "itms": [item],
+                "pos": pos,
+                "rchrg": "N",
+                "inv_typ": "R",
+                "itms": [item],
             }
             b2b.setdefault(buyer, {})[str(inv["inum"])] = inv
         else:
@@ -421,9 +489,15 @@ def gstr1_json(
     if b2cs:
         out["b2cs"] = [
             {
-                "sply_ty": sply, "pos": pos, "typ": "OE", "rt": rt,
-                "txval": _to_rupees(v["txval"]), "iamt": _to_rupees(v["iamt"]),
-                "camt": _to_rupees(v["camt"]), "samt": _to_rupees(v["samt"]), "csamt": 0,
+                "sply_ty": sply,
+                "pos": pos,
+                "typ": "OE",
+                "rt": rt,
+                "txval": _to_rupees(v["txval"]),
+                "iamt": _to_rupees(v["iamt"]),
+                "camt": _to_rupees(v["camt"]),
+                "samt": _to_rupees(v["samt"]),
+                "csamt": 0,
             }
             for (pos, rt, sply), v in b2cs.items()
         ]
@@ -431,9 +505,16 @@ def gstr1_json(
         out["hsn"] = {
             "data": [
                 {
-                    "num": i + 1, "hsn_sc": code, "uqc": "NA", "qty": v["qty"], "rt": v["rt"],
-                    "txval": _to_rupees(v["txval"]), "iamt": _to_rupees(v["iamt"]),
-                    "camt": _to_rupees(v["camt"]), "samt": _to_rupees(v["samt"]), "csamt": 0,
+                    "num": i + 1,
+                    "hsn_sc": code,
+                    "uqc": "NA",
+                    "qty": v["qty"],
+                    "rt": v["rt"],
+                    "txval": _to_rupees(v["txval"]),
+                    "iamt": _to_rupees(v["iamt"]),
+                    "camt": _to_rupees(v["camt"]),
+                    "samt": _to_rupees(v["samt"]),
+                    "csamt": 0,
                 }
                 for i, (code, v) in enumerate(hsn.items())
             ]

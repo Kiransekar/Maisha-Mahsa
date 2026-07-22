@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.core.loop import run_loop
 from app.core.mahsa_client import MahsaClient
+from app.core.rbac import Capability
+from app.core.rbac_deps import require, require_filing
 from app.core.verify import verify_figure
 from app.db.session import get_session
 from app.deps import get_mahsa
@@ -16,11 +18,17 @@ from app.domains.tax.schemas import Interest234cInput, TdsReturnInput, TdsReturn
 from app.domains.tax.service import TaxService, interest_234c_claim
 from app.domains.tax.tax_calc import interest_234c
 
-router = APIRouter(prefix="/api/tax", tags=["tax"])
+# WS5.1: `read` capability baseline on EVERY route in this router; mutations add
+# `write`, approvals add `approve_payment`, statutory filings use the WS5.2 hard gate.
+router = APIRouter(
+    prefix="/api/tax",
+    tags=["tax"],
+    dependencies=[Depends(require(Capability.READ))],
+)
 _service = TaxService()
 
 
-@router.post("/tds-returns")
+@router.post("/tds-returns", dependencies=[Depends(require_filing("tds_returns"))])
 def file_tds_return(body: TdsReturnInput, db: Session = Depends(get_session)) -> TdsReturnResult:
     result = _service.file_tds_return(
         db,
@@ -40,15 +48,11 @@ def tds_summary(month: str, db: Session = Depends(get_session)) -> dict:
 
 
 @router.post("/advance-tax/234c")
-async def compute_234c(
-    body: Interest234cInput, mahsa: MahsaClient = Depends(get_mahsa)
-) -> dict:
+async def compute_234c(body: Interest234cInput, mahsa: MahsaClient = Depends(get_mahsa)) -> dict:
     # Golden Rule: the s.234C figure reaches the caller only after Mahsa independently
     # recomputes it. A mismatch blocks; Mahsa unreachable raises (never silently unverified).
     result = interest_234c(body.total_liability, body.cumulative_paid)
-    claim = interest_234c_claim(
-        body.total_liability, body.cumulative_paid, result["total_234c"]
-    )
+    claim = interest_234c_claim(body.total_liability, body.cumulative_paid, result["total_234c"])
     verdict = await verify_figure(mahsa, claim)
     return {**result, "verified": verdict.verified, "mahsa_blocked": verdict.blocked}
 

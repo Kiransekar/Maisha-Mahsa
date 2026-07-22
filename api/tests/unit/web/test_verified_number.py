@@ -139,9 +139,18 @@ def test_answer_card_chip_preserves_legacy_glyphs_and_adds_working_panel() -> No
     # tests/unit/web/test_ask.py) must still render — WS7.2 wraps the badge in a chip, it does
     # not replace it.
     figures = [
-        Figure("Recomputed figure", "₹1.00", True, "check"),
-        Figure("Pending figure", "₹2.00", True, "pending"),
-        Figure("Unbacked figure", "₹3.00", False, "warn"),
+        Figure(
+            "Recomputed figure", "₹1.00", True, "check",
+            FigureVerdict(verified=True, blocked=False, honest_pending=False),
+        ),
+        Figure(
+            "Pending figure", "₹2.00", True, "pending",
+            FigureVerdict(verified=False, blocked=False, honest_pending=True),
+        ),
+        Figure(
+            "Unbacked figure", "₹3.00", False, "warn",
+            FigureVerdict(verified=False, blocked=True, honest_pending=False),
+        ),
     ]
     citations = [Citation("GST-001", "GSTR-3B overdue", "CGST Act 2017 / Sec 47", "gst")]
     answer = Answer(

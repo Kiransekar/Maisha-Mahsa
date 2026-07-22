@@ -51,7 +51,22 @@ fn ymd(v: &Value, key: &str) -> (i32, u32, u32) {
     (p[0].parse().unwrap(), p[1].parse().unwrap(), p[2].parse().unwrap())
 }
 
-const INCLUDED_KEYS: [&str; 3] = ["basic", "da", "retaining_allowance"];
+// s.2(y) key classification — mirror of app/core/statutory_wage.py (defects #5/#6/#7):
+// clause (a)-(i) exclusions feed the first-proviso add-back; clauses (j)-(k) are excluded but
+// outside the add-back span; ANY other key (inclusion limb, special_allowance, unknown) is wages.
+const EXCLUDED_ADDBACK_KEYS: [&str; 14] = [
+    "bonus", "statutory_bonus",                    // (a)
+    "house_accommodation", "amenity_value",        // (b)
+    "employer_pf", "employer_pension",             // (c)
+    "conveyance", "travelling_concession", "lta",  // (d)
+    "special_expenses_reimbursement",              // (e)
+    "hra",                                         // (f)
+    "award_settlement_remuneration",               // (g)
+    "overtime",                                    // (h)
+    "commission",                                  // (i)
+];
+const EXCLUDED_TERMINAL_KEYS: [&str; 4] =
+    ["gratuity", "retrenchment_compensation", "retirement_benefit", "ex_gratia"]; // (j)-(k)
 
 // The targets Rust recomputes so far (§WS3.1 port order).
 const PORTED: [&str; 9] = [
@@ -102,18 +117,22 @@ fn rust_matches_oracle_vectors_to_the_paisa() {
             "statutory_wage_base" => {
                 let comps = inputs.get("components").unwrap().as_mapping().unwrap();
                 let mut included = 0i64;
-                let mut excluded = 0i64;
+                let mut excluded_addback = 0i64;
+                let mut excluded_terminal = 0i64;
                 for (k, val) in comps {
                     let key = k.as_str().unwrap_or("");
                     let amt = val.as_i64().unwrap_or(0);
-                    if INCLUDED_KEYS.contains(&key) {
-                        included += amt;
+                    if EXCLUDED_ADDBACK_KEYS.contains(&key) {
+                        excluded_addback += amt;
+                    } else if EXCLUDED_TERMINAL_KEYS.contains(&key) {
+                        excluded_terminal += amt;
                     } else {
-                        excluded += amt;
+                        included += amt; // inclusion limb or outside the closed (a)-(k) list
                     }
                 }
                 let in_kind = i_or(inputs, "in_kind", 0);
-                let got = pf_esi::statutory_wage_base(included, excluded, in_kind);
+                let got =
+                    pf_esi::statutory_wage_base(included, excluded_addback, excluded_terminal, in_kind);
                 let want = expected.as_i64().unwrap();
                 if got.0 != want {
                     failures.push(format!("{id} wage_base: got {} want {want}", got.0));
@@ -142,6 +161,7 @@ fn rust_matches_oracle_vectors_to_the_paisa() {
                     ymd(inputs, "boundary"),
                     i(inputs, "old_base"),
                     i(inputs, "new_base"),
+                    inputs.get("fixed_term").and_then(Value::as_bool).unwrap_or(false),
                 );
                 let want = expected.as_i64().unwrap();
                 if got.0 != want {

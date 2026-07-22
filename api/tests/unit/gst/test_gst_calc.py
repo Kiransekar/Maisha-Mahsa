@@ -26,8 +26,11 @@ def test_gstin_rejects_bad_checkdigit_and_structure():
 
 
 # ---- ITC set-off ----
-def test_itc_setoff_igst_credit_cascades():
-    # IGST credit ₹150 covers ₹100 CGST then ₹50 SGST; SGST credit clears remaining ₹50 SGST.
+def test_itc_setoff_igst_credit_cash_minimizing():
+    # Rule 88A ("in any order and in any proportion"): IGST credit ₹150 covers the uncovered
+    # needs first — ₹80 CGST (₹100 − ₹20 own credit), then ₹70 of the ₹80 SGST need; own
+    # credits fill the rest, leaving ₹10 SGST cash. The old fixed IGST→CGST-first order
+    # stranded the ₹20 CGST credit and paid ₹30 cash.
     out = {"igst": 0, "cgst": Paise.from_rupees(100), "sgst": Paise.from_rupees(100)}
     cr = {
         "igst": Paise.from_rupees(150),
@@ -35,8 +38,30 @@ def test_itc_setoff_igst_credit_cascades():
         "sgst": Paise.from_rupees(20),
     }
     res = g.itc_setoff(out, cr)
-    assert res["cash"] == {"igst": 0, "cgst": 0, "sgst": Paise.from_rupees(30)}
-    assert res["remaining_credit"]["cgst"] == Paise.from_rupees(20)
+    assert res["cash"] == {"igst": 0, "cgst": 0, "sgst": Paise.from_rupees(10)}
+    assert res["remaining_credit"] == {"igst": 0, "cgst": 0, "sgst": 0}
+
+
+def test_itc_setoff_allocation_boundary_paired():
+    # PAIRED boundary: IGST credit exactly covers both uncovered needs (8000 + 7000) -> nil
+    # cash; one paisa short -> exactly one paisa of cash on SGST (the tie-break tail).
+    out = {"igst": 0, "cgst": 10000, "sgst": 10000}
+    at = g.itc_setoff(out, {"igst": 15000, "cgst": 2000, "sgst": 3000})
+    assert at["cash"] == {"igst": 0, "cgst": 0, "sgst": 0}
+    assert at["remaining_credit"] == {"igst": 0, "cgst": 0, "sgst": 0}
+    past = g.itc_setoff(out, {"igst": 14999, "cgst": 2000, "sgst": 3000})
+    assert past["cash"] == {"igst": 0, "cgst": 0, "sgst": 1}
+    assert past["remaining_credit"] == {"igst": 0, "cgst": 0, "sgst": 0}
+
+
+def test_itc_setoff_mandatory_exhaustion_displaces_own_credit():
+    # Rule 88A proviso: IGST credit is "completely exhausted mandatorily" even where own credit
+    # could cover the head — displaced CGST credit carries forward, cash stays nil.
+    res = g.itc_setoff(
+        {"igst": 0, "cgst": 5000, "sgst": 5000}, {"igst": 12000, "cgst": 4000, "sgst": 0}
+    )
+    assert res["cash"] == {"igst": 0, "cgst": 0, "sgst": 0}
+    assert res["remaining_credit"] == {"igst": 2000, "cgst": 4000, "sgst": 0}
 
 
 def test_itc_cgst_cannot_offset_sgst():

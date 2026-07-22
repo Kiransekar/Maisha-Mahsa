@@ -27,7 +27,10 @@
     <div class="figrow">
       <span class="figrow__label">{{ f.label }}</span>
       <span class="figrow__val">{{ f.value }}</span>
-      {% set vstate = "verified" if f.badge == "check" else ("honest_pending" if f.badge == "pending" else "unbacked") %}
+      {# WS7-E2E-OPEN(4b): vstate now reads the real per-figure FigureVerdict (app.core.verify),
+         threaded onto Figure by app.core.ask._verdict — not a re-parse of the display badge
+         string. Unknown/absent falls to "unbacked", never "verified" (fail closed). #}
+      {% set vstate = "verified" if f.verdict.verified else ("honest_pending" if f.verdict.honest_pending else "unbacked") %}
       <details class="vnum vnum--{{ vstate }}">
         <summary>
           {% if f.badge == "check" %}

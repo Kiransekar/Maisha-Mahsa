@@ -55,13 +55,21 @@ def g_eps_employer(rng):
 
 
 def g_wage_base(rng):
-    basic, hra, special, in_kind = (_m(rng, 50000) for _ in range(4))
+    basic, hra, special, gratuity, in_kind = (_m(rng, 50000) for _ in range(5))
     claimed = int(
         statutory_wage_base(
-            {"basic": basic, "hra": hra, "special_allowance": special}, in_kind=in_kind
+            {"basic": basic, "hra": hra, "special_allowance": special, "gratuity": gratuity},
+            in_kind=in_kind,
         )
     )
-    return {"included": basic, "excluded": hra + special, "in_kind": in_kind}, claimed
+    # s.2(y) buckets: special_allowance is wages (defect #7); HRA is clause (f) inside the
+    # (a)-(i) add-back span; gratuity is clause (j) OUTSIDE it (defect #5).
+    return {
+        "included": basic + special,
+        "excluded_addback": hra,
+        "excluded_terminal": gratuity,
+        "in_kind": in_kind,
+    }, claimed
 
 
 def g_tds(rng):
@@ -107,6 +115,7 @@ def g_gratuity_hybrid(rng):
     exit_y = y + rng.randint(1, 20)
     exit_date = f"{exit_y}-{rng.randint(1, 12):02d}-{rng.randint(1, 28):02d}"
     old_base, new_base = _m(rng, 100000), _m(rng, 100000)
+    fixed_term = rng.random() < 0.5  # exercise both eligibility floors (s.53(1) + FTE proviso)
     import datetime
 
     claimed = int(
@@ -116,6 +125,7 @@ def g_gratuity_hybrid(rng):
             boundary=datetime.date(2025, 11, 21),
             old_base=old_base,
             new_base=new_base,
+            fixed_term=fixed_term,
         )
     )
     return {
@@ -124,6 +134,7 @@ def g_gratuity_hybrid(rng):
         "boundary": "2025-11-21",
         "old_base": old_base,
         "new_base": new_base,
+        "fixed_term": fixed_term,
     }, claimed
 
 

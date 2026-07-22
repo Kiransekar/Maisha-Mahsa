@@ -10,16 +10,27 @@ from sqlalchemy.orm import Session
 from app.core.entitlement_deps import require_feature
 from app.core.loop import run_loop
 from app.core.mahsa_client import MahsaClient
+from app.core.rbac import Capability
+from app.core.rbac_deps import require
 from app.db.session import get_session
 from app.deps import get_mahsa
 from app.domains.equity.schemas import NewShareholder, SafeConversionInput, SafeConversionResult
 from app.domains.equity.service import EquityService
 
-router = APIRouter(prefix="/api/equity", tags=["equity"])
+# WS5.1: `read` capability baseline on EVERY route in this router; mutations add
+# `write`, approvals add `approve_payment`, statutory filings use the WS5.2 hard gate.
+router = APIRouter(
+    prefix="/api/equity",
+    tags=["equity"],
+    dependencies=[Depends(require(Capability.READ))],
+)
 _service = EquityService()
 
 
-@router.post("/shareholders", dependencies=[Depends(require_feature("cap_table"))])
+@router.post(
+    "/shareholders",
+    dependencies=[Depends(require(Capability.WRITE)), Depends(require_feature("cap_table"))],
+)
 def add_shareholder(body: NewShareholder, db: Session = Depends(get_session)) -> dict[str, int]:
     sid = _service.add_shareholder(
         db,
@@ -38,12 +49,21 @@ def cap_table(db: Session = Depends(get_session)) -> dict:
     return _service.cap_table(db)
 
 
-@router.post("/safe/convert", dependencies=[Depends(require_feature("safe_notes"))])
+@router.post(
+    "/safe/convert",
+    dependencies=[Depends(require(Capability.WRITE)), Depends(require_feature("safe_notes"))],
+)
 def convert_safe(body: SafeConversionInput) -> SafeConversionResult:
     return SafeConversionResult(**_service.convert_safe(**body.model_dump()))
 
 
-@router.post("/snapshot", dependencies=[Depends(require_feature("cap_table_snapshot"))])
+@router.post(
+    "/snapshot",
+    dependencies=[
+        Depends(require(Capability.WRITE)),
+        Depends(require_feature("cap_table_snapshot")),
+    ],
+)
 def snapshot(
     snapshot_date: str, esop_board_approved: bool = True, db: Session = Depends(get_session)
 ) -> dict[str, int]:

@@ -39,6 +39,7 @@ from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.core import audit_store
+from app.core.approval_matrix import STATUTORY_FILING_ACTIONS, decide_approval
 from app.core.betterauth import get_principal
 from app.core.principal import Principal
 from app.core.rbac import Capability, Role, can, role_change_event
@@ -115,6 +116,42 @@ def require(capability: Capability) -> Callable[..., Principal]:
         enforce(principal, capability, request.url.path)
         return principal
 
+    # Machine-readable declaration: the route-coverage guard in tests/integration/
+    # test_rbac_matrix.py walks every /api route's dependencies looking for this attribute,
+    # so a new route with no capability declared fails CI rather than shipping unguarded.
+    _dependency.required_capability = capability  # type: ignore[attr-defined]
+    return _dependency
+
+
+def require_filing(action: str) -> Callable[..., Principal]:
+    """Dependency factory for statutory-filing routes: the WS5.2 HARD gate, wired not duplicated.
+
+    ``action`` must be a member of ``approval_matrix.STATUTORY_FILING_ACTIONS`` — checked at
+    definition time (router import), so a typo'd action can never silently take the softer
+    amount-matrix path. The decision itself is :func:`app.core.approval_matrix.decide_approval`,
+    whose statutory branch admits Owner/Admin ONLY and ignores any configured matrix. Plan and
+    amount are irrelevant on that branch (it consults neither), so fixed valid placeholders are
+    passed rather than resolving a plan this gate would not use.
+    """
+    if action not in STATUTORY_FILING_ACTIONS:
+        raise ValueError(
+            f"{action!r} is not a statutory filing action; expected one of "
+            f"{sorted(STATUTORY_FILING_ACTIONS)}"
+        )
+
+    def _dependency(
+        request: Request, principal: Principal = Depends(resolve_principal)
+    ) -> Principal:
+        verdict = decide_approval("basics", principal.role, action, 0)
+        if verdict["required_role_ok"]:
+            return principal
+        _audit_denial(
+            _denial_payload(principal, Capability.APPROVE_FILING, request.url.path)
+        )
+        raise HTTPException(status_code=403, detail=str(verdict["reason"]))
+
+    _dependency.required_capability = Capability.APPROVE_FILING  # type: ignore[attr-defined]
+    _dependency.filing_action = action  # type: ignore[attr-defined]
     return _dependency
 
 

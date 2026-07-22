@@ -9,22 +9,25 @@ from app.domains.payroll.service import compute_components, payslip_recompute_cl
 def test_claims_use_the_wage_base_and_carry_the_computed_figures():
     comp = compute_components(
         basic=Paise.from_rupees(8000),
-        hra=Paise.from_rupees(6000),
+        hra=Paise.from_rupees(12000),
         lta=0,
-        special_allowance=Paise.from_rupees(6000),
+        special_allowance=0,
         state="MH",
         month=6,
     )
-    # under-weighted CTC: excluded ₹12k > 50% of ₹20k -> wage base added back to ₹10,000
+    # under-weighted CTC: (a)-(i) excluded HRA ₹12k > 50% of ₹20k -> base added back to ₹10,000
+    # (CoW 2019 s.2(y) first proviso — see ws1b_wage_base.yaml)
     assert comp["wage_base"] == Paise.from_rupees(10000)
     claims = {c.target: c for c in payslip_recompute_claims(comp)}
 
-    # wage-base claim reconstructs included/excluded so Mahsa recomputes the same base
+    # wage-base claim reconstructs the s.2(y) buckets so Mahsa recomputes the same base:
+    # special_allowance is WAGES (included), HRA/LTA are clause (f)/(d) add-back exclusions
     wb = claims["statutory_wage_base"]
     assert wb.claimed_paise == comp["wage_base"]
     assert wb.inputs == {
         "included": comp["basic"],
-        "excluded": Paise.from_rupees(12000),
+        "excluded_addback": Paise.from_rupees(12000),
+        "excluded_terminal": 0,
         "in_kind": 0,
     }
 

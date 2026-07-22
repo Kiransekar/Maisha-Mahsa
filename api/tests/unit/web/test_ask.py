@@ -12,12 +12,13 @@ import pytest
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy.orm import Session
 
-from app.core.ask import Answer, Figure, _badge, answer_query
+from app.core.ask import Answer, Figure, _badge, _figures, _verdict, answer_query
 from app.core.mahsa_client import FoldResult, ResponseShape, TriggeredRule, Validation
 from app.core.mahsa_coverage import load_coverage
 from app.db.models.gst import GstReturn
 from app.domains import build_registry
 from app.llm.schema import ActionClaim
+from app.web.format import humanize
 
 _SETTINGS = SimpleNamespace(
     mahsa_url="http://unused",
@@ -179,9 +180,18 @@ def test_badge_is_coverage_driven_not_hardcoded() -> None:
 
 def test_answer_card_renders_hollow_circle_for_pending_and_check_for_recomputed() -> None:
     figures = [
-        Figure("Recomputed figure", "₹1.00", True, _badge(_PORTED_TARGET, True)),
-        Figure("Pending figure", "₹2.00", True, _badge(_UNPORTED_TARGET, True)),
-        Figure("Unbacked figure", "₹3.00", False, _badge(_PORTED_TARGET, False)),
+        Figure(
+            "Recomputed figure", "₹1.00", True,
+            _badge(_PORTED_TARGET, True), _verdict(_PORTED_TARGET, True),
+        ),
+        Figure(
+            "Pending figure", "₹2.00", True,
+            _badge(_UNPORTED_TARGET, True), _verdict(_UNPORTED_TARGET, True),
+        ),
+        Figure(
+            "Unbacked figure", "₹3.00", False,
+            _badge(_PORTED_TARGET, False), _verdict(_PORTED_TARGET, False),
+        ),
     ]
     answer = Answer(
         query="q",
@@ -195,3 +205,49 @@ def test_answer_card_renders_hollow_circle_for_pending_and_check_for_recomputed(
     assert "○" in html  # honest-pending: shown as-is, not yet independently verifiable
     assert "⚠" in html  # genuinely unbacked
     assert "Mahsa cannot yet independently verify this figure" in html
+
+
+# ---- WS7-E2E-OPEN(4b): per-figure FigureVerdict threaded through ask.py -------------------
+
+
+def test_figures_thread_real_verdict_for_ported_and_unported() -> None:
+    """Response-shape check: ``_figures`` (what ``answer_query`` calls to build
+    ``Answer.figures``) attaches the ACTUAL app.core.verify.FigureVerdict per figure — a
+    response with one ported/verified target and one unported/honest-pending target shows both
+    states correctly, and the unbacked figure is never mistaken for verified."""
+    facts = {"some_fact": "20"}
+    claim = ActionClaim(
+        domain="gst",
+        narrative="x",
+        claims={_PORTED_TARGET: "20", _UNPORTED_TARGET: "20", "invented_number": "999"},
+    )
+    figures = {f.label: f for f in _figures(facts, claim)}
+
+    ported = figures[humanize(_PORTED_TARGET)]
+    assert ported.verdict.verified is True
+    assert ported.verdict.blocked is False
+    assert ported.verdict.honest_pending is False
+    assert ported.badge == "check"
+
+    unported = figures[humanize(_UNPORTED_TARGET)]
+    assert unported.verdict.honest_pending is True
+    assert unported.verdict.verified is False  # never a fabricated verified
+    assert unported.badge == "pending"
+
+    unbacked = figures[humanize("invented_number")]
+    assert unbacked.verdict.blocked is True
+    assert unbacked.verdict.verified is False
+    assert unbacked.badge == "warn"
+
+
+def test_verdict_lookup_is_real_not_hardcoded(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tamper/mutation check: if the mahsa_coverage lookup behind ``_verdict`` were dropped
+    (hardcoded to always say "recomputed"), the unported target above would wrongly flip to
+    verified — proving the correctness test isn't vacuous."""
+    import app.core.ask as ask_mod
+
+    assert _verdict(_UNPORTED_TARGET, fact_backed=True).verified is False  # true today
+
+    monkeypatch.setattr(ask_mod, "is_recomputed", lambda target: True)  # drop the real lookup
+    tampered = ask_mod._verdict(_UNPORTED_TARGET, fact_backed=True)
+    assert tampered.verified is True  # ... and the wrong answer proves the lookup was live

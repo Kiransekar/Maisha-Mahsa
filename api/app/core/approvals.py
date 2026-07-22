@@ -89,9 +89,17 @@ async def record_decision(
     as_of: date | None = None,
     user_id: str = "founder",
     timestamp: str | None = None,
+    item_id: str | None = None,
 ) -> str:
     """Seal an approve/reject onto the audit chain and persist the Decision. Re-folds the
-    domain so the decision is bound to the *current* books (state_hash + rules_version)."""
+    domain so the decision is bound to the *current* books (state_hash + rules_version).
+
+    ``item_id`` is WHICH inbox row was decided (e.g. ``"approval:gst"``) — without it, two
+    previewed rows in one domain would seal two byte-identical, indistinguishable decisions
+    (WS7-E2E fix:bulk-rows). It is carried inside ``query``, which sits in the hashed
+    ``core_payload`` — the row identity is tamper-evident, and no new payload key is added
+    (a new key would break ``verify_chain``'s recomputation for this entry). ``None`` keeps
+    the exact pre-fix entry shape for whole-domain decisions from the approvals page."""
     if decision not in ("approved", "rejected"):
         raise ValueError(f"decision must be approved/rejected, got {decision!r}")
     service = registry.get(domain)
@@ -109,7 +117,7 @@ async def record_decision(
             "action": f"approval.{decision}",
             "domain": domain,
             "user_id": user_id,
-            "query": f"{decision} {domain}",
+            "query": f"{decision} {domain}" + (f" [row {item_id}]" if item_id else ""),
             "intent_global": fold.global_intent,
             "intent_domain": fold.domain_intent,
             "validation_status": fold.validation.status,
@@ -124,6 +132,7 @@ async def record_decision(
         state_hash=state_hash,
         audit_hash=entry.this_hash,
         user_id=user_id,
+        item_id=item_id,
     )
     session.commit()
     verb = "approved" if decision == "approved" else "rejected"

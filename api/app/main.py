@@ -33,11 +33,14 @@ from app.core.money import Paise
 from app.core.ocr import OcrUnavailable
 from app.core.overview import collect_kpis, upcoming_deadlines
 from app.core.principal import Principal, bind_org_guc, reset_current_org, set_current_org
+from app.core.rbac import Capability
+from app.core.rbac_deps import require
 from app.core.strategy import cap_table as cfo_cap_table
 from app.core.strategy import investor_update, run_scenario
 from app.db import models as _models  # noqa: F401  registers all models on Base.metadata
 from app.db.base import Base
 from app.db.session import get_session, session_factory
+from app.deps import get_mahsa
 from app.domains import build_registry
 from app.domains.compliance.router import router as compliance_router
 from app.domains.equity.router import router as equity_router
@@ -401,7 +404,14 @@ def create_app() -> FastAPI:
             request, "partials/drawer_form.html", {"action": action, "settings": settings}
         )
 
-    @app.post("/d/{domain}/action/{key}", response_class=HTMLResponse)
+    @app.post(
+        "/d/{domain}/action/{key}",
+        response_class=HTMLResponse,
+        # WS5.1: same decision as the /api surface — a mutation needs `write` from a verified
+        # caller. The legacy dev-cookie session carries no role, so it can render the form but
+        # never submit it (fail-closed, per the _authenticate middleware contract).
+        dependencies=[Depends(require(Capability.WRITE))],
+    )
     async def action_submit(
         domain: str, key: str, request: Request, db: Session = Depends(get_session)
     ) -> HTMLResponse:
@@ -478,7 +488,7 @@ def create_app() -> FastAPI:
         except OcrUnavailable as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
-    @app.post("/d/vault/ocr-ingest")
+    @app.post("/d/vault/ocr-ingest", dependencies=[Depends(require(Capability.WRITE))])
     async def vault_ocr_route(
         file: UploadFile = File(...),
         upload_date: str = Form(...),
@@ -576,9 +586,12 @@ def create_app() -> FastAPI:
         request: Request,
         decision: str = Form(...),
         db: Session = Depends(get_session),
+        # WS5.1: same gate as POST /api/approvals/{domain}/decide — one decision, both surfaces.
+        principal: Principal = Depends(require(Capability.APPROVE_PAYMENT)),
+        # Same Mahsa seam as the JSON surface (app.deps.get_mahsa), so tests reach it too.
+        mahsa: MahsaClient = Depends(get_mahsa),
     ) -> HTMLResponse:
         today = datetime.now(UTC).date()
-        mahsa = MahsaClient(settings.mahsa_url)
         toast = None
         mahsa_up = True
         try:
@@ -589,7 +602,7 @@ def create_app() -> FastAPI:
                 mahsa=mahsa,
                 registry=registry,
                 as_of=today,
-                user_id=settings.default_user_id,
+                user_id=principal.user_id,  # the VERIFIED caller, never a settings default
             )
             items = await pending_approvals(db, mahsa, registry, as_of=today)
         except MahsaError:
@@ -713,7 +726,11 @@ def create_app() -> FastAPI:
             request, "partials/inline_toast.html", {"message": message}
         )
 
-    @app.post("/history/capture", response_class=HTMLResponse)
+    @app.post(
+        "/history/capture",
+        response_class=HTMLResponse,
+        dependencies=[Depends(require(Capability.WRITE))],
+    )
     async def history_capture(
         request: Request, db: Session = Depends(get_session)
     ) -> HTMLResponse:
@@ -735,7 +752,7 @@ def create_app() -> FastAPI:
             ctx["r"] = parallel.readiness(db, run)
         return templates.TemplateResponse(request, "parallel.html", ctx)
 
-    @app.post("/parallel/start")
+    @app.post("/parallel/start", dependencies=[Depends(require(Capability.WRITE))])
     async def parallel_start(
         name: str = Form("Cut-over parallel run"), db: Session = Depends(get_session)
     ) -> RedirectResponse:
@@ -744,7 +761,11 @@ def create_app() -> FastAPI:
             db.commit()
         return RedirectResponse(url="/parallel", status_code=303)
 
-    @app.post("/parallel/observe", response_class=HTMLResponse)
+    @app.post(
+        "/parallel/observe",
+        response_class=HTMLResponse,
+        dependencies=[Depends(require(Capability.WRITE))],
+    )
     async def parallel_observe(
         request: Request,
         domain: str = Form(...),

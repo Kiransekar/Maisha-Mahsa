@@ -9,17 +9,25 @@ from sqlalchemy.orm import Session
 
 from app.core.loop import run_loop
 from app.core.mahsa_client import MahsaClient
+from app.core.rbac import Capability
+from app.core.rbac_deps import require
 from app.db.models.revenue import Customer
 from app.db.session import get_session
 from app.deps import get_mahsa
 from app.domains.revenue.schemas import InvoiceResult, NewCustomer, NewInvoice
 from app.domains.revenue.service import RevenueService
 
-router = APIRouter(prefix="/api/revenue", tags=["revenue"])
+# WS5.1: `read` capability baseline on EVERY route in this router; mutations add
+# `write`, approvals add `approve_payment`, statutory filings use the WS5.2 hard gate.
+router = APIRouter(
+    prefix="/api/revenue",
+    tags=["revenue"],
+    dependencies=[Depends(require(Capability.READ))],
+)
 _service = RevenueService()
 
 
-@router.post("/customers")
+@router.post("/customers", dependencies=[Depends(require(Capability.WRITE))])
 def create_customer(body: NewCustomer, db: Session = Depends(get_session)) -> dict[str, int]:
     cust = Customer(
         name=body.name,
@@ -35,7 +43,7 @@ def create_customer(body: NewCustomer, db: Session = Depends(get_session)) -> di
     return {"id": cust.id}
 
 
-@router.post("/invoices")
+@router.post("/invoices", dependencies=[Depends(require(Capability.WRITE))])
 def create_invoice(body: NewInvoice, db: Session = Depends(get_session)) -> InvoiceResult:
     try:
         result = _service.create_invoice(

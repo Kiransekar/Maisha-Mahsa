@@ -19,6 +19,7 @@ def append(
     state_hash: str,
     audit_hash: str | None,
     user_id: str,
+    item_id: str | None = None,
 ) -> Decision:
     row = Decision(
         timestamp=timestamp,
@@ -27,6 +28,7 @@ def append(
         state_hash=state_hash,
         audit_hash=audit_hash,
         user_id=user_id,
+        item_id=item_id,
     )
     session.add(row)
     session.flush()

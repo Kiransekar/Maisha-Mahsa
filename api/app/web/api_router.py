@@ -17,6 +17,8 @@ from sqlalchemy.orm import Session
 
 from app.core.approvals import pending_approvals
 from app.core.mahsa_client import MahsaClient, MahsaError
+from app.core.rbac import Capability
+from app.core.rbac_deps import require
 from app.db.session import get_session
 from app.deps import get_mahsa
 from app.domains import build_registry
@@ -24,7 +26,8 @@ from app.web.exceptions import build_inbox, build_items
 from app.web.exceptions_router import collect_sources
 from app.web.today import build_today
 
-router = APIRouter(prefix="/api", tags=["spa"])
+# WS5.1: read-only SPA surface — every route needs the `read` capability of a verified caller.
+router = APIRouter(prefix="/api", tags=["spa"], dependencies=[Depends(require(Capability.READ))])
 
 _registry = build_registry()
 

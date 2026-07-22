@@ -82,7 +82,13 @@ fn ymd(v: &Value, key: &str) -> Option<gratuity_bonus::Ymd> {
 fn recompute(target: &str, inp: &Value) -> Option<i64> {
     Some(match target {
         "statutory_wage_base" => {
-            pf_esi::statutory_wage_base(gi(inp, "included"), gi(inp, "excluded"), gi(inp, "in_kind")).0
+            pf_esi::statutory_wage_base(
+                gi(inp, "included"),
+                gi(inp, "excluded_addback"),
+                gi(inp, "excluded_terminal"),
+                gi(inp, "in_kind"),
+            )
+            .0
         }
         "esi_employee" => {
             let (emp, _) = pf_esi::esi(gi(inp, "gross_monthly"));
@@ -128,6 +134,7 @@ fn recompute(target: &str, inp: &Value) -> Option<i64> {
                 ymd(inp, "boundary")?,
                 gi(inp, "old_base"),
                 gi(inp, "new_base"),
+                inp.get("fixed_term").and_then(Value::as_bool).unwrap_or(false),
             )
             .0
         }
@@ -319,8 +326,8 @@ mod claim_tests {
 
     #[test]
     fn has_mismatch_only_on_recomputable_wrong() {
-        let ok = check_claim(&claim("statutory_wage_base", json!({"included": 3000000, "excluded": 0}), 3000000));
-        let wrong = check_claim(&claim("statutory_wage_base", json!({"included": 3000000, "excluded": 0}), 1));
+        let ok = check_claim(&claim("statutory_wage_base", json!({"included": 3000000, "excluded_addback": 0}), 3000000));
+        let wrong = check_claim(&claim("statutory_wage_base", json!({"included": 3000000, "excluded_addback": 0}), 1));
         assert!(!has_mismatch(std::slice::from_ref(&ok)));
         assert!(has_mismatch(&[ok, wrong]));
     }

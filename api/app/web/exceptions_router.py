@@ -19,6 +19,9 @@ from app.config import get_settings
 from app.core.approvals import pending_approvals, record_decision
 from app.core.mahsa_client import MahsaClient, MahsaError
 from app.core.money import Paise
+from app.core.principal import Principal
+from app.core.rbac import Capability
+from app.core.rbac_deps import enforce, require
 from app.db.session import get_session
 from app.deps import get_mahsa
 from app.domains import build_registry
@@ -129,6 +132,9 @@ async def inbox_bulk(
     confirm: bool = Form(default=False),
     db: Session = Depends(get_session),
     mahsa: MahsaClient = Depends(get_mahsa),
+    # WS5.1: same split as POST /api/inbox/bulk — `read` to preview, `approve_payment` to
+    # commit. One decision, both surfaces.
+    principal: Principal = Depends(require(Capability.READ)),
 ) -> HTMLResponse:
     today = datetime.now(UTC).date()
     toast = None
@@ -137,8 +143,10 @@ async def inbox_bulk(
         approvals, blocked, mahsa_up = await collect_sources(db, mahsa, today)
         items = build_items(approvals, blocked)
         preview = preview_bulk(items, ids, action)  # dry-run — nothing mutated yet
+        if confirm:
+            # Checked BEFORE any decision is recorded, not after the first one.
+            enforce(principal, Capability.APPROVE_PAYMENT, request.url.path)
         if confirm and preview.rows:
-            settings = get_settings()
             decision = "approved" if action == "approve" else "rejected"
             for row in preview.rows:
                 await record_decision(
@@ -148,7 +156,8 @@ async def inbox_bulk(
                     mahsa=mahsa,
                     registry=_registry,
                     as_of=today,
-                    user_id=settings.default_user_id,
+                    user_id=principal.user_id,  # the VERIFIED caller, never a settings default
+                    item_id=row.id,  # WHICH row was decided — fix:bulk-rows
                 )
             toast = f"{len(preview.rows)} item(s) {decision} · sealed to the audit chain."
             preview = replace(preview, committed=True)

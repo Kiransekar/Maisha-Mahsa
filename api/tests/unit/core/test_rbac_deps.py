@@ -27,7 +27,13 @@ from app.core import audit_store, rbac_deps
 from app.core.betterauth import get_principal
 from app.core.principal import Principal
 from app.core.rbac import Capability, Role
-from app.core.rbac_deps import emit_role_change, enforce, require, resolve_principal
+from app.core.rbac_deps import (
+    emit_role_change,
+    enforce,
+    require,
+    require_filing,
+    resolve_principal,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -186,6 +192,56 @@ def test_require_returns_the_principal_for_a_permitted_caller():
     principal = _principal(Role.APPROVER)
     request = SimpleNamespace(url=SimpleNamespace(path="/api/approvals/treasury/decide"))
     assert dep(request, principal) is principal
+
+
+# --- the statutory-filing hard gate (fix:rbac-api) --------------------------------------------
+
+
+def test_require_filing_rejects_a_non_filing_action_at_definition_time():
+    """A typo'd or invented action must never silently take the softer amount-matrix path."""
+    with pytest.raises(ValueError, match="not a statutory filing action"):
+        require_filing("create_invoice")
+
+
+#: PAIRED both directions, by hand. The load-bearing row is APPROVER: it HOLDS the
+#: approve_filing capability (see EXPECTED above) and is still refused — the WS5.2 hard gate
+#: (Owner/Admin only, via approval_matrix.decide_approval) is stricter than rbac.can().
+@pytest.mark.parametrize(
+    ("role", "allowed"),
+    [
+        (Role.OWNER, True),
+        (Role.ADMIN, True),
+        (Role.APPROVER, False),
+        (Role.ACCOUNTANT, False),
+        (Role.CA, False),
+        (Role.INVESTOR, False),
+    ],
+)
+def test_require_filing_is_a_hard_owner_admin_gate(
+    role: Role, allowed: bool, denial_audit_db: Session
+):
+    from types import SimpleNamespace
+
+    dep = require_filing("gstr3b")
+    request = SimpleNamespace(url=SimpleNamespace(path="/api/gst/gstr3b"))
+    principal = _principal(role)
+    if allowed:
+        assert dep(request, principal) is principal
+        assert _denied_count(denial_audit_db) == 0
+    else:
+        with pytest.raises(HTTPException) as exc_info:
+            dep(request, principal)
+        assert exc_info.value.status_code == 403
+        assert "Owner or Admin" in str(exc_info.value.detail)
+        assert "/api/" not in str(exc_info.value.detail)  # capability-level, never the resource
+        assert _denied_count(denial_audit_db) == 1  # the denial is audited server-side
+
+
+def test_require_filing_declares_its_marker_for_the_coverage_guard():
+    dep = require_filing("mark_filed")
+    assert dep.required_capability is Capability.APPROVE_FILING
+    assert dep.filing_action == "mark_filed"
+    assert require(Capability.WRITE).required_capability is Capability.WRITE
 
 
 # --- role_change_event wiring ------------------------------------------------------------------

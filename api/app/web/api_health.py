@@ -13,9 +13,14 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.freshness import build_freshness
+from app.core.rbac import Capability
+from app.core.rbac_deps import require
 from app.db.session import get_session
 
-router = APIRouter(prefix="/api/health", tags=["health"])
+# WS5.1: staleness data is still org data — `read` capability required.
+router = APIRouter(
+    prefix="/api/health", tags=["health"], dependencies=[Depends(require(Capability.READ))]
+)
 
 
 @router.get("/connections")

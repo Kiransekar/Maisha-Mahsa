@@ -9,16 +9,24 @@ from sqlalchemy.orm import Session
 
 from app.core.loop import run_loop
 from app.core.mahsa_client import MahsaClient
+from app.core.rbac import Capability
+from app.core.rbac_deps import require, require_filing
 from app.db.session import get_session
 from app.deps import get_mahsa
 from app.domains.compliance.schemas import MarkFiled, NewDeadline
 from app.domains.compliance.service import ComplianceService
 
-router = APIRouter(prefix="/api/compliance", tags=["compliance"])
+# WS5.1: `read` capability baseline on EVERY route in this router; mutations add
+# `write`, approvals add `approve_payment`, statutory filings use the WS5.2 hard gate.
+router = APIRouter(
+    prefix="/api/compliance",
+    tags=["compliance"],
+    dependencies=[Depends(require(Capability.READ))],
+)
 _service = ComplianceService()
 
 
-@router.post("/deadlines")
+@router.post("/deadlines", dependencies=[Depends(require(Capability.WRITE))])
 def add_deadline(body: NewDeadline, db: Session = Depends(get_session)) -> dict[str, int]:
     deadline_id = _service.add_deadline(
         db,
@@ -31,14 +39,14 @@ def add_deadline(body: NewDeadline, db: Session = Depends(get_session)) -> dict[
     return {"id": deadline_id}
 
 
-@router.post("/seed")
+@router.post("/seed", dependencies=[Depends(require(Capability.WRITE))])
 def seed_month(month: str, db: Session = Depends(get_session)) -> dict[str, list[int]]:
     ids = _service.seed_month(db, month)
     db.commit()
     return {"ids": ids}
 
 
-@router.post("/deadlines/{deadline_id}/file")
+@router.post("/deadlines/{deadline_id}/file", dependencies=[Depends(require_filing("mark_filed"))])
 def mark_filed(
     deadline_id: int, body: MarkFiled, db: Session = Depends(get_session)
 ) -> dict[str, str]:

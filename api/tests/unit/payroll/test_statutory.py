@@ -79,6 +79,38 @@ def test_gratuity_formula():
     assert s.gratuity_required(Paise.from_rupees(26000), 0) == 0
 
 
+def test_gratuity_required_ceiling_pair():
+    # CoSS 2020 s.53(3) notified ceiling ₹20,00,000 (S.O. 1420(E) via s.164(2)(a) — see
+    # ws1b_wiring_gratuity.yaml). PAIRED: under the cap passes through, over it clamps exactly.
+    # ₹2,00,000 × 17y = ₹19,61,538 (< cap, untouched); × 18y raw ₹20,76,923 -> exactly ₹20,00,000.
+    assert s.gratuity_required(Paise.from_rupees(200000), 17) == Paise.from_rupees(1961538)
+    assert s.gratuity_required(Paise.from_rupees(200000), 18) == int(s.GRATUITY_CEILING)
+
+
+def test_gratuity_hybrid_eligibility_pairs():
+    # CoSS 2020 s.53(1): five-year floor, PAIRED at the boundary; the one-year floor is the
+    # statute's own FIXED-TERM exception (second proviso + MoLE FAQ Sl.14), not the rule.
+    from datetime import date as d
+
+    kw = dict(boundary=d(2025, 11, 21), old_base=0, new_base=Paise.from_rupees(26000))
+    # exactly 5 completed years -> payable ₹75,000; one day short (4 years) -> nil (non-FTE)
+    assert s.gratuity_hybrid(
+        doj=d(2026, 1, 1), exit_date=d(2031, 1, 1), **kw
+    ) == Paise.from_rupees(75000)
+    assert s.gratuity_hybrid(doj=d(2026, 1, 1), exit_date=d(2030, 12, 31), **kw) == 0
+    # FTE: exactly 1 year -> ₹15,000; 11 months -> nil; 2y non-FTE nil vs 2y FTE ₹30,000
+    assert s.gratuity_hybrid(
+        doj=d(2026, 1, 1), exit_date=d(2027, 1, 1), fixed_term=True, **kw
+    ) == Paise.from_rupees(15000)
+    assert s.gratuity_hybrid(
+        doj=d(2026, 1, 1), exit_date=d(2026, 12, 1), fixed_term=True, **kw
+    ) == 0
+    assert s.gratuity_hybrid(doj=d(2026, 1, 1), exit_date=d(2028, 1, 1), **kw) == 0
+    assert s.gratuity_hybrid(
+        doj=d(2026, 1, 1), exit_date=d(2028, 1, 1), fixed_term=True, **kw
+    ) == Paise.from_rupees(30000)
+
+
 def test_bonus_provision():
     # basic ₹6,000 -> 8.33% = ₹499.80 -> ₹500
     assert s.bonus_provision_monthly(Paise.from_rupees(6000)) == Paise.from_rupees(500)

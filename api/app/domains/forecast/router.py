@@ -9,6 +9,8 @@ from sqlalchemy.orm import Session
 
 from app.core.loop import run_loop
 from app.core.mahsa_client import MahsaClient
+from app.core.rbac import Capability
+from app.core.rbac_deps import require
 from app.db.session import get_session
 from app.deps import get_mahsa
 from app.domains.forecast.schemas import (
@@ -19,7 +21,13 @@ from app.domains.forecast.schemas import (
 )
 from app.domains.forecast.service import ForecastService
 
-router = APIRouter(prefix="/api/forecast", tags=["forecast"])
+# WS5.1: `read` capability baseline on EVERY route in this router; mutations add
+# `write`, approvals add `approve_payment`, statutory filings use the WS5.2 hard gate.
+router = APIRouter(
+    prefix="/api/forecast",
+    tags=["forecast"],
+    dependencies=[Depends(require(Capability.READ))],
+)
 _service = ForecastService()
 
 
@@ -45,7 +53,7 @@ def unit_economics(body: UnitEconomicsInput) -> dict:
     return _service.unit_economics(**body.model_dump())
 
 
-@router.post("/forecasts")
+@router.post("/forecasts", dependencies=[Depends(require(Capability.WRITE))])
 def record_forecast(body: RecordForecast, db: Session = Depends(get_session)) -> dict:
     result = _service.record_forecast(
         db,

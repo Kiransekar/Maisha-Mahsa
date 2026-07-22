@@ -31,6 +31,20 @@ BONUS_WAGE_CAP = Paise.from_rupees(7000)  # calculation ceiling
 BONUS_MIN_RATE = Decimal("0.0833")  # 8.33%
 
 GRATUITY_NUM, GRATUITY_DEN = 15, 26  # 15 days' wages per completed year
+# CoSS 2020 s.53(1): "Gratuity shall be payable to an employee on the termination of his
+# employment after he has rendered continuous service for not less than five years"; second
+# proviso: "the completion of continuous service of five years shall not be necessary where the
+# termination ... is due to death or disablement or expiration of fixed term employment".
+# The FTE floor of one year is MoLE Additional FAQs on Labour Codes (16.03.2026) Sl.14/19.
+GRATUITY_MIN_YEARS = 5
+GRATUITY_MIN_YEARS_FIXED_TERM = 1
+# CoSS 2020 s.53(3): "The amount of gratuity payable to an employee shall not exceed such amount
+# as may be notified by the Central Government." Amount applied: ₹20,00,000 — S.O. 1420(E)
+# 29-03-2018 (notified under PoG Act 1972 s.4(3)), carried into s.53(3) by CoSS s.164(2)(a)
+# (repealed-Act notifications "deemed to have been done ... under the corresponding provisions
+# of this Code"). No CoSS-specific s.53(3) notification could be sourced; see the ceiling
+# vectors in ws1b_wiring_gratuity.yaml (provenance=interpretation, ca_initials OWNER).
+GRATUITY_CEILING = Paise.from_rupees(2000000)
 
 # New-regime annual slabs: (lower_paise, upper_paise_or_None, rate)
 STD_DEDUCTION_ANNUAL = Paise.from_rupees(75000)
@@ -245,11 +259,13 @@ def monthly_tds(annual_gross: int) -> Paise:
 
 
 def gratuity_required(last_basic_monthly: int, completed_years: int) -> Paise:
-    """Accrued gratuity liability = (15/26) × last drawn Basic × completed years."""
+    """Accrued gratuity liability = (15/26) × last drawn Basic × completed years, capped at the
+    s.53(3) notified ceiling (₹20 lakh) — the payable amount can never exceed the cap."""
     if completed_years <= 0:
         return Paise(0)
     amount = Decimal(int(last_basic_monthly)) * GRATUITY_NUM * completed_years / GRATUITY_DEN
-    return Paise(_round_rupee(int(amount.to_integral_value(ROUND_HALF_UP))))
+    return Paise(min(_round_rupee(int(amount.to_integral_value(ROUND_HALF_UP))),
+                     int(GRATUITY_CEILING)))
 
 
 def _completed_years(start: date, end: date) -> int:
@@ -269,21 +285,28 @@ def gratuity_hybrid(
     boundary: date,
     old_base: int,
     new_base: int,
+    fixed_term: bool = False,
 ) -> Paise:
     """Hybrid gratuity across the Labour-Code transition (MMX-1.0 §WS1.B2).
 
     Completed years of service rendered before ``boundary`` (21-11-2025) are valued on the OLD
     base (last-drawn Basic); years completed on/after ``boundary`` on the NEW s.2(y) wage base.
-    Both legs reuse the same 15/26 factor; the legs are summed and rounded once. FTE eligibility:
-    nil unless total service ≥ 1 completed year. All dates are injected — no clock. ``old_base``
-    and ``new_base`` are the monthly Basic / statutory wage base in paise.
+    Both legs reuse the same 15/26 factor; the legs are summed and rounded once, then capped at
+    the s.53(3) notified ceiling (₹20 lakh). All dates are injected — no clock. ``old_base`` and
+    ``new_base`` are the monthly Basic / statutory wage base in paise.
+
+    Eligibility (CoSS 2020 s.53(1)): continuous service of not less than FIVE years, except that
+    for fixed-term employment (``fixed_term=True``) the second proviso disapplies the five-year
+    requirement and the MoLE FAQ fixes the FTE floor at one year (defect #3, fixed — the old
+    code applied the 1-year FTE exception to every employee).
 
     Apportionment (a computational interpretation, no statutory value invented): a completed year
     is assigned to the pre-boundary leg when its anniversary (completion date) falls strictly
     before ``boundary``, else to the post-boundary leg.
     """
     total_years = _completed_years(doj, exit_date)
-    if total_years < 1:  # FTE eligibility >= 1 completed year
+    floor = GRATUITY_MIN_YEARS_FIXED_TERM if fixed_term else GRATUITY_MIN_YEARS
+    if total_years < floor:
         return Paise(0)
     b = (boundary.year, boundary.month, boundary.day)
     pre_years = sum(
@@ -293,7 +316,8 @@ def gratuity_hybrid(
     old_leg = Decimal(int(old_base)) * GRATUITY_NUM * pre_years / GRATUITY_DEN
     new_leg = Decimal(int(new_base)) * GRATUITY_NUM * post_years / GRATUITY_DEN
     total = old_leg + new_leg
-    return Paise(_round_rupee(int(total.to_integral_value(ROUND_HALF_UP))))
+    return Paise(min(_round_rupee(int(total.to_integral_value(ROUND_HALF_UP))),
+                     int(GRATUITY_CEILING)))
 
 
 def bonus_provision_monthly(basic_monthly: int) -> Paise:

@@ -86,11 +86,21 @@ def payslip_recompute_claims(
     recomputes the identical figure and BLOCKs on any mismatch. PT/TDS/loss-of-pay are not yet
     ported to Mahsa, so no claim is emitted for them (they stay honest-pending elsewhere)."""
     wb = int(comp["wage_base"])
-    excluded = int(comp["hra"]) + int(comp["lta"]) + int(comp["special_allowance"])
+    # s.2(y) classification (see app/core/statutory_wage.py): special_allowance is WAGES
+    # (closed exclusion list + Vivekananda Vidyamandir); HRA is clause (f) and LTA clause (d),
+    # both inside the first proviso's (a)-(i) add-back span. No terminal (j)/(k) components
+    # appear on a monthly payslip.
+    included = int(comp["basic"]) + int(comp["special_allowance"])
+    excluded_addback = int(comp["hra"]) + int(comp["lta"])
     return [
         RecomputeClaim(
             target="statutory_wage_base",
-            inputs={"included": int(comp["basic"]), "excluded": excluded, "in_kind": 0},
+            inputs={
+                "included": included,
+                "excluded_addback": excluded_addback,
+                "excluded_terminal": 0,
+                "in_kind": 0,
+            },
             claimed_paise=wb,
             label=f"{label_prefix}.wage_base",
         ),

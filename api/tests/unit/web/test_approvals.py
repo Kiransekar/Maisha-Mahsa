@@ -123,3 +123,52 @@ def test_decision_store_resolution_keyed_by_state(session: Session) -> None:
     )
     assert decision_store.resolution(session, "gst", "hashA") == "approved"
     assert decision_store.resolution(session, "gst", "hashB") is None  # different state = pending
+
+
+@pytest.mark.asyncio
+async def test_two_rows_one_domain_seal_distinguishable_decisions(session: Session) -> None:
+    """WS7-E2E fix:bulk-rows. Two decisions in ONE domain, each carrying its row identity, must
+    be distinguishable in BOTH stores — and the extended audit payload must still hash-verify.
+
+    Mutation check: if ``item_id`` is dropped anywhere along the path (record_decision → audit
+    ``query`` → Decision row), the two entries collapse into byte-identical twins and the
+    distinctness/row-naming asserts below fail."""
+    registry = build_registry()
+    mahsa = _FakeMahsa()
+    for row_id in ("approval:gst", "approval:gst:itc"):
+        await record_decision(
+            session,
+            domain="gst",
+            decision="approved",
+            mahsa=mahsa,  # type: ignore[arg-type]
+            registry=registry,
+            as_of=date(2026, 7, 22),
+            timestamp="2026-07-22T20:00:00",
+            item_id=row_id,
+        )
+
+    chain = load_chain(session)
+    assert verify_chain(chain) is True  # row identity rides INSIDE the hashed payload
+    q1, q2 = chain[-2].query, chain[-1].query
+    assert q1 != q2, "two rows in one domain must not seal identical audit entries"
+    assert "[row approval:gst]" in (q1 or "")
+    assert "[row approval:gst:itc]" in (q2 or "")
+
+    rows = session.scalars(select(Decision)).all()
+    assert [r.item_id for r in rows] == ["approval:gst", "approval:gst:itc"]
+
+
+@pytest.mark.asyncio
+async def test_record_decision_without_item_id_keeps_prefix_shape(session: Session) -> None:
+    """Whole-domain decisions (approvals page) keep the exact pre-fix audit query."""
+    await record_decision(
+        session,
+        domain="gst",
+        decision="rejected",
+        mahsa=_FakeMahsa(),  # type: ignore[arg-type]
+        registry=build_registry(),
+        timestamp="2026-07-22T20:00:00",
+    )
+    chain = load_chain(session)
+    assert chain[-1].query == "rejected gst"
+    assert session.scalars(select(Decision)).one().item_id is None

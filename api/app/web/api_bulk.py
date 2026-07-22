@@ -130,6 +130,9 @@ async def inbox_bulk_json(
         if req.confirm and preview.rows:
             decision = _BULK_ACTIONS[req.action]
             user_id = principal.user_id
+            # Exactly the previewed ids commit, one decision PER ROW (item_id): an id not in
+            # preview.rows is reported skipped below and never decided; two rows in one domain
+            # seal two distinguishable decisions. committed_count = rows actually decided.
             for row in preview.rows:
                 await record_decision(
                     db,
@@ -139,6 +142,7 @@ async def inbox_bulk_json(
                     registry=_registry,
                     as_of=as_of,
                     user_id=user_id,
+                    item_id=row.id,
                 )
                 committed_count += 1
             preview = replace(preview, committed=True)

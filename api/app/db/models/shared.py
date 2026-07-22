@@ -134,6 +134,9 @@ class Decision(Base):
     state_hash: Mapped[str] = mapped_column(String, nullable=False)
     audit_hash: Mapped[str | None] = mapped_column(String)
     user_id: Mapped[str] = mapped_column(String, nullable=False)
+    # WS7-E2E fix:bulk-rows — WHICH inbox row this decision covered (e.g. "approval:gst").
+    # NULL for pre-fix rows and for whole-domain decisions from the approvals page.
+    item_id: Mapped[str | None] = mapped_column(String)
 
 
 class ComplianceCalendar(Base):

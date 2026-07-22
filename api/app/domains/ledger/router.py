@@ -9,16 +9,24 @@ from sqlalchemy.orm import Session
 
 from app.core.loop import run_loop
 from app.core.mahsa_client import MahsaClient
+from app.core.rbac import Capability
+from app.core.rbac_deps import require
 from app.db.session import get_session
 from app.deps import get_mahsa
 from app.domains.ledger.schemas import JournalEntryResult, NewAccount, NewJournalEntry
 from app.domains.ledger.service import LedgerService
 
-router = APIRouter(prefix="/api/ledger", tags=["ledger"])
+# WS5.1: `read` capability baseline on EVERY route in this router; mutations add
+# `write`, approvals add `approve_payment`, statutory filings use the WS5.2 hard gate.
+router = APIRouter(
+    prefix="/api/ledger",
+    tags=["ledger"],
+    dependencies=[Depends(require(Capability.READ))],
+)
 _service = LedgerService()
 
 
-@router.post("/accounts")
+@router.post("/accounts", dependencies=[Depends(require(Capability.WRITE))])
 def create_account(body: NewAccount, db: Session = Depends(get_session)) -> dict[str, int]:
     try:
         account_id = _service.create_account(
@@ -35,7 +43,7 @@ def create_account(body: NewAccount, db: Session = Depends(get_session)) -> dict
     return {"id": account_id}
 
 
-@router.post("/journal")
+@router.post("/journal", dependencies=[Depends(require(Capability.WRITE))])
 def post_journal(body: NewJournalEntry, db: Session = Depends(get_session)) -> JournalEntryResult:
     try:
         result = _service.post_journal_entry(
