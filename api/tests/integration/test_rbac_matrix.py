@@ -378,6 +378,10 @@ API_ROUTE_GATES: dict[str, tuple[str, ...]] = {
     "GET /api/health/connections": ("read",),
     "GET /api/domains": ("read",),
     "GET /api/domains/{domain}": ("read",),
+    # P0-2 generic action preview/commit: preview is a dry-run (read, api_bulk precedent);
+    # commit carries the capability the HTMX drawer flow already requires (write).
+    "POST /api/domains/{domain}/actions/{key}/preview": ("read",),
+    "POST /api/domains/{domain}/actions/{key}/commit": ("read", "write"),
     "GET /api/audit": ("read", "view_audit"),
     # WS8.1 audit pack (downloads additionally need export)
     "GET /api/audit/pack": ("read", "view_audit"),
@@ -395,8 +399,20 @@ API_ROUTE_GATES: dict[str, tuple[str, ...]] = {
     # by the invited CA's own token (no extra capability — identity IS the authorization).
     "POST /api/ca/invite": ("read", "manage_users"),
     "POST /api/ca/accept": ("read",),
+    # P0-1 filing flow (app/web/api_filings.py): previews are readable (the queue is honest to
+    # every role), confirms wear the WS5.2 statutory hard gate, evidence is an audit read.
+    "GET /api/filings": ("read",),
+    "POST /api/filings/gstr3b/preview": ("read",),
+    "POST /api/filings/gstr3b/confirm": ("read", "filing"),
+    "POST /api/filings/tds/preview": ("read",),
+    "POST /api/filings/tds/confirm": ("read", "filing"),
+    "POST /api/filings/deadline/{deadline_id}/preview": ("read",),
+    "POST /api/filings/deadline/{deadline_id}/confirm": ("read", "filing"),
+    "GET /api/filings/evidence": ("read", "view_audit"),
     # treasury
     "POST /api/treasury/accounts": ("read", "write"),
+    # P0-5: the re-import account picker (Domain.tsx treasury) — read, same as every other list.
+    "GET /api/treasury/accounts": ("read",),
     "POST /api/treasury/accounts/{account_id}/import": ("read", "write"),
     "GET /api/treasury/cash": ("read",),
     "GET /api/treasury/metrics": ("read",),
@@ -408,6 +424,15 @@ API_ROUTE_GATES: dict[str, tuple[str, ...]] = {
     "POST /api/payroll/runs": ("read", "write"),
     "POST /api/payroll/fold": ("read",),
     "GET /api/payroll/lwf": ("read",),
+    # P0-4 payroll run flow (app/web/api_payroll.py): preview is a dry-run read (api_actions
+    # precedent); confirm carries the same `write` the direct POST /runs already requires;
+    # artifact downloads wear the same `export` gate as the audit-pack downloads.
+    "GET /api/payroll/runs/overview": ("read",),
+    "POST /api/payroll/runs/preview": ("read",),
+    "POST /api/payroll/runs/confirm": ("read", "write"),
+    "GET /api/payroll/employees/{employee_id}/payslip.pdf": ("read", "export"),
+    "GET /api/payroll/employees/{employee_id}/form16.pdf": ("read", "export"),
+    "GET /api/payroll/ecr.txt": ("read", "export"),
     # gst — filing a GSTR-3B is a statutory filing: WS5.2 hard gate, not a capability check
     "GET /api/gst/validate-gstin": ("read",),
     "POST /api/gst/gstr3b": ("read", "filing"),

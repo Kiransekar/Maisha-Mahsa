@@ -6,6 +6,7 @@ from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.loop import run_loop
@@ -15,6 +16,7 @@ from app.core.rbac_deps import require
 from app.db.models.treasury import BankAccount
 from app.db.session import get_session
 from app.deps import get_mahsa
+from app.domains.treasury.schemas import AccountSummary
 from app.domains.treasury.service import TreasuryService
 
 # WS5.1: `read` capability baseline on EVERY route in this router; mutations add
@@ -46,6 +48,23 @@ def create_account(body: NewAccount, db: Session = Depends(get_session)) -> dict
     db.add(acct)
     db.commit()
     return {"id": acct.id}
+
+
+@router.get("/accounts")
+def list_accounts(db: Session = Depends(get_session)) -> list[AccountSummary]:
+    """P0-5: the re-import target picker on the treasury domain screen needs a real account id
+    to import into — this is the only place that existed to get one (creation returns an id,
+    but nothing previously listed the accounts already on file)."""
+    accounts = db.scalars(select(BankAccount)).all()
+    return [
+        AccountSummary(
+            id=a.id,
+            bank_name=a.bank_name,
+            account_number=a.account_number,
+            current_balance_paise=a.current_balance,
+        )
+        for a in accounts
+    ]
 
 
 @router.post("/accounts/{account_id}/import", dependencies=[Depends(require(Capability.WRITE))])

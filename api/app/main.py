@@ -59,10 +59,13 @@ from app.domains.treasury.router import router as treasury_router
 from app.domains.vault.router import router as vault_router
 from app.llm.tools import enrich
 from app.web.actions import actions_for, find_action
+from app.web.api_actions import router as actions_api_router
 from app.web.api_approvals import router as approvals_api_router
 from app.web.api_bulk import router as bulk_api_router
 from app.web.api_domains import router as domains_api_router
+from app.web.api_filings import router as filings_api_router
 from app.web.api_health import router as health_api_router
+from app.web.api_payroll import router as payroll_api_router
 from app.web.api_router import router as spa_api_router
 from app.web.charts import sparkline
 from app.web.exceptions_router import router as inbox_router
@@ -255,8 +258,11 @@ def create_app() -> FastAPI:
     app.include_router(spa_api_router)
     app.include_router(bulk_api_router)
     app.include_router(approvals_api_router)
+    app.include_router(filings_api_router)
+    app.include_router(payroll_api_router)
     app.include_router(health_api_router)
     app.include_router(domains_api_router)
+    app.include_router(actions_api_router)
 
     registry = build_registry()
 
@@ -423,7 +429,10 @@ def create_app() -> FastAPI:
         form = await request.form()
         data = {k: str(v) for k, v in form.items()}
         try:
-            message = action.handler(db, data)
+            result = action.handler(db, data)
+            # P0-3 handlers may return (message, badged_figures); this HTMX surface shows
+            # the message and lets the refreshed figures below carry the numbers.
+            message = result[0] if isinstance(result, tuple) else result
             db.commit()
         except (ValueError, KeyError, TypeError) as exc:
             db.rollback()

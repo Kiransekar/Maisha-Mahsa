@@ -5,7 +5,7 @@
 #
 # Seed set per PRD §4.4. Expand as each domain module is built; bump `version` on change
 # and record the change in BUILD_PROGRESS.md.
-version: "2026.06.1"
+version: "2026.07.1"
 
 rules:
   - id: TREASURY-001
@@ -57,6 +57,16 @@ rules:
     all_of:
       - { metric: bonus_reserve, op: lt, value: 1 }
     action: "Top up the bonus provision to at least 8.33% of eligible wages."
+
+  - id: PAYROLL-005
+    domain: payroll
+    description: "A payroll run is drafted and awaiting approval — wages are not released until a human signs it off."
+    statute: "Internal payroll policy"
+    section: "PP-1"
+    severity: warning
+    all_of:
+      - { metric: payroll_run_pending, op: gt, value: 0 }
+    action: "Open Approvals: approve to release the drafted run, or reject to void it. Mind the Payment of Wages Act 1936 Sec 5 disbursement window."
 
   - id: GST-001
     domain: gst

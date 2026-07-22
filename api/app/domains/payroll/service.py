@@ -291,6 +291,43 @@ class PayrollService(BaseDomainService):
 
     # ---- monthly run ----------------------------------------------------------------
 
+    def preview_run(
+        self,
+        session: Session,
+        month_year: str,
+        lop_days: dict[int, int] | None = None,
+    ) -> list[tuple[Employee, dict[str, int]]]:
+        """The per-employee components a run for ``month_year`` WOULD write, computed without
+        writing anything. ``run_payroll`` consumes this same loop, so a preview and the run it
+        confirms agree by construction (INVARIANT 9: preview → explicit confirm)."""
+        import calendar
+
+        lop_days = lop_days or {}
+        year, month = (int(p) for p in month_year.split("-"))
+        days_in_month = calendar.monthrange(year, month)[1]
+        anchor = f"{year:04d}-{month:02d}-28"
+        rows: list[tuple[Employee, dict[str, int]]] = []
+        for emp in session.scalars(select(Employee).where(Employee.status == "active")).all():
+            structure = self._latest_structure(session, emp.id, anchor)
+            if structure is None:
+                continue
+            rows.append(
+                (
+                    emp,
+                    compute_components(
+                        basic=structure.basic,
+                        hra=structure.hra,
+                        lta=structure.lta,
+                        special_allowance=structure.special_allowance,
+                        state=emp.state,
+                        month=month,
+                        lop_days=int(lop_days.get(emp.id, 0)),
+                        days_in_month=days_in_month,
+                    ),
+                )
+            )
+        return rows
+
     def run_payroll(
         self,
         session: Session,
@@ -301,37 +338,20 @@ class PayrollService(BaseDomainService):
         """Run payroll for ``month_year`` ("YYYY-MM"). Recomputes each active employee's
         entry for that month (so PT February specials etc. apply) from their latest
         effective salary structure. ``lop_days`` optionally maps employee_id → unpaid-leave
-        days for the month (loss-of-pay); absent employees are treated as full-month."""
-        import calendar
+        days for the month (loss-of-pay); absent employees are treated as full-month.
 
-        lop_days = lop_days or {}
-        year, month = (int(p) for p in month_year.split("-"))
-        days_in_month = calendar.monthrange(year, month)[1]
-        anchor = f"{year:04d}-{month:02d}-28"
-
+        The run lands as status ``draft``: ``build_snapshot`` reports it via the
+        ``payroll_run_pending`` metric, rule PAYROLL-005 folds the domain yellow, and the
+        run therefore appears in the EXISTING approvals queue until a decision releases it
+        (see :meth:`resolve_pending_runs`)."""
         run = PayrollRun(month_year=month_year, run_date=run_date, status="draft")
         session.add(run)
         session.flush()
 
-        employees = session.scalars(select(Employee).where(Employee.status == "active")).all()
-
         totals = {"gross": 0, "deductions": 0, "net": 0, "pf_employer": 0, "esi_employer": 0}
         min_net = None
         count = 0
-        for emp in employees:
-            structure = self._latest_structure(session, emp.id, anchor)
-            if structure is None:
-                continue
-            comp = compute_components(
-                basic=structure.basic,
-                hra=structure.hra,
-                lta=structure.lta,
-                special_allowance=structure.special_allowance,
-                state=emp.state,
-                month=month,
-                lop_days=int(lop_days.get(emp.id, 0)),
-                days_in_month=days_in_month,
-            )
+        for emp, comp in self.preview_run(session, month_year, lop_days):
             session.add(
                 PayrollEntry(
                     payroll_run_id=run.id,
@@ -376,6 +396,17 @@ class PayrollService(BaseDomainService):
             "total_esi_employer": totals["esi_employer"],
             "min_net_pay": 0 if min_net is None else min_net,
         }
+
+    def resolve_pending_runs(self, session: Session, *, decision: str) -> int:
+        """Approvals-flow hook (called by ``app.core.approvals.record_decision`` for the payroll
+        domain): an approve releases every drafted run, a reject voids it. Domain-level on
+        purpose — the approvals queue itself decides per domain, not per row, so the decision
+        resolves every draft. Returns how many runs were flipped."""
+        status = "approved" if decision == "approved" else "rejected"
+        runs = session.scalars(select(PayrollRun).where(PayrollRun.status == "draft")).all()
+        for run in runs:
+            run.status = status
+        return len(runs)
 
     # ---- Labour Welfare Fund (state calendars) --------------------------------------
 
@@ -598,5 +629,14 @@ class PayrollService(BaseDomainService):
                 "min_net_pay_paise": 0 if min_net is None else min_net,
                 "monthly_bonus_required_paise": bonus_required,
                 "lwf_due_paise": lwf_due,
+                # Drafted (not yet approved) runs — drives rule PAYROLL-005, which is what
+                # lands a confirmed run in the approvals queue until a human releases it.
+                "payroll_run_pending": float(
+                    len(
+                        session.scalars(
+                            select(PayrollRun.id).where(PayrollRun.status == "draft")
+                        ).all()
+                    )
+                ),
             },
         }

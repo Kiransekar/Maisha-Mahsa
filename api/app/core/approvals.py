@@ -134,6 +134,12 @@ async def record_decision(
         user_id=user_id,
         item_id=item_id,
     )
+    # A domain may hold writes that only an approval releases (payroll: drafted runs flagged by
+    # PAYROLL-005). The hook is optional and generic — every decision surface (HTMX, JSON, bulk)
+    # routes through here, so the release cannot drift per surface. Shares this commit.
+    resolve_pending = getattr(service, "resolve_pending_runs", None)
+    if resolve_pending is not None:
+        resolve_pending(session, decision=decision)
     session.commit()
     verb = "approved" if decision == "approved" else "rejected"
     return f"{domain.capitalize()} {verb} · sealed to audit {entry.this_hash[:8]}…"

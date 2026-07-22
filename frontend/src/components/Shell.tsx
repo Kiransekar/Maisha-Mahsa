@@ -11,6 +11,9 @@ const NAV = [
   { to: "/approvals", label: "Approvals" },
   { to: "/domains", label: "Domains" },
   { to: "/audit", label: "Audit Room" },
+  // T2: appended, never reshuffled.
+  { to: "/file", label: "File returns" },
+  { to: "/payroll-run", label: "Payroll run" },
 ];
 
 // The app shell on the brand system (docs/BRAND_THEME.md): warm paper ground, hairline borders

@@ -44,6 +44,13 @@ Governing spec: `docs/MASTER_PLAN.md` (immutable). Detail log: `PROGRESS.md`.
 ## P2 · Product & UX (WS7 · WS8 · WS9)
 - [x] WS7 UX research · [x] WS7.1 design tokens+lakh/crore · [x] WS7.2 Verified-Number chip · [x] WS7.3 Today view · [x] WS7.5 Exception Inbox · [ ] WS7.4/7.6-7.8 · [x] WS7.9 PWA core (manifest/SW/offline-staleness/responsive-360/budget; Lighthouse-in-CI + template-send infra deferred to Human) · [h] WS7.10 i18n (deferred, English-only for now) · [ ] WS7.V  · [x] WS8.1 audit pack · [x] WS8.2 query threads+sampling · [x] WS8.3 CA seat (free+unlimited, invite→accept, referral events)  · [ ] WS9.1 · [x] WS9.2 bank parsers · [x] WS9.3 · [h] WS9.4 GSP
 
+### SPA core-loop (batch-2, from the P2-ROUND gap scout)
+- [x] P0-1 filing flow (b1:filing-flow, 2026-07-22): /file queue + preview→typed-confirm→receipt over require_filing-gated JSON wrappers, T5 attempt-evidence export; WS7 contract T5 row ✅
+- [x] P0-2 generic action preview/commit (api_actions two-step + HMAC token + ActionDrawer; invariant 9 both sides)
+- [x] P0-3 entry forms (b2:entry-forms, 2026-07-22): customer/invoice (GST split badged), vendor/bill (tds_engine section+rate+amount badged), multi-line journal (double-entry 422 w/ totals), employee/salary structure (PF/ESI/PT + s.2(y) warning); `lines` field type + WS7.4 keyboard (Enter advances/adds rows, chord previews/confirms)
+- [x] P0-4 payroll run flow (b2:payroll-run, 2026-07-22): /payroll-run screen + preview→typed-confirm over the EXISTING run_payroll write (per-employee PF/ESI live-verified, TDS/net ◐); draft run lands in the EXISTING approvals queue via payroll_run_pending metric + PAYROLL-005 (rule pack 2026.07.1), decision releases/voids it (resolve_pending_runs hook in record_decision); payslip/Form16/ECR behind export-gated /api routes
+- [x] P0-5 treasury CSV re-import (b2:csv-reimport, 2026-07-22): Onboarding's bank-CSV dry-run→confirm extracted to components/BankCsvImport.tsx (ONE parser/preview, both call sites use it — Onboarding step 2 unchanged behaviourally); mounted on the treasury Domain.tsx screen behind a new `GET /api/treasury/accounts` read route (RBAC-matrixed) so re-import can target a real existing account; confirm import → onImported → domain refetch refreshes badged figures. Fixed a latent bug while extracting: the shared import fetch was missing `authHeaders()` (bearer JWT), so it now attaches the same header every other call gets.
+
 ## P3/P4 · Hardening, GTM (WS10 · WS11)
 - [ ] WS10.1–10.5  · [ ] WS11.1–11.3
 

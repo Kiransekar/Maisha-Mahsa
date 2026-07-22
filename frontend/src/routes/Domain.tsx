@@ -10,10 +10,11 @@
 //     unrecognised state falls to ✕ and NOTHING reads ✓ while Mahsa is unreachable (invariant 6).
 //   · Deadlines carry no ₹ figure on this endpoint, so the consequence line says it is not known.
 //     It never renders ₹0 (invariant 2).
-//   · The action registry is listed, not fired: there is no preview-then-confirm endpoint behind
-//     `app.web.actions` (its handlers write immediately), and invariant 9 forbids a silent
-//     mutation. The panel says so out loud rather than shipping a button that skips the preview.
+//   · Actions are fireable through the P0-2 preview→confirm machinery (api/app/web/api_actions.py):
+//     the ActionDrawer holds no path to a commit without a server preview token, and the server
+//     independently 409s a commit whose values were never previewed (invariant 9, both sides).
 
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../lib/api";
@@ -23,6 +24,8 @@ import {
   type VerifyState,
 } from "../components/VerifiedNumber";
 import { ErrorState } from "../components/ErrorState";
+import { ActionDrawer } from "../components/ActionDrawer";
+import { BankCsvImport } from "../components/BankCsvImport";
 import { useTraceId } from "../lib/trace";
 import { Empty, Header, MahsaDownBanner } from "./Today";
 
@@ -43,17 +46,29 @@ export type Deadline = {
   days_to_due?: number;
 };
 
+export type FieldSpec = {
+  name: string;
+  label: string;
+  type: string;
+  required: boolean;
+  placeholder: string;
+  options: string[];
+  /** P0-3: sub-schema for `type === "lines"` — a multi-row array field (invoice items,
+   *  journal lines). Absent on scalar fields. */
+  columns?: FieldSpec[];
+};
+
 export type ActionSpec = {
   key: string;
   label: string;
-  fields: {
-    name: string;
-    label: string;
-    type: string;
-    required: boolean;
-    placeholder: string;
-    options: string[];
-  }[];
+  fields: FieldSpec[];
+};
+
+export type AccountSummary = {
+  id: number;
+  bank_name: string;
+  account_number: string;
+  current_balance_paise: number;
 };
 
 export type DomainData = {
@@ -213,6 +228,16 @@ export function Domain() {
         </>
       )}
 
+      {/* P0-5: re-import reuses the SAME dry-run -> confirm component Onboarding's first
+          statement uses (components/BankCsvImport.tsx) — no second parser, no second preview.
+          Treasury-only: no other domain has a bank-account concept to import into. */}
+      {data.domain === "treasury" && (
+        <>
+          <Section>Re-import bank statement</Section>
+          <TreasuryReimport onImported={() => void refetch()} />
+        </>
+      )}
+
       <Section>Deadlines · {data.deadlines.length}</Section>
       {data.deadlines.length === 0 ? (
         <Empty>No statutory deadline is in view for this domain today.</Empty>
@@ -226,17 +251,101 @@ export function Domain() {
       ) : (
         <>
           <p style={{ fontSize: 12, color: "var(--color-ink-muted)", margin: "0 0 8px" }}>
-            These are listed, not armed. Every mutation in this product is preview-then-confirm —
-            you see the exact rows and the total ₹ impact before anything is written — and the
-            server handlers behind these actions write immediately, with no preview step. Until
-            that preview exists they run on the HTMX screens only.
+            Every action is preview-then-confirm: you see exactly what will be created — with any
+            ₹ echoed to the paisa — before anything is written. Enter advances fields;
+            ⌘/Ctrl+Enter confirms from the preview.
           </p>
           {data.actions.map((a) => (
-            <ActionRow key={a.key} a={a} />
+            <ActionDrawer
+              key={a.key}
+              domain={data.domain}
+              a={a}
+              // The one badge gate: preview figures pass through the same honestState as every
+              // other badge on this screen, so the drawer cannot invent its own path to a ✓.
+              badge={(s) => honestState(s, data.mahsa_up)}
+              onCommitted={() => void refetch()}
+            />
           ))}
         </>
       )}
     </section>
+  );
+}
+
+/** The account picker + the shared import component. A picker only appears with 2+ accounts
+ *  (T2: chrome with exactly one choice is noise, matching the App.tsx OrgSwitcher precedent) —
+ *  with exactly one account it is pre-selected, and with zero we point at onboarding rather than
+ *  rendering a picker with nothing to pick. */
+function TreasuryReimport({ onImported }: { onImported: () => void }) {
+  const traceId = useTraceId("treasury-accounts");
+  const accountsQuery = useQuery({
+    queryKey: ["treasury-accounts"],
+    queryFn: () => api<AccountSummary[]>("/treasury/accounts"),
+  });
+  const [selected, setSelected] = useState<number | null>(null);
+
+  if (accountsQuery.isLoading) {
+    return <p style={{ color: "var(--color-ink-muted)", fontSize: 13 }}>Loading accounts…</p>;
+  }
+  if (accountsQuery.error) {
+    return (
+      <ErrorState
+        error={accountsQuery.error}
+        traceId={traceId}
+        onRetry={() => void accountsQuery.refetch()}
+      />
+    );
+  }
+  const accounts = accountsQuery.data ?? [];
+  if (accounts.length === 0) {
+    return (
+      <Empty>
+        No bank account is on file yet, so there is nothing to re-import into.{" "}
+        <Link to="/onboarding" style={{ color: "var(--color-accent)" }}>
+          Add your first bank account →
+        </Link>
+      </Empty>
+    );
+  }
+  const accountId = selected ?? accounts[0].id;
+
+  return (
+    <div>
+      {accounts.length > 1 && (
+        <label style={{ display: "block", fontSize: 12, color: "var(--color-ink-muted)", marginBottom: 10 }}>
+          Account
+          <select
+            value={accountId}
+            onChange={(e) => setSelected(Number(e.target.value))}
+            style={{
+              display: "block",
+              marginTop: 4,
+              padding: "6px 10px",
+              borderRadius: 4,
+              border: "1px solid var(--color-border-strong)",
+              background: "var(--color-surface)",
+              color: "var(--color-ink)",
+              fontSize: 13,
+              fontFamily: "inherit",
+            }}
+          >
+            {accounts.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.bank_name} · {a.account_number}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+      {/* Keyed on the account so switching accounts starts a fresh dry-run rather than
+          carrying a staged preview from the previously selected account into a confirm. */}
+      <BankCsvImport
+        key={accountId}
+        accountId={accountId}
+        traceNamespace={`treasury-reimport-${accountId}`}
+        onImported={onImported}
+      />
+    </div>
   );
 }
 
@@ -315,41 +424,6 @@ function DeadlineRow({ d }: { d: Deadline }) {
         </Link>
       </div>
     </div>
-  );
-}
-
-function ActionRow({ a }: { a: ActionSpec }) {
-  return (
-    <details
-      style={{
-        border: "1px solid var(--color-border)",
-        background: "var(--color-surface)",
-        borderRadius: 4,
-        padding: "7px 12px",
-        marginBottom: 4,
-        fontSize: 13,
-      }}
-    >
-      <summary style={{ cursor: "pointer", listStyle: "none" }}>
-        {a.label} <span className="ident" style={{ color: "var(--color-ink-faint)" }}>{a.key}</span>
-      </summary>
-      <div style={{ fontSize: 12, color: "var(--color-ink-muted)", marginTop: 6 }}>
-        {a.fields.length === 0
-          ? "Takes no input."
-          : a.fields.map((f) => (
-              <div key={f.name} style={{ display: "flex", justifyContent: "space-between" }}>
-                <span>
-                  {f.label}
-                  {f.required ? "" : " (optional)"}
-                </span>
-                <span className="ident" style={{ color: "var(--color-ink-faint)" }}>
-                  {f.type}
-                  {f.options.length > 0 ? `: ${f.options.join(" | ")}` : ""}
-                </span>
-              </div>
-            ))}
-      </div>
-    </details>
   );
 }
 

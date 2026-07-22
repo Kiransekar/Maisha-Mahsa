@@ -42,6 +42,7 @@ from app.db.session import get_session
 from app.deps import get_mahsa
 from app.domains import build_registry
 from app.llm.tools import enrich
+from app.web.actions import Field as ActionField
 from app.web.actions import actions_for
 from app.web.exceptions_router import _snapshot
 from app.web.format import fmt_value, humanize
@@ -81,6 +82,22 @@ def _figures_for(session: Session, domain: str) -> list[dict[str, Any]]:
     snapshot = _snapshot(service, session, _today())
     facts = enrich(snapshot)
     return [_figure(k, v) for k, v in sorted(facts.items()) if k != "as_of"]
+
+
+def _field_json(f: ActionField) -> dict[str, Any]:
+    """One action Field for the SPA — recursive so ``lines`` fields ship their column
+    sub-schema (P0-3 entry forms)."""
+    out: dict[str, Any] = {
+        "name": f.name,
+        "label": f.label,
+        "type": f.type,
+        "required": f.required,
+        "placeholder": f.placeholder,
+        "options": list(f.options),
+    }
+    if f.columns:
+        out["columns"] = [_field_json(c) for c in f.columns]
+    return out
 
 
 def _health_row(domain: str, h: DomainHealth | None) -> dict[str, Any]:
@@ -161,17 +178,7 @@ async def domain_json(
         {
             "key": a.key,
             "label": a.label,
-            "fields": [
-                {
-                    "name": f.name,
-                    "label": f.label,
-                    "type": f.type,
-                    "required": f.required,
-                    "placeholder": f.placeholder,
-                    "options": list(f.options),
-                }
-                for f in a.fields
-            ],
+            "fields": [_field_json(f) for f in a.fields],
         }
         for a in actions_for(domain)
     ]

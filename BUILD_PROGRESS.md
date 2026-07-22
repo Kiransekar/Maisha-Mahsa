@@ -427,3 +427,11 @@ Legend: ✅ done · 🟡 in progress · ⬜ not started · 🔒 blocked
   deterministic IRN + canonical payload + QR data. 2 manifests flipped ⬜→✅. Tested (IRN matches
   spec hash, FY boundary, schema/QR, B2C, API download + 404). **`make verify` green: Rust 52,
   Python 361 (+1 tracked OCR skip), eval 13/13.** 28 deferred features done.
+
+- **2026-07-22 · rule pack `2026.06.1` → `2026.07.1`** (per the rules.yaml bump-on-change rule):
+  added `PAYROLL-005` — a drafted payroll run (`payroll_run_pending` metric from
+  `payroll.build_snapshot`) folds the domain *warning/yellow* until an approvals decision
+  releases it (`PayrollService.resolve_pending_runs`, called from `record_decision`). Cited as
+  Internal payroll policy PP-1 (a process gate, not a statutory value — §0.6); the action text
+  references the Payment of Wages Act 1936 Sec 5 disbursement window. Mirrored in
+  `api/app/domains/payroll/rules.py`; lock-step test `test_rule_set_completeness.py` green.

@@ -35,3 +35,15 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) throw new ApiError(res.status, `${res.status} ${res.statusText}`);
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
 }
+
+/** Authenticated binary fetch (payslip/Form 16 PDFs, ECR files) through the same seam, so a
+ *  download can never forget the Authorization header any more than a JSON call can. */
+export async function apiBlob(path: string): Promise<Blob> {
+  const res = await fetch(`${BASE}/api${path}`, {
+    credentials: "include",
+    headers: { ...(await authHeaders()) },
+  });
+  if (res.status === 401) clearAuthToken();
+  if (!res.ok) throw new ApiError(res.status, `${res.status} ${res.statusText}`);
+  return res.blob();
+}

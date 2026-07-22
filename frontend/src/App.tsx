@@ -9,6 +9,8 @@ import { Domains } from "./routes/Domains";
 import { Domain } from "./routes/Domain";
 import { AuditRoom } from "./routes/AuditRoom";
 import { Onboarding } from "./routes/Onboarding";
+import { Filings } from "./routes/Filings";
+import { PayrollRun } from "./routes/PayrollRun";
 import { SignIn } from "./routes/SignIn";
 import {
   sessionStatus,
@@ -120,6 +122,9 @@ export function App() {
                 <Route path="/d/:domain" element={<Domain />} />
                 <Route path="/audit" element={<AuditRoom />} />
                 <Route path="/onboarding" element={<Onboarding />} />
+                {/* T2: appended, never reshuffled. */}
+                <Route path="/file" element={<Filings />} />
+                <Route path="/payroll-run" element={<PayrollRun />} />
                 <Route path="*" element={<p>Not found.</p>} />
               </Routes>
             </Shell>

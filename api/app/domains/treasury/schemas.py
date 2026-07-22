@@ -12,6 +12,15 @@ class ImportResult(BaseModel):
     closing_balance_paise: int
 
 
+class AccountSummary(BaseModel):
+    """P0-5: lets the treasury domain screen offer a re-import target without guessing an id."""
+
+    id: int
+    bank_name: str
+    account_number: str
+    current_balance_paise: int
+
+
 class CashPosition(BaseModel):
     total_cash_paise: int
     account_count: int

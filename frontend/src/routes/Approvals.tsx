@@ -245,7 +245,7 @@ export function booksFreshness(
 /** Re-render on a timer so a tab left open actually crosses the staleness threshold. Without this
  *  the downgrade would only fire on the next user interaction — i.e. never, in the case we care
  *  about. ponytail: a 30s tick, not a scheduled timeout; the resolution is plenty for a 2m limit. */
-function useNow(intervalMs = 30_000): number {
+export function useNow(intervalMs = 30_000): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), intervalMs);
