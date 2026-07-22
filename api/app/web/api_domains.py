@@ -21,17 +21,23 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.core import ca_seat, ca_threads
 from app.core.audit import verify_chain
+from app.core.audit_pack import build_audit_pack, pack_to_csv_zip
 from app.core.audit_store import load_chain
 from app.core.cfo import DomainHealth, collect_health
+from app.core.entitlement_deps import SessionContext, get_session_context
 from app.core.mahsa_client import MahsaClient, MahsaError
 from app.core.mahsa_coverage import badge_state
 from app.core.overview import collect_kpis, upcoming_deadlines
+from app.core.pdf import audit_pack_pdf
+from app.core.principal import Principal
 from app.core.rbac import Capability
-from app.core.rbac_deps import require
+from app.core.rbac_deps import require, resolve_principal
 from app.db.session import get_session
 from app.deps import get_mahsa
 from app.domains import build_registry
@@ -214,3 +220,332 @@ async def audit_json(
             for e in page
         ],
     }
+
+
+# --- WS8.2 CA query threads ------------------------------------------------------------------
+# raise/read/resolve are Audit-Room actions -> view_audit (CA holds it; Investor does not).
+# respond-with-doc is a books-side answer -> write (Accountant/Owner/Admin; CA excluded by
+# construction — a CA can never answer, let alone mutate, its own query).
+
+
+class ThreadRaise(BaseModel):
+    domain: str
+    entry_ref: str = Field(min_length=1)
+    question: str = Field(min_length=1)
+
+
+class ThreadRespond(BaseModel):
+    doc_id: str = Field(min_length=1)  # vault documents.id — the evidence link
+    note: str = ""
+
+
+class ThreadResolve(BaseModel):
+    note: str = ""
+
+
+def _now_iso() -> str:
+    return datetime.now(UTC).isoformat()
+
+
+def _thread_json(session: Session, thread: Any) -> dict[str, Any]:
+    return {
+        "id": thread.id,
+        "created_at": thread.created_at,
+        "domain": thread.domain,
+        "entry_ref": thread.entry_ref,
+        "question": thread.question,
+        "state": thread.state,
+        "raised_by": thread.raised_by,
+        "events": [
+            {
+                "timestamp": ev.timestamp,
+                "event": ev.event,
+                "user_id": ev.user_id,
+                "note": ev.note,
+                "doc_id": ev.doc_id,
+                "audit_hash": ev.audit_hash,
+            }
+            for ev in ca_threads.events_for(session, thread.id)
+        ],
+    }
+
+
+def _known_domain(domain: str) -> str:
+    if _registry.get(domain) is None:
+        raise HTTPException(status_code=404, detail=f"unknown domain '{domain}'")
+    return domain
+
+
+@router.get("/audit/threads", dependencies=[Depends(require(Capability.VIEW_AUDIT))])
+async def threads_json(db: Session = Depends(get_session)) -> dict[str, Any]:
+    """All CA query threads, newest first, each with its full sealed event history."""
+    return {"threads": [_thread_json(db, t) for t in ca_threads.list_threads(db)]}
+
+
+@router.get("/audit/threads/{thread_id}", dependencies=[Depends(require(Capability.VIEW_AUDIT))])
+async def thread_json(thread_id: int, db: Session = Depends(get_session)) -> dict[str, Any]:
+    thread = db.get(ca_threads.CaThread, thread_id)
+    if thread is None:
+        raise HTTPException(status_code=404, detail=f"unknown thread {thread_id}")
+    return _thread_json(db, thread)
+
+
+@router.post("/audit/threads")
+async def thread_raise(
+    body: ThreadRaise,
+    db: Session = Depends(get_session),
+    principal: Principal = Depends(require(Capability.VIEW_AUDIT)),
+) -> dict[str, Any]:
+    """Raise a query pinned to an entry. The raise event is sealed onto the audit chain."""
+    _known_domain(body.domain)
+    thread = ca_threads.raise_thread(
+        db,
+        timestamp=_now_iso(),
+        domain=body.domain,
+        entry_ref=body.entry_ref,
+        question=body.question,
+        user_id=principal.user_id,
+    )
+    db.commit()
+    return _thread_json(db, thread)
+
+
+@router.post("/audit/threads/{thread_id}/respond")
+async def thread_respond(
+    thread_id: int,
+    body: ThreadRespond,
+    db: Session = Depends(get_session),
+    principal: Principal = Depends(require(Capability.WRITE)),
+) -> dict[str, Any]:
+    """Respond WITH a vault document (evidence link required, validated to exist)."""
+    try:
+        thread = ca_threads.respond_thread(
+            db,
+            thread_id=thread_id,
+            timestamp=_now_iso(),
+            note=body.note,
+            doc_id=body.doc_id,
+            user_id=principal.user_id,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    db.commit()
+    return _thread_json(db, thread)
+
+
+@router.post("/audit/threads/{thread_id}/resolve")
+async def thread_resolve(
+    thread_id: int,
+    body: ThreadResolve,
+    db: Session = Depends(get_session),
+    principal: Principal = Depends(require(Capability.VIEW_AUDIT)),
+) -> dict[str, Any]:
+    """Close a responded query."""
+    try:
+        thread = ca_threads.resolve_thread(
+            db, thread_id=thread_id, timestamp=_now_iso(), note=body.note,
+            user_id=principal.user_id,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    db.commit()
+    return _thread_json(db, thread)
+
+
+@router.get("/audit/sample", dependencies=[Depends(require(Capability.VIEW_AUDIT))])
+async def audit_sample(
+    date_from: str,
+    date_to: str,
+    n: int = Query(ge=1, le=200),
+    domain: str | None = None,
+    db: Session = Depends(get_session),
+    principal: Principal = Depends(resolve_principal),
+) -> dict[str, Any]:
+    """Deterministic voucher sample (seeded by org + spec hash, NO RNG): same spec, same org,
+    same sample — re-runnable by the CA in a dispute. Each voucher carries its vault doc
+    bundle refs."""
+    return ca_threads.sample_selection(
+        db, org=principal.org_id, domain=domain, date_from=date_from, date_to=date_to, n=n
+    )
+
+
+# ---- WS8.3 CA seat onboarding: free + unlimited seat, invite → accept, referral events ------
+
+
+class CaInvite(BaseModel):
+    email: str = Field(min_length=3)
+
+
+@router.post("/ca/invite")
+async def ca_invite(
+    body: CaInvite,
+    db: Session = Depends(get_session),
+    principal: Principal = Depends(require(Capability.MANAGE_USERS)),
+    ctx: SessionContext = Depends(get_session_context),
+) -> dict[str, Any]:
+    """Invite a CA by email (Owner/Admin). The seat is FREE + UNLIMITED — never counted
+    against the plan's seat gate (entitlements.SEAT_EXEMPT_ROLES). Seals ``ca_invited``."""
+    try:
+        membership = ca_seat.invite_ca(
+            db, principal=principal, email=body.email, plan=ctx.org_plan, timestamp=_now_iso()
+        )
+    except PermissionError as exc:  # defence in depth; require() above already gates
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    db.commit()
+    return {
+        "membership_id": membership.id,
+        "role": membership.role,
+        "status": membership.status,
+        "seat": "free_unlimited",
+    }
+
+
+@router.post("/ca/accept")
+async def ca_accept(
+    db: Session = Depends(get_session),
+    principal: Principal = Depends(resolve_principal),
+) -> dict[str, Any]:
+    """The invited CA accepts their pending seat — matched on the VERIFIED token's email
+    within the token's org (§0.8), never on request-supplied identity. Seals ``ca_joined``
+    (+ ``ca_referred_org`` when this CA already serves another org)."""
+    try:
+        membership, referred = ca_seat.accept_ca(db, principal=principal, timestamp=_now_iso())
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    db.commit()
+    return {
+        "membership_id": membership.id,
+        "status": membership.status,
+        "referred_org": referred,
+    }
+
+
+# ---- WS8.1 remainder: the full Audit Pack + downloadable artifacts ---------------------------
+
+
+def _audit_pack_entity_data(db: Session, *, org_id: str, rules_version: str) -> dict[str, Any]:
+    """Assemble ``build_audit_pack``'s input from the EXISTING domain services — every figure
+    below was already computed (and, where portable, Mahsa-claimed) by its own domain; nothing
+    is recomputed here (§0.4)."""
+    from sqlalchemy import select
+
+    from app.db.models.gst import GstReturn
+    from app.db.models.ledger import ChartOfAccounts
+    from app.db.models.tax import TdsReturn
+    from app.domains.ledger.service import LedgerService
+    from app.domains.payables.service import PayablesService
+    from app.domains.payroll.service import PayrollService
+
+    # Concrete, stateless services (same instances-by-construction as build_registry uses) —
+    # concrete types so the ledger/payables/payroll-specific methods are statically checked.
+    ledger = LedgerService()
+    payables = PayablesService()
+    payroll = PayrollService()
+    as_of = _today()
+
+    accounts = db.scalars(select(ChartOfAccounts).order_by(ChartOfAccounts.code)).all()
+    gl = [
+        {"code": a.code, "name": a.name,
+         "closing_balance": ledger.general_ledger(db, a.id)["closing_balance"]}
+        for a in accounts
+    ]
+    payroll_metrics = payroll.build_snapshot(db, as_of)
+    return {
+        "org_id": org_id,
+        "rules_version": rules_version,
+        "trial_balance": ledger.trial_balance(db),
+        "profit_and_loss": ledger.profit_and_loss(db),
+        "balance_sheet": ledger.balance_sheet(db),
+        "general_ledger": gl,
+        "statutory_registers": {
+            "tds_returns": [
+                {"return_type": r.return_type, "quarter": r.quarter, "status": r.status,
+                 "total_deducted": int(r.total_deducted),
+                 "late_filing_fee": int(r.late_filing_fee)}
+                for r in db.scalars(select(TdsReturn).order_by(TdsReturn.quarter)).all()
+            ],
+            "gst_returns": [
+                {"return_type": r.return_type, "filing_period": r.filing_period,
+                 "status": r.status, "tax_payable": int(r.tax_payable),
+                 "late_fee": int(r.late_fee), "interest": int(r.interest)}
+                for r in db.scalars(select(GstReturn).order_by(GstReturn.filing_period)).all()
+            ],
+            "payroll": {
+                "monthly_burn": int(payroll_metrics["monthly_burn"]),
+                "lwf_due_paise": int(payroll_metrics["metrics"]["lwf_due_paise"]),
+                "monthly_bonus_required_paise": int(
+                    payroll_metrics["metrics"]["monthly_bonus_required_paise"]
+                ),
+            },
+        },
+        # No Form 26AS statement store exists yet — the section states that honestly (never a
+        # vacuous "reconciled" from two empty lists). When a 26AS upload lands, feed
+        # tax_calc.reconcile_26as output here.
+        "form_26as_reconciliation": None,
+        "msme_ageing": {
+            "ap_aging": payables.ap_aging(db, as_of),
+            "msme_max_days_unpaid": payables.msme_max_days_unpaid(db, as_of),
+        },
+    }
+
+
+async def _build_pack(db: Session, mahsa: MahsaClient, principal: Principal) -> dict[str, Any]:
+    """Rules version comes from the LIVE Mahsa engine (its /health), the org from the session
+    principal (§0.8). Mahsa unreachable → 503, stated — never a fabricated version string."""
+    try:
+        health = await mahsa.health()
+    except MahsaError:
+        raise HTTPException(
+            status_code=503,
+            detail="Mahsa is unreachable, so the audit pack cannot bind a rules version. "
+                   "No pack was generated and nothing was fabricated.",
+        ) from None
+    entity_data = _audit_pack_entity_data(
+        db, org_id=principal.org_id, rules_version=health["rules_version"]
+    )
+    return build_audit_pack(entity_data)
+
+
+@router.get("/audit/pack")
+async def audit_pack_json(
+    db: Session = Depends(get_session),
+    mahsa: MahsaClient = Depends(get_mahsa),
+    principal: Principal = Depends(require(Capability.VIEW_AUDIT)),
+) -> dict[str, Any]:
+    """The full §WS8.1 Audit Pack (TB/P&L/BS/GL/registers/26AS/MSME), every figure badged via
+    the one §0.4 gate, sealed with its integrity hash."""
+    return await _build_pack(db, mahsa, principal)
+
+
+@router.get("/audit/pack.zip")
+async def audit_pack_zip(
+    db: Session = Depends(get_session),
+    mahsa: MahsaClient = Depends(get_mahsa),
+    principal: Principal = Depends(require(Capability.EXPORT)),
+) -> Response:
+    pack = await _build_pack(db, mahsa, principal)
+    return Response(
+        content=pack_to_csv_zip(pack),
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="audit_pack.zip"'},
+    )
+
+
+@router.get("/audit/pack.pdf")
+async def audit_pack_pdf_route(
+    db: Session = Depends(get_session),
+    mahsa: MahsaClient = Depends(get_mahsa),
+    principal: Principal = Depends(require(Capability.EXPORT)),
+) -> Response:
+    pack = await _build_pack(db, mahsa, principal)
+    return Response(
+        content=audit_pack_pdf(pack),
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="audit_pack.pdf"'},
+    )

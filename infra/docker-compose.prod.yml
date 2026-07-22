@@ -1,15 +1,17 @@
 # Production stack (P7). Single VPS + Docker + Caddy TLS.
 #   cp ../api/.env.example .env  &&  edit (MAISHA_ENVIRONMENT=production, strong secrets, domain)
 #   docker compose -f docker-compose.prod.yml up -d --build
-# Only Caddy publishes ports (80/443). api/dif/redis are internal-only. Migrations run once
-# before the api starts. No MailHog (real SMTP via .env); Ollama optional (add back if using LLM).
+# Only Caddy publishes ports (80/443); api/dif are internal-only. Migrations run once before the
+# api starts. No MailHog (real SMTP via .env); Ollama optional (add back if using LLM).
+# MAISHA_DATABASE_URL comes from .env (compose interpolates ./.env): leave it unset for the
+# default on-volume SQLite, or set the Postgres/Supabase URL for the multi-tenant launch path.
 services:
   migrate:
     build: { context: ../api, dockerfile: Dockerfile }
     command: ["alembic", "upgrade", "head"]
     env_file: [.env]
     environment:
-      MAISHA_DATABASE_URL: "sqlite:////data/maisha.db"
+      MAISHA_DATABASE_URL: "${MAISHA_DATABASE_URL:-sqlite:////data/maisha.db}"
     volumes:
       - maisha_data:/data
     restart: "no"
@@ -27,15 +29,21 @@ services:
     environment:
       MAISHA_ENVIRONMENT: "production"
       MAISHA_MAHSA_URL: "http://dif:8088"
-      MAISHA_DATABASE_URL: "sqlite:////data/maisha.db"
+      MAISHA_DATABASE_URL: "${MAISHA_DATABASE_URL:-sqlite:////data/maisha.db}"
       MAISHA_SECURE_COOKIES: "true"
     volumes:
       - maisha_data:/data
     expose: ["8000"]
+    healthcheck:
+      # python one-liner: the slim image ships no curl/wget. GET /health is the app's own probe.
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
     depends_on:
       migrate: { condition: service_completed_successfully }
       dif: { condition: service_started }
-      redis: { condition: service_started }
     restart: unless-stopped
 
   scheduler:
@@ -45,7 +53,7 @@ services:
     environment:
       MAISHA_ENVIRONMENT: "production"
       MAISHA_MAHSA_URL: "http://dif:8088"
-      MAISHA_DATABASE_URL: "sqlite:////data/maisha.db"
+      MAISHA_DATABASE_URL: "${MAISHA_DATABASE_URL:-sqlite:////data/maisha.db}"
     volumes:
       - maisha_data:/data
     depends_on:
@@ -53,13 +61,8 @@ services:
       dif: { condition: service_started }
     restart: unless-stopped
 
-  redis:
-    image: redis:7-alpine
-    command: ["redis-server", "--save", "60", "1"]
-    volumes:
-      - redis_data:/data
-    expose: ["6379"]
-    restart: unless-stopped
+  # redis removed 2026-07-22 (launch-pack drift check): no code path in api/, dif/ or frontend/
+  # reads Redis — grep for "redis" across the codebase finds nothing. Re-add when something does.
 
   caddy:
     image: caddy:2-alpine
@@ -73,11 +76,10 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      api: { condition: service_started }
+      api: { condition: service_healthy }
     restart: unless-stopped
 
 volumes:
   maisha_data:
-  redis_data:
   caddy_data:
   caddy_config:

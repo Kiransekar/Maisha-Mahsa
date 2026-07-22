@@ -19,7 +19,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.cfo_router import router as cfo_router
 from app.config import get_settings
-from app.core import auth, betterauth, history_store, parallel, trace_store
+from app.core import auth, betterauth, ca_threads, history_store, parallel, trace_store
 from app.core.approvals import pending_approvals, record_decision
 from app.core.ask import answer_query
 from app.core.audit import verify_chain
@@ -802,10 +802,84 @@ def create_app() -> FastAPI:
                 "entries": list(reversed(entries)),  # newest first for reading
                 "chain_intact": verify_chain(entries),
                 "traces": trace_store.recent(db),
+                "threads": [
+                    (t, ca_threads.events_for(db, t.id)) for t in ca_threads.list_threads(db)
+                ],
                 "settings": settings,
                 "nav_active": "audit",
             },
         )
+
+    # WS8.2 CA query threads — the HTMX surface carries the SAME capability decision as the
+    # /api routes: raise/resolve are Audit-Room actions (view_audit, which CA holds); respond-
+    # with-doc is a books-side answer (write, which CA does not hold).
+    @app.post("/audit/threads")
+    async def audit_thread_raise(
+        domain: str = Form(...),
+        entry_ref: str = Form(...),
+        question: str = Form(...),
+        db: Session = Depends(get_session),
+        principal: Principal = Depends(require(Capability.VIEW_AUDIT)),
+    ) -> RedirectResponse:
+        try:
+            ca_threads.raise_thread(
+                db,
+                timestamp=datetime.now(UTC).isoformat(),
+                domain=domain,
+                entry_ref=entry_ref,
+                question=question,
+                user_id=principal.user_id,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        db.commit()
+        return RedirectResponse(url="/audit", status_code=303)
+
+    @app.post("/audit/threads/{thread_id}/respond")
+    async def audit_thread_respond(
+        thread_id: int,
+        doc_id: str = Form(...),
+        note: str = Form(""),
+        db: Session = Depends(get_session),
+        principal: Principal = Depends(require(Capability.WRITE)),
+    ) -> RedirectResponse:
+        try:
+            ca_threads.respond_thread(
+                db,
+                thread_id=thread_id,
+                timestamp=datetime.now(UTC).isoformat(),
+                note=note,
+                doc_id=doc_id,
+                user_id=principal.user_id,
+            )
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        db.commit()
+        return RedirectResponse(url="/audit", status_code=303)
+
+    @app.post("/audit/threads/{thread_id}/resolve")
+    async def audit_thread_resolve(
+        thread_id: int,
+        note: str = Form(""),
+        db: Session = Depends(get_session),
+        principal: Principal = Depends(require(Capability.VIEW_AUDIT)),
+    ) -> RedirectResponse:
+        try:
+            ca_threads.resolve_thread(
+                db,
+                thread_id=thread_id,
+                timestamp=datetime.now(UTC).isoformat(),
+                note=note,
+                user_id=principal.user_id,
+            )
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        db.commit()
+        return RedirectResponse(url="/audit", status_code=303)
 
     return app
 

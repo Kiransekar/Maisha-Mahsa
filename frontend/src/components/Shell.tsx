@@ -17,18 +17,12 @@ const NAV = [
 // as the only elevation, brass reserved for the active/primary state. No shadows, no gradients.
 export function Shell({ children }: { children: ReactNode }) {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", minHeight: "100vh" }}>
-      <aside
-        style={{
-          borderRight: "1px solid var(--color-border)",
-          background: "var(--color-surface-sunk)",
-          padding: "20px 14px",
-        }}
-      >
+    <div className="shell">
+      <aside className="shell-aside">
         <div style={{ letterSpacing: "-0.02em", marginBottom: 22, fontSize: 15 }}>
           Maisha<span style={{ color: "var(--color-ink-faint)" }}>·</span>Mahsa
         </div>
-        <nav style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <nav className="shell-nav">
           {NAV.map((n) => (
             <NavLink
               key={n.to}
@@ -38,6 +32,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 borderRadius: 4,
                 fontSize: 13,
                 textDecoration: "none",
+                whiteSpace: "nowrap",
                 color: isActive ? "var(--color-accent)" : "var(--color-ink-muted)",
                 background: isActive ? "var(--color-accent-sunk)" : "transparent",
               })}
@@ -47,6 +42,7 @@ export function Shell({ children }: { children: ReactNode }) {
           ))}
         </nav>
         <div
+          className="shell-footnote"
           style={{
             marginTop: 24,
             paddingTop: 14,
@@ -60,7 +56,7 @@ export function Shell({ children }: { children: ReactNode }) {
           aren't say so.
         </div>
       </aside>
-      <main style={{ padding: "28px 32px", maxWidth: 1080 }}>{children}</main>
+      <main className="shell-main">{children}</main>
     </div>
   );
 }

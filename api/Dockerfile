@@ -10,7 +10,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr \
 
 COPY pyproject.toml ./
 COPY app ./app
-RUN pip install --upgrade pip && pip install ".[ocr]"
+# alembic.ini + alembic/ must ship in the image: the compose `migrate` service runs
+# `alembic upgrade head` in this image (it previously failed — the files were never copied).
+COPY alembic.ini ./
+COPY alembic ./alembic
+# [pg] = psycopg2 so MAISHA_DATABASE_URL can point at Postgres/Supabase (launch path).
+RUN pip install --upgrade pip && pip install ".[ocr,pg]"
 
 RUN useradd -r -u 10002 maisha && mkdir -p /data && chown maisha /data
 USER maisha

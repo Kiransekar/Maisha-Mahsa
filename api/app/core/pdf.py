@@ -67,6 +67,72 @@ def payslip_pdf(data: dict) -> bytes:
     return buf.getvalue()
 
 
+def audit_pack_pdf(pack: dict) -> bytes:
+    """Audit Pack artifact (§WS8.1). ``pack`` is the output of
+    :func:`app.core.audit_pack.build_audit_pack` — every figure renders with its badge TEXT
+    (VERIFIED/PENDING/BLOCKED, straight from the §0.4-gated badge, never re-decided here) and
+    the pack integrity hash is embedded on the cover."""
+    # no cycle: audit_pack does not import pdf
+    from app.core.audit_pack import SECTION_ORDER, badge_text, section_title
+
+    buf = BytesIO()
+    styles = getSampleStyleSheet()
+    integrity = pack["integrity"]
+    elems: list[Any] = [
+        Paragraph("Maisha-Mahsa — Audit Pack", styles["Title"]),
+        Paragraph(
+            f"Organisation: {pack['org_id']} &nbsp; · &nbsp; "
+            f"Rules version: {pack['rules_version']}",
+            styles["Normal"],
+        ),
+        Spacer(1, 6),
+        Table(
+            [["Integrity hash (SHA-256)", integrity["hash"]]],
+            colWidths=[140, 360],
+            style=_GRID,
+        ),
+        Spacer(1, 6),
+        Paragraph(
+            "Badge legend: VERIFIED = Mahsa independently recomputed this figure to the paisa; "
+            "PENDING = not yet independently recomputed; BLOCKED = recompute mismatch. "
+            "No figure is marked VERIFIED without a Mahsa recomputation (Prime Directive §0.4).",
+            styles["Italic"],
+        ),
+        Spacer(1, 12),
+    ]
+    for name in SECTION_ORDER:
+        elems.append(Paragraph(section_title(name), styles["Heading2"]))
+        figures = pack["sections"][name]
+        if figures:
+            rows = [["Particulars", "Amount (₹)", "Badge", "Evidence"]]
+            rows += [
+                [
+                    Paragraph(f["label"], styles["BodyText"]),
+                    _inr(f["value_paise"]),
+                    badge_text(f["badge"]),
+                    Paragraph(f["evidence_ref"], styles["BodyText"]),
+                ]
+                for f in figures
+            ]
+            table = Table(rows, colWidths=[210, 100, 70, 120])
+            table.setStyle(_GRID)
+            elems.append(table)
+        note = pack["section_notes"].get(name)
+        if note:
+            elems.append(Spacer(1, 4))
+            elems.append(Paragraph(note, styles["Italic"]))
+        elems.append(Spacer(1, 10))
+    if pack["pending_sections"]:
+        elems.append(
+            Paragraph(
+                "Not yet included: " + ", ".join(pack["pending_sections"]) + ".",
+                styles["Italic"],
+            )
+        )
+    _doc(buf, "Audit Pack").build(elems)
+    return buf.getvalue()
+
+
 def form16_pdf(data: dict) -> bytes:
     """Form 16 — Part B (salary TDS certificate). ``data``: company, tan, employee_name, pan,
     financial_year, assessment_year, rows (list of [label, paise]), total_tax_deducted."""

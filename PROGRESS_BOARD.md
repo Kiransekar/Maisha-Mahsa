@@ -37,12 +37,12 @@ Governing spec: `docs/MASTER_PLAN.md` (immutable). Detail log: `PROGRESS.md`.
 - [x] WS3.3 kill default-healthy · [x] WS3.4 verdict object · [x] WS3.5 honest-state wiring (coverage json + tri-state badges)
 
 ## P1 · Platform (WS4 tenancy · WS5 RBAC · WS6 entitlements)
-- [x] WS4.1 tenancy schema+RLS · [~] WS4.7 red-team suite (DB/RLS layer; route-level awaits WS4.3) · [ ] WS4.2–4.6/4.8
+- [x] WS4.1 tenancy schema+RLS · [~] WS4.7 red-team suite (DB/RLS layer; route-level awaits WS4.3) · [x] WS4.5 tenant-iterated jobs (per-org failure isolation + org+job+period idempotency) · [ ] WS4.2–4.4/4.6/4.8 (board not yet reconciled with 07-21 PROGRESS entries)
 - [x] WS5.1 RBAC · [x] WS5.2 approval matrices · [x] WS5.3 per-role landing   ·   [x] WS6.1 entitlements · [x] WS6.2 quantity gates · [x] WS6.3 upgrade triggers · [h] WS6.4 billing(Razorpay=Human)
 - [x] WS4.4 per-tenant hash-chain + MCA audit-trail doc
 
 ## P2 · Product & UX (WS7 · WS8 · WS9)
-- [x] WS7 UX research · [x] WS7.1 design tokens+lakh/crore · [x] WS7.2 Verified-Number chip · [x] WS7.3 Today view · [x] WS7.5 Exception Inbox · [ ] WS7.4/7.6-7.9 · [h] WS7.10 i18n (deferred, English-only for now) · [ ] WS7.V  · [~] WS8.1 audit pack (core slice) · [ ] WS8.2–8.3  · [ ] WS9.1 · [x] WS9.2 bank parsers · [x] WS9.3 · [h] WS9.4 GSP
+- [x] WS7 UX research · [x] WS7.1 design tokens+lakh/crore · [x] WS7.2 Verified-Number chip · [x] WS7.3 Today view · [x] WS7.5 Exception Inbox · [ ] WS7.4/7.6-7.8 · [x] WS7.9 PWA core (manifest/SW/offline-staleness/responsive-360/budget; Lighthouse-in-CI + template-send infra deferred to Human) · [h] WS7.10 i18n (deferred, English-only for now) · [ ] WS7.V  · [x] WS8.1 audit pack · [x] WS8.2 query threads+sampling · [x] WS8.3 CA seat (free+unlimited, invite→accept, referral events)  · [ ] WS9.1 · [x] WS9.2 bank parsers · [x] WS9.3 · [h] WS9.4 GSP
 
 ## P3/P4 · Hardening, GTM (WS10 · WS11)
 - [ ] WS10.1–10.5  · [ ] WS11.1–11.3

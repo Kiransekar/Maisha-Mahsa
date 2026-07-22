@@ -354,6 +354,14 @@ GATES: dict[str, tuple[frozenset[Role], str]] = {
         frozenset({Role.OWNER, Role.ADMIN, Role.ACCOUNTANT, Role.APPROVER, Role.CA}),
         "missing capability: view_audit",
     ),
+    "export": (
+        frozenset({Role.OWNER, Role.ADMIN, Role.ACCOUNTANT, Role.CA}),
+        "missing capability: export",
+    ),
+    "manage_users": (
+        frozenset({Role.OWNER, Role.ADMIN}),
+        "missing capability: manage_users",
+    ),
     "filing": (frozenset({Role.OWNER, Role.ADMIN}), _FILING_DETAIL),
 }
 
@@ -371,6 +379,22 @@ API_ROUTE_GATES: dict[str, tuple[str, ...]] = {
     "GET /api/domains": ("read",),
     "GET /api/domains/{domain}": ("read",),
     "GET /api/audit": ("read", "view_audit"),
+    # WS8.1 audit pack (downloads additionally need export)
+    "GET /api/audit/pack": ("read", "view_audit"),
+    "GET /api/audit/pack.zip": ("read", "export"),
+    "GET /api/audit/pack.pdf": ("read", "export"),
+    # WS8.2 CA query threads: raise/read/resolve are Audit-Room actions (view_audit — CA holds
+    # it); respond-with-doc is a books-side answer (write — CA is excluded by construction).
+    "GET /api/audit/threads": ("read", "view_audit"),
+    "POST /api/audit/threads": ("read", "view_audit"),
+    "GET /api/audit/threads/{thread_id}": ("read", "view_audit"),
+    "POST /api/audit/threads/{thread_id}/respond": ("read", "write"),
+    "POST /api/audit/threads/{thread_id}/resolve": ("read", "view_audit"),
+    "GET /api/audit/sample": ("read", "view_audit"),
+    # WS8.3 CA seat onboarding: inviting is user management (Owner/Admin); accepting is done
+    # by the invited CA's own token (no extra capability — identity IS the authorization).
+    "POST /api/ca/invite": ("read", "manage_users"),
+    "POST /api/ca/accept": ("read",),
     # treasury
     "POST /api/treasury/accounts": ("read", "write"),
     "POST /api/treasury/accounts/{account_id}/import": ("read", "write"),
@@ -451,6 +475,8 @@ _GATE_MARKER = {
     "write": Capability.WRITE,
     "approve_payment": Capability.APPROVE_PAYMENT,
     "view_audit": Capability.VIEW_AUDIT,
+    "export": Capability.EXPORT,
+    "manage_users": Capability.MANAGE_USERS,
     "filing": Capability.APPROVE_FILING,
 }
 
@@ -510,6 +536,7 @@ def _call(client: TestClient, route_id: str, headers: dict[str, str]) -> Respons
         ("{employee_id}", "1"),
         ("{deadline_id}", "1"),
         ("{claim_id}", "1"),
+        ("{thread_id}", "1"),
     ):
         path = path.replace(param, value)
     if method == "GET":
@@ -639,3 +666,188 @@ def test_statutory_filing_hard_gate_is_stricter_than_the_capability(
 
     allowed = client.post("/api/gst/gstr3b", json={}, headers=_bearer(auth_server, Role.ADMIN))
     assert allowed.status_code == 422  # past both gates; the empty body is the only objection
+
+
+# --------------------------------------------------------------------------------------------
+# WS8.2 — CA query threads over real HTTP: full lifecycle chained into audit verify, role
+# negatives on the respond gate, and sampling determinism through the org-bearing principal.
+# --------------------------------------------------------------------------------------------
+
+
+def _seed_vault_doc(session) -> str:
+    from app.db.models.vault import Document
+
+    doc_id = "e" * 64
+    session.add(
+        Document(
+            id=doc_id, file_name="invoice.pdf", file_path="/vault/invoice.pdf",
+            doc_type="invoice", upload_date="2026-07-01", sha256=doc_id,
+        )
+    )
+    session.commit()
+    return doc_id
+
+
+def test_ca_thread_lifecycle_over_http_is_chained_and_role_gated(
+    client, auth_server, session
+) -> None:
+    """CA raises -> CA is REFUSED respond (write) -> Accountant responds with a vault doc ->
+    CA resolves -> the Audit Room reports the chain intact with all three sealed events,
+    attributed to the verified JWT subjects."""
+    doc_id = _seed_vault_doc(session)
+    ca = _bearer(auth_server, Role.CA)
+
+    raised = client.post(
+        "/api/audit/threads",
+        json={"domain": "ledger", "entry_ref": "journal:1", "question": "Support?"},
+        headers=ca,
+    )
+    assert raised.status_code == 200, raised.text
+    tid = raised.json()["id"]
+    assert raised.json()["state"] == "open"
+    assert raised.json()["raised_by"] == "user-ca"
+
+    # Role negative on the REAL route: the CA cannot answer (or mutate) its own query.
+    denied = client.post(
+        f"/api/audit/threads/{tid}/respond",
+        json={"doc_id": doc_id, "note": "self-answer"},
+        headers=ca,
+    )
+    assert denied.status_code == 403
+    assert denied.json()["detail"] == "missing capability: write"
+
+    # A respond pointing at a nonexistent vault doc is refused, not recorded.
+    acct = _bearer(auth_server, Role.ACCOUNTANT)
+    bad_doc = client.post(
+        f"/api/audit/threads/{tid}/respond",
+        json={"doc_id": "f" * 64, "note": "no such doc"},
+        headers=acct,
+    )
+    assert bad_doc.status_code == 404
+
+    responded = client.post(
+        f"/api/audit/threads/{tid}/respond",
+        json={"doc_id": doc_id, "note": "invoice attached"},
+        headers=acct,
+    )
+    assert responded.status_code == 200, responded.text
+    assert responded.json()["state"] == "responded"
+
+    resolved = client.post(f"/api/audit/threads/{tid}/resolve", json={}, headers=ca)
+    assert resolved.status_code == 200, resolved.text
+    assert resolved.json()["state"] == "resolved"
+    events = resolved.json()["events"]
+    assert [e["event"] for e in events] == ["raise", "respond", "resolve"]
+    assert [e["user_id"] for e in events] == ["user-ca", "user-accountant", "user-ca"]
+    assert events[1]["doc_id"] == doc_id
+
+    # The whole exchange is on the ONE hash chain and it still verifies.
+    audit = client.get("/api/audit", headers=ca)
+    assert audit.status_code == 200
+    body = audit.json()
+    assert body["chain_intact"] is True
+    sealed_actions = [e["action"] for e in body["entries"]]
+    for action in ("ca_thread.raise", "ca_thread.respond", "ca_thread.resolve"):
+        assert action in sealed_actions
+    sealed_hashes = {e["this_hash"] for e in body["entries"]}
+    assert {e["audit_hash"] for e in events} <= sealed_hashes
+
+
+def test_sampling_route_is_deterministic_for_the_principals_org(client, auth_server, session):
+    from app.db.models.ledger import JournalEntry
+
+    for i in range(6):
+        session.add(
+            JournalEntry(
+                entry_date=f"2026-07-{i + 1:02d}", reference=f"V-{i + 1}",
+                description=f"voucher {i + 1}", source="gst",
+                total_debit=100_00, total_credit=100_00,
+            )
+        )
+    session.commit()
+    ca = _bearer(auth_server, Role.CA)
+    params = {"domain": "gst", "date_from": "2026-07-01", "date_to": "2026-07-31", "n": 3}
+    s1 = client.get("/api/audit/sample", params=params, headers=ca)
+    s2 = client.get("/api/audit/sample", params=params, headers=ca)
+    assert s1.status_code == 200, s1.text
+    assert s1.json() == s2.json()
+    assert len(s1.json()["sample"]) == 3
+    assert s1.json()["population"] == 6
+
+
+def test_htmx_thread_surface_carries_the_same_decision(client, auth_server, session) -> None:
+    """The HTMX audit room mirrors the JSON gates: CA raises via the form (303 back to /audit),
+    CA cannot respond there either, and the raised thread renders on the page."""
+    doc_id = _seed_vault_doc(session)
+    ca = _bearer(auth_server, Role.CA)
+
+    raised = client.post(
+        "/audit/threads",
+        data={"domain": "ledger", "entry_ref": "journal:9", "question": "HTMX raise?"},
+        headers=ca,
+        follow_redirects=False,
+    )
+    assert raised.status_code == 303
+    assert raised.headers["location"] == "/audit"
+
+    denied = client.post(
+        "/audit/threads/1/respond",
+        data={"doc_id": doc_id, "note": "self"},
+        headers=ca,
+    )
+    assert denied.status_code == 403
+    assert denied.json()["detail"] == "missing capability: write"
+
+    page = client.get("/audit", headers=ca)
+    assert page.status_code == 200
+    assert "HTMX raise?" in page.text
+    assert "journal:9" in page.text
+
+
+# --------------------------------------------------------------------------------------------
+# WS8.3 — CA seat onboarding over real HTTP: invite (Owner) -> accept (the CA's own token),
+# free seat, referral events sealed append-only and PII-minimal.
+# --------------------------------------------------------------------------------------------
+
+
+def test_ca_invite_accept_lifecycle_and_referral_events(client, auth_server, session) -> None:
+    from app.core import ca_seat
+    from app.core.audit_store import load_chain_for, verify_chain_for
+
+    owner = _bearer(auth_server, Role.OWNER)
+    ca = _bearer(auth_server, Role.CA)  # token email is ca@example.com, org org-7
+
+    # accepting before any invite exists is a 404, never a fabricated membership
+    premature = client.post("/api/ca/accept", json={}, headers=ca)
+    assert premature.status_code == 404
+
+    invited = client.post("/api/ca/invite", json={"email": "ca@example.com"}, headers=owner)
+    assert invited.status_code == 200, invited.text
+    assert invited.json()["status"] == "pending"
+    assert invited.json()["seat"] == "free_unlimited"
+
+    # an Accountant cannot invite (spec negative), and the refusal names the gate
+    denied = client.post(
+        "/api/ca/invite", json={"email": "x@y.in"}, headers=_bearer(auth_server, Role.ACCOUNTANT)
+    )
+    assert denied.status_code == 403
+    assert denied.json()["detail"] == "missing capability: manage_users"
+
+    # the CA accepts with their OWN verified token — matched on the token's email
+    accepted = client.post("/api/ca/accept", json={}, headers=ca)
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["status"] == "active"
+    assert accepted.json()["referred_org"] is False  # first org for this CA
+
+    # referral events sealed append-only on the org's chain, PII-minimal (hash, not address)
+    chain = load_chain_for(session, "org-7")
+    ca_events = [e for e in chain if e.action.startswith("ca_") and "." not in e.action]
+    assert [e.action for e in ca_events] == [ca_seat.EVENT_INVITED, ca_seat.EVENT_JOINED]
+    assert verify_chain_for(session, "org-7")
+    assert all("ca@example.com" not in (e.query or "") for e in chain)
+    assert ca_seat.email_sha256("ca@example.com") in (ca_events[0].query or "")
+
+    # inviting the same CA again (any case) is refused and seals nothing further
+    dup = client.post("/api/ca/invite", json={"email": "CA@example.com"}, headers=owner)
+    assert dup.status_code == 409
+    assert len(load_chain_for(session, "org-7")) == len(chain)

@@ -16,7 +16,11 @@ export type ErrorKind = "mahsa_down" | "api_down" | "unknown";
 /** A read failed (nothing could have changed) vs a write failed (something may have). */
 export type Operation = "read" | "write";
 
-function classify(error: unknown): ErrorKind {
+// Exported so the offline path can be pinned directly: a real offline fetch() rejects with a
+// plain TypeError (not an ApiError — there was no HTTP response at all), and that must classify
+// the same way a down server does, so the SAME copy + the SAME stale-marking machinery engage
+// whether the network is unreachable or the server is. See ErrorState.test.ts.
+export function classify(error: unknown): ErrorKind {
   if (error instanceof ApiError) return error.status >= 500 ? "api_down" : "unknown";
   return "api_down";
 }

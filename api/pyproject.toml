@@ -39,6 +39,11 @@ ocr = [
     "pytesseract>=0.3.10",
     "pillow>=10.0",
 ]
+# Postgres/Supabase driver (launch path). psycopg2 specifically: plain postgresql:// URLs
+# resolve to it under SQLAlchemy, and app/core/principal.py's SET_ORG_GUC_SQL uses %s paramstyle.
+pg = [
+    "psycopg2-binary>=2.9",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]

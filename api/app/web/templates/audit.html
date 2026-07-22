@@ -14,6 +14,17 @@
   tampering breaks every later hash. Verified in the browser, no secrets needed.
 </p>
 
+<div class="section-title">Audit Pack (§WS8.1)</div>
+<p class="muted" style="margin-bottom:var(--sp-3)">
+  TB · P&amp;L · Balance Sheet · GL · statutory registers · 26AS recon · MSME ageing — every
+  figure badged (VERIFIED only when Mahsa recomputed it), integrity hash on the cover sheet.
+</p>
+<p style="margin-bottom:var(--sp-5)">
+  <a class="btn" href="/api/audit/pack.zip" download>Download spreadsheet (.zip of CSV sheets)</a>
+  &nbsp;
+  <a class="btn" href="/api/audit/pack.pdf" download>Download PDF</a>
+</p>
+
 <div class="section-title">Audit log ({{ entries|length }})</div>
 {% if entries %}
 <table class="dtable">
@@ -33,6 +44,61 @@
 {% else %}
 <p class="muted">No audit entries yet. Decisions and validated loop runs are recorded here.</p>
 {% endif %}
+
+<div class="section-title">CA query threads ({{ threads|length }})</div>
+<p class="muted" style="margin-bottom:var(--sp-3)">
+  Queries pinned to entries: raise &rarr; respond with a vault document &rarr; resolve.
+  Every event is sealed onto the audit chain above.
+</p>
+{% for t, evs in threads %}
+<div style="border:1px solid var(--border, #333); padding:var(--sp-3); margin-bottom:var(--sp-3)">
+  <div>
+    <strong>#{{ t.id }}</strong> · <span style="text-transform:capitalize">{{ t.domain }}</span>
+    · <span class="mono">{{ t.entry_ref }}</span>
+    {% if t.state == "resolved" %}<span class="pill pill--green">RESOLVED</span>
+    {% elif t.state == "responded" %}<span class="pill">RESPONDED</span>
+    {% else %}<span class="pill pill--red">OPEN</span>{% endif %}
+  </div>
+  <p style="margin:var(--sp-2) 0">{{ t.question }}</p>
+  <table class="dtable">
+    <thead><tr><th>Time</th><th>Event</th><th>By</th><th>Note</th><th>Document</th><th>Sealed hash</th></tr></thead>
+    <tbody>
+      {% for ev in evs %}
+      <tr>
+        <td class="mono">{{ ev.timestamp }}</td>
+        <td>{{ ev.event }}</td>
+        <td class="mono">{{ ev.user_id }}</td>
+        <td>{{ ev.note or "—" }}</td>
+        <td class="mono">{{ ev.doc_id or "—" }}</td>
+        <td class="mono" title="{{ ev.audit_hash }}">{{ (ev.audit_hash or "—")[:12] }}…</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if t.state != "resolved" %}
+  <form method="post" action="/audit/threads/{{ t.id }}/respond" style="margin-top:var(--sp-2)">
+    <input name="doc_id" placeholder="vault document id" required>
+    <input name="note" placeholder="note (optional)">
+    <button type="submit">Respond with document</button>
+  </form>
+  {% endif %}
+  {% if t.state == "responded" %}
+  <form method="post" action="/audit/threads/{{ t.id }}/resolve" style="margin-top:var(--sp-2)">
+    <input name="note" placeholder="resolution note (optional)">
+    <button type="submit">Resolve</button>
+  </form>
+  {% endif %}
+</div>
+{% else %}
+<p class="muted">No queries raised yet.</p>
+{% endfor %}
+<form method="post" action="/audit/threads" style="margin-bottom:var(--sp-5)">
+  <div class="section-title">Raise a query</div>
+  <input name="domain" placeholder="domain (e.g. ledger)" required>
+  <input name="entry_ref" placeholder="entry reference (e.g. journal:42)" required>
+  <input name="question" placeholder="question" required>
+  <button type="submit">Raise</button>
+</form>
 
 <div class="section-title">LLM trace ({{ traces|length }})</div>
 <p class="muted" style="margin-bottom:var(--sp-3)">Drafting-layer observability — hashes only, no raw prompts.</p>

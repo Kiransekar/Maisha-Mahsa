@@ -452,6 +452,7 @@ function ApprovalCard({
           display: "flex",
           justifyContent: "space-between",
           alignItems: "baseline",
+          flexWrap: "wrap",
           gap: 16,
           marginTop: 12,
           paddingTop: 12,

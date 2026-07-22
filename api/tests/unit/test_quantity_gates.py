@@ -132,3 +132,41 @@ def test_unknown_kind_raises() -> None:
 def test_unknown_plan_raises() -> None:
     with pytest.raises(ValueError, match="unknown plan"):
         ent.quantity_gate("headcount", 1, "enterprise")
+
+
+# --- §WS8.3: the CA seat is FREE + UNLIMITED — never counted against the seat gate ----------
+
+
+def test_ca_seats_never_count_and_are_unlimited() -> None:
+    limit = ent.QUANTITY_LIMITS["seats"]["basics"]
+    many_cas = ["ca"] * (limit * 10)  # far beyond any plan ceiling
+    assert ent.countable_seats(many_cas) == 0
+    decision = ent.seat_gate(many_cas, "basics")
+    assert decision.state is ent.GateState.OK
+    assert decision.current == 0
+
+
+def test_countable_seats_counts_only_non_exempt_roles() -> None:
+    # exemption is case/whitespace-insensitive; every other role counts
+    roles = ["owner", "admin", "CA", " ca ", "accountant"]
+    assert ent.countable_seats(roles) == 3
+
+
+def test_adding_a_ca_seat_never_blocks_even_over_the_limit() -> None:
+    limit = ent.QUANTITY_LIMITS["seats"]["basics"]
+    over = ["accountant"] * (limit + GRACE_BAND + 1)  # BLOCK territory for countable seats
+
+    # contrast: a countable role IS gated on the post-addition count …
+    blocked = ent.seat_addition_gate(over, "approver", "basics")
+    assert blocked.state is ent.GateState.BLOCK
+
+    # … while the CA seat is exempt, whatever the org's current usage (§WS8.3)
+    free = ent.seat_addition_gate(over, "ca", "basics")
+    assert free.state is ent.GateState.OK
+    assert "free" in free.reason
+    assert free.upsell is None
+
+
+def test_seat_addition_gate_still_validates_the_plan() -> None:
+    with pytest.raises(ValueError, match="unknown plan"):
+        ent.seat_addition_gate([], "ca", "enterprise")

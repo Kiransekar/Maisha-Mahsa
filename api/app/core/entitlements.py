@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import enum
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -296,6 +297,46 @@ def quantity_gate(
         visible=True, reason=reason,
         upsell=upsell if state in (GateState.GRACE, GateState.BLOCK) else None,
     )
+
+
+# --- CA seat exemption (§WS8.3) -----------------------------------------------
+
+
+#: §WS8.3 — a CA seat is FREE + UNLIMITED. Memberships in these roles NEVER count against the
+#: "seats" quantity gate on any plan: the CA channel is a growth loop, not a seat to monetize
+#: (MASTER_PLAN §10 / risk register §16.5 "free seats"). This is the EXPLICIT exemption the
+#: invite flow (app.core.ca_seat) relies on; tests prove an over-limit org can still add a CA.
+SEAT_EXEMPT_ROLES: frozenset[str] = frozenset({"ca"})
+
+
+def countable_seats(roles: Iterable[str]) -> int:
+    """Seats that COUNT against the seat gate: every membership whose role is not exempt.
+
+    Case/whitespace-insensitive on the role string (it is compared against our own small
+    fixed vocabulary, same stance as ``principal.map_better_auth_role``)."""
+    return sum(1 for r in roles if r.strip().lower() not in SEAT_EXEMPT_ROLES)
+
+
+def seat_gate(roles: Iterable[str], plan: str, **kwargs: Any) -> GateDecision:
+    """The "seats" quantity gate over an org's membership ROLES (never a raw count), so the
+    CA exemption can never be forgotten by a caller counting rows itself."""
+    return quantity_gate("seats", countable_seats(roles), plan, **kwargs)
+
+
+def seat_addition_gate(existing_roles: Iterable[str], new_role: str, plan: str) -> GateDecision:
+    """Gate for ADDING one seat. An exempt role (CA) can never block — regardless of how far
+    over its seat limit the org already is — because the new seat is not countable. A countable
+    role is gated on the post-addition count via :func:`seat_gate`."""
+    normalized = new_role.strip().lower()
+    if normalized in SEAT_EXEMPT_ROLES:
+        base = seat_gate(existing_roles, plan)  # validates plan; current excludes exempt seats
+        return GateDecision(
+            kind="seats", plan=plan, current=base.current, limit=base.limit,
+            state=GateState.OK, visible=True,
+            reason=f"{normalized} seat is free + unlimited (§WS8.3); not counted",
+            upsell=None,
+        )
+    return seat_gate([*existing_roles, new_role], plan)
 
 
 # --- session-context plan source (§0.8) --------------------------------------

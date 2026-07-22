@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "vitest run",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lighthouse": "node scripts/lighthouse.mjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.101.3",

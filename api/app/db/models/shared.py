@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import Float, Integer, String, Text, func
+from sqlalchemy import Float, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -137,6 +137,96 @@ class Decision(Base):
     # WS7-E2E fix:bulk-rows — WHICH inbox row this decision covered (e.g. "approval:gst").
     # NULL for pre-fix rows and for whole-domain decisions from the approvals page.
     item_id: Mapped[str | None] = mapped_column(String)
+
+
+class Org(Base):
+    """Tenancy root — dev/SQLite mirror of ``tenant_core.orgs`` (infra 001_tenancy.sql).
+    Scheduled jobs iterate these rows (WS4.5); ``plan`` is the entitlement tier (WS6)."""
+
+    __tablename__ = "orgs"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    plan: Mapped[str] = mapped_column(String, nullable=False, default="basics")
+    created_at: Mapped[datetime] = mapped_column(server_default=func.current_timestamp())
+
+
+class AppUser(Base):
+    """Global identity — dev/SQLite mirror of ``app_users`` (infra 001_tenancy.sql). NOT a
+    parallel auth system: Better Auth owns credentials/sessions (WS4.3); this row only anchors
+    memberships to an email so an invite can precede the invitee's first login."""
+
+    __tablename__ = "app_users"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    email: Mapped[str] = mapped_column(String, unique=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.current_timestamp())
+
+
+class Membership(Base):
+    """User↔org binding with a role — dev/SQLite mirror of ``memberships`` (infra
+    001_tenancy.sql + the ``status`` column added by migration 0007). ``status`` is
+    'pending' from a WS8.3 invite until the invitee accepts, then 'active'."""
+
+    __tablename__ = "memberships"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    org_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String, nullable=False)
+    role: Mapped[str] = mapped_column(String, nullable=False)  # owner|admin|…|ca|investor
+    status: Mapped[str] = mapped_column(String, nullable=False, default="active")  # pending|active
+    created_at: Mapped[datetime] = mapped_column(server_default=func.current_timestamp())
+
+
+class JobRun(Base):
+    """WS4.5 — idempotency ledger for scheduled jobs: one row per (org, job, period).
+
+    A re-run for a period the job already COMPLETED ('done') is a no-op; an 'error' row does
+    NOT block a retry. ``org_id`` is 'default' on the legacy single-tenant dev path."""
+
+    __tablename__ = "job_run"
+    __table_args__ = (UniqueConstraint("org_id", "job", "period", name="uq_job_run_key"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    org_id: Mapped[str] = mapped_column(String, nullable=False)
+    job: Mapped[str] = mapped_column(String, nullable=False)
+    period: Mapped[str] = mapped_column(String, nullable=False)  # ISO date the run covered
+    status: Mapped[str] = mapped_column(String, nullable=False)  # done | error
+    ran_at: Mapped[str] = mapped_column(String, nullable=False)  # ISO timestamp
+
+
+class CaThread(Base):
+    """WS8.2 — a CA query pinned to a ledger entry / figure reference. States:
+    open -> responded -> resolved. Every transition also seals a ``ca_thread.*`` event onto the
+    hash-chained ``audit_log`` (see ``app.core.ca_threads``); these rows are the queryable
+    mirror, never the source of truth for tamper-evidence."""
+
+    __tablename__ = "ca_thread"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    created_at: Mapped[str] = mapped_column(String, nullable=False)  # ISO timestamp
+    domain: Mapped[str] = mapped_column(String, nullable=False)
+    entry_ref: Mapped[str] = mapped_column(String, nullable=False)  # e.g. "journal:42"
+    question: Mapped[str] = mapped_column(Text, nullable=False)
+    state: Mapped[str] = mapped_column(String, default="open")  # open | responded | resolved
+    raised_by: Mapped[str] = mapped_column(String, nullable=False)
+
+
+class CaThreadEvent(Base):
+    """One append-only event on a :class:`CaThread` (raise / respond / resolve).
+    ``audit_hash`` links to the sealed ``audit_log.this_hash`` for this event; the raw ``note``
+    text lives ONLY here — the audit descriptor carries its sha256 (no PII in the chain)."""
+
+    __tablename__ = "ca_thread_event"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    thread_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    timestamp: Mapped[str] = mapped_column(String, nullable=False)
+    event: Mapped[str] = mapped_column(String, nullable=False)  # raise | respond | resolve
+    user_id: Mapped[str] = mapped_column(String, nullable=False)
+    note: Mapped[str | None] = mapped_column(Text)
+    doc_id: Mapped[str | None] = mapped_column(String)  # vault documents.id (respond-with-doc)
+    audit_hash: Mapped[str | None] = mapped_column(String)
 
 
 class ComplianceCalendar(Base):

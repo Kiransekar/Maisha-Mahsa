@@ -233,6 +233,7 @@ export function Inbox() {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
+                  flexWrap: "wrap",
                   gap: 16,
                   background: selected.has(it.id)
                     ? "var(--color-accent-sunk)"
@@ -243,7 +244,7 @@ export function Inbox() {
                   marginBottom: 8,
                 }}
               >
-                <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
+                <div style={{ display: "flex", gap: 12, alignItems: "flex-start", minWidth: 0 }}>
                   {blocked === null && (
                     // Frozen while a preview is open: the confirm commits the previewed rows, so
                     // a row ticked now would create a selection the preview never showed.
@@ -275,7 +276,13 @@ export function Inbox() {
                     <div style={{ color: "var(--color-ink-muted)", fontSize: 13 }}>{it.detail}</div>
                   )}
                   <div
-                    style={{ display: "flex", gap: 12, alignItems: "center", marginTop: 4 }}
+                    style={{
+                      display: "flex",
+                      gap: 12,
+                      alignItems: "center",
+                      flexWrap: "wrap",
+                      marginTop: 4,
+                    }}
                   >
                     <span className="tnum" style={{ fontSize: 13 }}>
                       {inrOrPending(it.impact_paise)}

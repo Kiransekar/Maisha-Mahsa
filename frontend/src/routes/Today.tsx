@@ -237,6 +237,7 @@ function Row({
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
+        flexWrap: "wrap",
         gap: 16,
         background: "var(--color-surface)",
         border: "1px solid var(--color-border)",
@@ -245,7 +246,7 @@ function Row({
         marginBottom: 8,
       }}
     >
-      <div>{children}</div>
+      <div style={{ minWidth: 0 }}>{children}</div>
       <a
         href={href}
         style={{
