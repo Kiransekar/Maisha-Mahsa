@@ -1,11 +1,44 @@
-# WS1.B1 — Code on Wages s.2(y) statutory wage base (MMX-1.0 §WS1.B1). Values are computed from
-# the spec's stated algorithm (cited primary source, §0.6(b)); ca_initials PENDING until the
-# Ministry-FAQ worked examples are confirmed. amounts are integer paise.
+# WS1.B1 — Code on Wages s.2(y) statutory wage base (MMX-1.0 §WS1.B1). amounts are integer paise.
+#
+# PROVENANCE (docs/STATUTORY_SOURCING.md §3). The governing instrument is the Code on Wages, 2019
+# (Act No. 29 of 2019, assented 8th August 2019), as hosted on India Code (the Ministry of Law &
+# Justice official repository), text "As on the 21th November, 2025":
+#   https://www.indiacode.nic.in/bitstream/123456789/15793/1/aA2019-29.pdf
+# s.2(y) was fetched and read in full for these vectors. The operative wording, verbatim:
+#
+#   (y) "wages" means all remuneration ... and includes, —
+#         (i) basic pay; (ii) dearness allowance; and (iii) retaining allowance, if any,
+#       but does not include— (a)...(k) [bonus under law; house-accommodation/light/water/medical;
+#       employer pension or PF contribution; conveyance allowance; special-expenses reimbursement;
+#       house rent allowance; award/settlement remuneration; overtime allowance; commission;
+#       gratuity; retrenchment compensation]:
+#         Provided that, for calculating the wages under this clause, if payments made by the
+#         employer to the employee under clauses (a) to (i) exceeds one-half, or such other per
+#         cent. as may be notified by the Central Government, of the all remuneration calculated
+#         under this clause, the amount which exceeds such one-half, or the per cent. so notified,
+#         shall be deemed as remuneration and shall be accordingly added in wages under this clause
+#       ...
+#         Explanation.—Where an employee is given in lieu of the whole or part of the wages payable
+#         to him, any remuneration in kind by his employer, the value of such remuneration in kind
+#         which does not exceed fifteen per cent. of the total wages payable to him, shall be deemed
+#         to form part of the wages of such employee;
+#
+# NOTE for the verifier: indiacode.nic.in serves this PDF to a normal user-agent (HTTP 200 confirmed)
+# but 403s some automated fetchers. Retry with a browser user-agent if a fetch is refused.
 
 - id: wage_base_compliant_no_addback
   statute: Code on Wages 2019
   section: "2(y)"
-  source: "MMX-1.0 §WS1.B1 (excluded 40% < 50% -> no add-back; wages = Basic+DA+retaining)"
+  provenance: primary
+  citation_url: "https://www.indiacode.nic.in/bitstream/123456789/15793/1/aA2019-29.pdf"
+  citation_locator: >-
+    Chapter I, s.2(y) — inclusion limb clauses (i) basic pay, (ii) dearness allowance,
+    (iii) retaining allowance, if any; read with the first proviso to s.2(y) (excluded payments
+    under clauses (a) to (i) not exceeding one-half of all remuneration, so no add-back arises)
+  source: >-
+    Code on Wages, 2019 (Act No. 29 of 2019) s.2(y). Wages are the inclusion limb (basic + DA +
+    retaining allowance) exactly; the first proviso's one-half trigger is not met here
+    (excluded 40% of total remuneration), so the base is the inclusion limb alone.
   ca_initials: PENDING
   ca_date: null
   target: statutory_wage_base
@@ -17,7 +50,17 @@
 - id: wage_base_addback_when_basic_underweighted
   statute: Code on Wages 2019
   section: "2(y)"
-  source: "MMX-1.0 §WS1.B1 (excluded 66.7% > 50% -> add back the excess over 50%)"
+  provenance: primary
+  citation_url: "https://www.indiacode.nic.in/bitstream/123456789/15793/1/aA2019-29.pdf"
+  citation_locator: >-
+    Chapter I, first proviso to s.2(y) — "if payments made by the employer to the employee under
+    clauses (a) to (i) exceeds one-half ... of the all remuneration calculated under this clause,
+    the amount which exceeds such one-half ... shall be deemed as remuneration and shall be
+    accordingly added in wages under this clause"
+  source: >-
+    Code on Wages, 2019 (Act No. 29 of 2019), first proviso to s.2(y). The one-half threshold and
+    the add-back of only the EXCESS over one-half are both stated in the proviso verbatim.
+    HRA is clause (f) of the exclusion list, so it counts toward the (a)-(i) total.
   ca_initials: PENDING
   ca_date: null
   target: statutory_wage_base
@@ -29,7 +72,16 @@
 - id: wage_base_overtime_counts_as_excluded
   statute: Code on Wages 2019
   section: "2(y)"
-  source: "MMX-1.0 §WS1.B1 (overtime is in the excluded total)"
+  provenance: primary
+  citation_url: "https://www.indiacode.nic.in/bitstream/123456789/15793/1/aA2019-29.pdf"
+  citation_locator: >-
+    Chapter I, s.2(y) exclusion clause (h) "any overtime allowance", read with the first proviso to
+    s.2(y) which aggregates "clauses (a) to (i)" — clause (h) falls inside that range, so overtime
+    is part of the excluded total tested against one-half
+  source: >-
+    Code on Wages, 2019 (Act No. 29 of 2019) s.2(y)(h) and first proviso. Overtime is an excluded
+    payment AND is inside the (a)-(i) span the proviso aggregates, so it both stays out of the
+    inclusion limb and drives the add-back.
   ca_initials: PENDING
   ca_date: null
   target: statutory_wage_base
@@ -41,7 +93,32 @@
 - id: wage_base_in_kind_capped_15pct
   statute: Code on Wages 2019
   section: "2(y)"
-  source: "MMX-1.0 §WS1.B1 (in-kind counts up to 15% of the wage base — interpretation BLOCKED-CA)"
+  # The 15% FIGURE is primary (Explanation to s.2(y)). The BASE it is 15% OF is not defined:
+  # the Explanation says "fifteen per cent. of the total wages payable to him", and "total wages
+  # payable" is itself the quantity being computed. A choice was required, so the VECTOR is an
+  # interpretation — see docs/STATUTORY_SOURCING.md §4b question 2 (WS1.B1).
+  provenance: interpretation
+  citation_url: "https://www.indiacode.nic.in/bitstream/123456789/15793/1/aA2019-29.pdf"
+  citation_locator: >-
+    Chapter I, Explanation to s.2(y) — "the value of such remuneration in kind which does not
+    exceed fifteen per cent. of the total wages payable to him, shall be deemed to form part of
+    the wages of such employee". The section defines neither "total wages payable to him" nor the
+    order of operations against the first proviso's add-back.
+  source: >-
+    Code on Wages, 2019 (Act No. 29 of 2019), Explanation to s.2(y), read and quoted above. The
+    fifteen-per-cent ceiling is statutory; the base is not. app/core/statutory_wage.py reads it as
+    15% of the money wage base AFTER the first-proviso add-back, and adds the capped in-kind value
+    on top. VERIFIED: the phrase "in kind" occurs nowhere else in the 32-page Act, which delegates
+    no rule-making power on this point, so the Act alone cannot resolve the base. NOT YET CHECKED:
+    the Code on Wages (Central) Rules 2020 and any Ministry/CLC FAQ — a web search for these could
+    not be completed (search API unavailable at time of writing) and remains open work before the
+    CA review. Ships BLOCKED, figure renders ◐ not ✓ (STATUTORY_SOURCING §3).
+  alternatives_considered:
+    - "15% of the money wage base AFTER the first-proviso add-back, added on top (CHOSEN; implemented in app/core/statutory_wage.py). Here 15% x ₹30,000 = ₹4,500 -> ₹34,500."
+    - "15% of the inclusion limb only (basic + DA + retaining), ignoring any add-back. Identical here (no add-back in this vector) but diverges whenever the proviso fires."
+    - "15% of ALL remuneration (the proviso's denominator, i.e. money remuneration including excluded allowances) rather than of wages."
+    - "15% of the post-inclusion total treated as a CEILING ON THE WHOLE wage figure inclusive of the in-kind value (i.e. in-kind may form at most 15% of the final wages), which solves the circularity as in_kind_counted = min(in_kind, 0.15/0.85 x money_base) rather than 0.15 x money_base."
+    - "In-kind excluded entirely unless paid 'in lieu of' wages on the Explanation's literal wording, i.e. a benefit given IN ADDITION to full money wages is not deemed part of wages at all."
   ca_initials: PENDING
   ca_date: null
   target: statutory_wage_base

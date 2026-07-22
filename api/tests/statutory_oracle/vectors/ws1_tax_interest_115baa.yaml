@@ -1,11 +1,26 @@
-# s.234B / s.234C interest and s.115BAA company tax — recomputable single figures (§WS3.1
-# extension). Values computed from the existing Python tax_calc (cited primary source, §0.6(b));
-# ca_initials PENDING. amounts are integer paise.
+# s.234B / s.234C interest and s.115BAA company tax — recomputable single figures.
+# Provenance recorded per docs/STATUTORY_SOURCING.md §3. Every rate, threshold and cut-off date
+# below was read in the instrument itself (Income-tax Act, 1961; Income-tax Rules, 1962;
+# Finance Act, 2025) — not from a restatement. amounts are integer paise.
+#
+# NOTE for a re-verifier: incometaxindia.gov.in returns 403 to bare HTTP clients. The pages below
+# serve normally with ordinary browser request headers (User-Agent + Accept + Accept-Language).
 
 - id: interest_234b_applies
   statute: Income-tax Act
   section: "234B"
-  source: "tax_calc.interest_234b: 1%/month on shortfall (rounded down to ₹100) when advance < 90%"
+  provenance: primary
+  citation_url: https://www.incometaxindia.gov.in/w/section-234b-37
+  citation_locator: >-
+    s.234B(1) — "where the advance tax paid by such assessee under the provisions of section 210
+    is less than ninety per cent of the assessed tax, the assessee shall be liable to pay simple
+    interest at the rate of one per cent for every month or part of a month ... on the amount by
+    which the advance tax paid as aforesaid falls short of the assessed tax".
+  source: >-
+    Both the 90% trigger and the 1%-per-month rate on the shortfall are the words of s.234B(1).
+    The ₹100 round-down of the interest base is Rule 119A(c), Income-tax Rules, 1962 (see the
+    interest_234b_relief_above_90pct vector) — inert here, ₹4,00,000 is already a multiple of ₹100.
+    ₹20,000 is then arithmetic: ₹4,00,000 shortfall × 1% × 5 months.
   ca_initials: PENDING
   ca_date: null
   target: interest_234b
@@ -16,7 +31,15 @@
 - id: interest_234b_relief_above_90pct
   statute: Income-tax Act
   section: "234B"
-  source: "tax_calc.interest_234b: no interest when advance >= 90% of assessed"
+  provenance: primary
+  citation_url: https://www.incometaxindia.gov.in/w/section-234b-37
+  citation_locator: >-
+    s.234B(1) — the charge arises only "where the advance tax paid ... is less than ninety per
+    cent of the assessed tax". ₹4,50,000 is exactly 90% of ₹5,00,000, so the condition is not met
+    and no interest is chargeable.
+  source: >-
+    Nil is the direct consequence of the ninety-per-cent threshold in the charging words of
+    s.234B(1); no other provision is engaged.
   ca_initials: PENDING
   ca_date: null
   target: interest_234b
@@ -26,7 +49,21 @@
 - id: interest_234c_full_shortfall
   statute: Income-tax Act
   section: "234C"
-  source: "tax_calc.interest_234c: total ₹20,200 on ₹4,00,000 liability, nothing paid (test_234c)"
+  provenance: primary
+  citation_url: https://www.incometaxindia.gov.in/w/section-234c-40
+  citation_locator: >-
+    s.234C(1)(a)(i) — advance tax "on or before the 15th day of June ... less than fifteen per
+    cent", "on or before the 15th day of September ... less than forty-five per cent", "on or
+    before the 15th day of December ... less than seventy-five per cent" attracts "simple
+    interest at the rate of one per cent per month for a period of three months on the amount of
+    the shortfall"; and s.234C(1)(a)(ii) — advance tax "on or before the 15th day of March ...
+    less than the tax due on the returned income" attracts "simple interest at the rate of one
+    per cent on the amount of the shortfall".
+  source: >-
+    Nothing paid, so every installment is short by its full statutory percentage. ₹20,200 is
+    arithmetic on the four rates in the locator: (15% × ₹4,00,000 × 1% × 3) = ₹1,800 +
+    (45% × 1% × 3) = ₹5,400 + (75% × 1% × 3) = ₹9,000 + (100% × 1% × 1) = ₹4,000.
+    The first proviso (12%/36% relief) is not reached — nothing was paid.
   ca_initials: PENDING
   ca_date: null
   target: interest_234c
@@ -36,7 +73,18 @@
 - id: interest_234c_on_schedule_nil
   statute: Income-tax Act
   section: "234C"
-  source: "tax_calc.interest_234c: nil when each installment reaches its relief floor"
+  provenance: primary
+  citation_url: https://www.incometaxindia.gov.in/w/section-234c-40
+  citation_locator: >-
+    s.234C(1)(a)(i) and (ii) — interest is chargeable only where the advance tax paid by 15 June /
+    15 September / 15 December / 15 March is "less than" fifteen / forty-five / seventy-five / one
+    hundred per cent of the tax due. Here the cumulative payments are exactly 15%, 45%, 75% and
+    100% of ₹4,00,000, so no installment is short and the charge never arises. (The first proviso
+    to s.234C(1)(a), which waives interest at twelve per cent / thirty-six per cent by 15 June /
+    15 September, is a lower floor and is not what carries this result.)
+  source: >-
+    Nil follows from the "less than" condition in the charging clauses, not from the relief
+    proviso — every installment is paid at its full statutory percentage.
   ca_initials: PENDING
   ca_date: null
   target: interest_234c
@@ -46,7 +94,27 @@
 - id: company_tax_115baa_1cr
   statute: Income-tax Act
   section: "115BAA"
-  source: "MMX-1.0 §WS1.C4 (22% + 10% surcharge + 4% cess = 25.168%); tax_calc.itr_computation normal_tax"
+  provenance: primary
+  citation_url: https://www.incometaxindia.gov.in/w/section-115baa-2
+  citation_locator: >-
+    s.115BAA(1) — "the income-tax payable in respect of the total income of a person, being a
+    domestic company ... shall, at the option of such person, be computed at the rate of
+    twenty-two per cent". Surcharge and cess are not in s.115BAA; they come from the annual
+    Finance Act — see citation_url_surcharge_cess below.
+  citation_url_surcharge_cess: https://www.incometaxindia.gov.in/w/section-2-135
+  citation_locator_surcharge_cess: >-
+    Finance Act, 2025, s.2 — proviso reading "Provided also that in case of every domestic company
+    whose income is chargeable to tax under section 115BAA or section 115BAB of the Income-tax
+    Act, the income-tax computed under this sub-section shall be increased by a surcharge, for the
+    purposes of the Union, calculated at the rate of ten per cent. of such income-tax"
+    (flat, with no income threshold and no marginal relief); and s.2(11) — the "Health and
+    Education Cess on income-tax", "calculated at the rate of four per cent. of such income-tax
+    and surcharge".
+  source: >-
+    Three separately-cited statutory rates; 25.168% is their arithmetic composition
+    (22% × 1.10 × 1.04). ₹1,00,00,000 × 25.168% = ₹25,16,800. The 10% surcharge is flat for a
+    115BAA company, so the ₹1 crore / ₹10 crore slabs and marginal relief in Paragraph E of the
+    First Schedule do not apply.
   ca_initials: PENDING
   ca_date: null
   target: company_tax_115baa

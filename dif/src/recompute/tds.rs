@@ -67,10 +67,15 @@ pub fn tds_on_payment(
     let Some((single, aggregate, per_month)) = section_cfg(section) else {
         return Tds { applicable: false, tds_paise: Paise(0) };
     };
+    // STRICT `>`, not `>=` — mirrors the Python fix of 2026-07-21. Each proviso exempts the payment
+    // where the amount "does not exceed" the threshold, so AT the threshold no deduction arises.
+    // s.194J(1) first proviso cl.(B)(i), s.194I proviso, s.194C(5). Both engines carried `>=` and
+    // agreed with each other perfectly while both were wrong — which is exactly why parity alone is
+    // not correctness, and why the oracle exists.
     let applies = if per_month {
-        amount >= single
+        amount > single
     } else {
-        amount >= single || aggregate_ytd + amount >= aggregate
+        amount > single || aggregate_ytd + amount > aggregate
     };
     if !applies {
         return Tds { applicable: false, tds_paise: Paise(0) };
@@ -90,9 +95,22 @@ mod tests {
 
     // --- oracle vectors (ws1c_proven_defects.yaml) ---
     #[test]
-    fn tds_194j_50k_boundary() {
-        // ₹50,000 at threshold -> 10% = ₹5,000.
+    fn tds_194j_at_threshold_no_tds() {
+        // ₹50,000 exactly. s.194J(1) first proviso (B)(i) exempts a sum that "does not exceed"
+        // the threshold, so NO deduction arises here. This test asserted the opposite until
+        // 2026-07-21 and was locking in the `>=` defect on the Rust side exactly as its Python
+        // twin was — both green, both wrong, and parity could never have revealed it.
         let r = tds_on_payment("194J", 5_000_000, "company", None, 0);
+        assert!(!r.applicable);
+        assert_eq!(r.tds_paise, Paise(0));
+    }
+
+    #[test]
+    fn tds_194j_one_paisa_above_threshold_deducts() {
+        // ₹50,000.01 DOES exceed -> duty arises on the whole sum. 10% = ₹5,000.001, single
+        // round-to-rupee half-up = ₹5,000. Pairs with the test above to pin the operator: either
+        // test alone would pass under a constant answer.
+        let r = tds_on_payment("194J", 5_000_001, "company", None, 0);
         assert!(r.applicable);
         assert_eq!(r.tds_paise, Paise(500_000));
     }
@@ -124,9 +142,10 @@ mod tests {
     // --- mirror of test_payables_calc.py ---
     #[test]
     fn t_194j_professional_above_threshold() {
-        let r = tds_on_payment("194J", 5_000_000, "company", None, 0);
+        // ₹60,000 — clear of the boundary, so this stays a rate test rather than a boundary test.
+        let r = tds_on_payment("194J", 6_000_000, "company", None, 0);
         assert!(r.applicable);
-        assert_eq!(r.tds_paise, Paise(500_000)); // 10%
+        assert_eq!(r.tds_paise, Paise(600_000)); // 10%
     }
 
     #[test]

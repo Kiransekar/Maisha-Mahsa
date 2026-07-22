@@ -53,7 +53,7 @@ def _claims(service: Any, session: Session, as_of: date | None) -> list[Any]:
         return service.recompute_claims(session)
 
 
-async def _collect(
+async def collect_sources(
     session: Session, mahsa: MahsaClient, as_of: date | None
 ) -> tuple[list[ApprovalInput], list[BlockedFigureInput], bool]:
     """Fetch the two wired sources. Blocked figures come from folding each domain WITH its
@@ -104,7 +104,7 @@ async def inbox_page(
     today = datetime.now(UTC).date()
     mahsa_up = True
     try:
-        approvals, blocked, mahsa_up = await _collect(db, mahsa, today)
+        approvals, blocked, mahsa_up = await collect_sources(db, mahsa, today)
         inbox = build_inbox(build_items(approvals, blocked))
     except MahsaError:
         mahsa_up = False
@@ -134,7 +134,7 @@ async def inbox_bulk(
     toast = None
     mahsa_up = True
     try:
-        approvals, blocked, mahsa_up = await _collect(db, mahsa, today)
+        approvals, blocked, mahsa_up = await collect_sources(db, mahsa, today)
         items = build_items(approvals, blocked)
         preview = preview_bulk(items, ids, action)  # dry-run — nothing mutated yet
         if confirm and preview.rows:

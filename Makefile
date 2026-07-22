@@ -6,7 +6,7 @@ PIP := api/.venv/bin/pip
 # Prefer a rustup-installed cargo; fall back to PATH.
 CARGO := $(shell [ -x "$$HOME/.cargo/bin/cargo" ] && echo "$$HOME/.cargo/bin/cargo" || echo cargo)
 
-.PHONY: help verify test test-rust test-py eval eval-real capture brief dunning scheduler lint fmt venv dev clean migrate
+.PHONY: help verify ci test test-rust test-py eval eval-real capture brief dunning scheduler lint fmt venv dev clean migrate
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n",$$1,$$2}'
@@ -18,6 +18,12 @@ venv: ## Create the Python venv and install api in editable mode
 
 verify: lint test eval ## Full gate: lint + all tests + golden-eval (green before marking a module done)
 	@echo "✅ verify passed"
+
+# .github/workflows/verify.yml runs this exact script and nothing else, so local and CI cannot
+# drift. Adds cargo build (so integration tests don't skip for want of the Mahsa binary) and the
+# frontend gate (tsc/vitest/oxlint) on top of `verify`.
+ci: ## The FULL CI gate (§WS4.8) — identical to what GitHub Actions runs on every push/PR
+	bash scripts/ci_gate.sh
 
 test: test-rust test-py ## Run all tests
 
@@ -58,9 +64,10 @@ lint: gates ## ruff + mypy + clippy + statutory grep-gates (warnings are errors)
 	cd api && .venv/bin/ruff check . && .venv/bin/mypy app evals
 	cd dif && $(CARGO) clippy --all-targets -- -D warnings
 
-gates: ## MMX-1.0 grep-gates (QG.3): truncate-then-round, draft-IRN honesty, RLS coverage, etc.
+gates: ## MMX-1.0 grep-gates (QG.3): truncate-then-round, draft-IRN honesty, money format, RLS coverage
 	bash scripts/check_no_truncate_round.sh
 	bash scripts/check_no_draft_irn.sh
+	bash scripts/check_money_format.sh
 	bash scripts/check_rls_coverage.sh
 
 fmt: ## Format Rust + Python

@@ -147,6 +147,56 @@ def test_vectors_exist() -> None:
     assert VECTORS, "no oracle vectors loaded — the statutory oracle must never be empty"
 
 
+VALID_PROVENANCE = {"primary", "derived", "interpretation", "unsourced"}
+
+# A restatement is not an instrument. Citing our own spec as a PRIMARY source is the exact hole
+# this gate closes — see docs/STATUTORY_SOURCING.md §2.
+_NOT_PRIMARY_MARKERS = ("mmx-1.0", "master_plan", "masterplan", "§ws", "§0.")
+
+
+@pytest.mark.parametrize("v", VECTORS, ids=lambda v: f"{v['_file']}::{v['id']}")
+def test_vector_provenance(v: dict[str, Any]) -> None:
+    """§0.6 sourcing, enforced by class rather than by the mere presence of a `source` key.
+
+    docs/STATUTORY_SOURCING.md §3 defines the taxonomy. The old gate passed any vector carrying a
+    `source` string, including one pointing at our own spec.
+    """
+    prov = v.get("provenance", "unsourced")
+    assert prov in VALID_PROVENANCE, f"vector {v['id']}: unknown provenance {prov!r}"
+
+    # Nothing ships unsourced.
+    assert prov != "unsourced", (
+        f"vector {v['id']} is unsourced — classify it per docs/STATUTORY_SOURCING.md §3 "
+        f"(primary | derived | interpretation)"
+    )
+
+    if prov == "primary":
+        url = str(v.get("citation_url") or "")
+        locator = str(v.get("citation_locator") or "")
+        assert url.startswith("http"), (
+            f"vector {v['id']}: provenance=primary requires a resolvable citation_url"
+        )
+        assert locator, (
+            f"vector {v['id']}: provenance=primary requires a citation_locator "
+            f"(section / para / table row) — a bare link is not a citation"
+        )
+        blob = f"{url} {locator} {v.get('source', '')}".lower()
+        assert not any(m in blob for m in _NOT_PRIMARY_MARKERS), (
+            f"vector {v['id']}: cites our own spec as a primary source. The spec is a restatement, "
+            f"not a primary instrument (docs/STATUTORY_SOURCING.md §3)"
+        )
+
+    if prov == "interpretation":
+        # An interpretation is a CHOICE. It must record that it was made, and by whom, before its
+        # figure may ever read ✓ — see STATUTORY_SOURCING.md §3.
+        assert "alternatives_considered" in v, (
+            f"vector {v['id']}: provenance=interpretation must record alternatives_considered"
+        )
+        assert "ca_initials" in v, (
+            f"vector {v['id']}: interpretation vectors require a ca_initials field"
+        )
+
+
 @pytest.mark.parametrize("v", VECTORS, ids=lambda v: f"{v['_file']}::{v['id']}")
 def test_oracle_vector(v: dict[str, Any]) -> None:
     missing = REQUIRED_FIELDS - v.keys()

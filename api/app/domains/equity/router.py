@@ -7,6 +7,7 @@ from datetime import UTC, date, datetime
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.core.entitlement_deps import require_feature
 from app.core.loop import run_loop
 from app.core.mahsa_client import MahsaClient
 from app.db.session import get_session
@@ -18,7 +19,7 @@ router = APIRouter(prefix="/api/equity", tags=["equity"])
 _service = EquityService()
 
 
-@router.post("/shareholders")
+@router.post("/shareholders", dependencies=[Depends(require_feature("cap_table"))])
 def add_shareholder(body: NewShareholder, db: Session = Depends(get_session)) -> dict[str, int]:
     sid = _service.add_shareholder(
         db,
@@ -32,17 +33,17 @@ def add_shareholder(body: NewShareholder, db: Session = Depends(get_session)) ->
     return {"id": sid}
 
 
-@router.get("/cap-table")
+@router.get("/cap-table", dependencies=[Depends(require_feature("cap_table"))])
 def cap_table(db: Session = Depends(get_session)) -> dict:
     return _service.cap_table(db)
 
 
-@router.post("/safe/convert")
+@router.post("/safe/convert", dependencies=[Depends(require_feature("safe_notes"))])
 def convert_safe(body: SafeConversionInput) -> SafeConversionResult:
     return SafeConversionResult(**_service.convert_safe(**body.model_dump()))
 
 
-@router.post("/snapshot")
+@router.post("/snapshot", dependencies=[Depends(require_feature("cap_table_snapshot"))])
 def snapshot(
     snapshot_date: str, esop_board_approved: bool = True, db: Session = Depends(get_session)
 ) -> dict[str, int]:
@@ -53,7 +54,7 @@ def snapshot(
     return {"id": sid}
 
 
-@router.post("/fold")
+@router.post("/fold", dependencies=[Depends(require_feature("cap_table"))])
 async def fold(
     as_of: str | None = None,
     db: Session = Depends(get_session),

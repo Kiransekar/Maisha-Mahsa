@@ -7,10 +7,21 @@ from app.domains.payables import payables_calc as p
 
 
 # ---- TDS ----
-def test_194j_professional_above_threshold():
+def test_194j_at_threshold_no_tds():
+    # s.194J(1) first proviso (B)(i) exempts a sum that "does not exceed" Rs.50,000, so AT the
+    # threshold there is no duty to deduct. This test previously asserted the opposite and was
+    # locking in the `>=` defect.
     res = p.tds_on_payment("194J", Paise.from_rupees(50000))
+    assert res["applicable"] is False
+    assert res["tds_paise"] == 0
+
+
+def test_194j_just_above_threshold_deducts():
+    # One paisa above, the duty arises on the WHOLE sum. Pairs with the test above to pin the
+    # comparison operator itself — either test alone passes under a wrong-but-constant answer.
+    res = p.tds_on_payment("194J", Paise.from_rupees(50000) + 1)
     assert res["applicable"] is True
-    assert res["tds_paise"] == Paise.from_rupees(5000)  # 10%
+    assert res["tds_paise"] == Paise.from_rupees(5000)  # 10%, rounded half-up to the rupee
 
 
 def test_194j_below_threshold_no_tds():

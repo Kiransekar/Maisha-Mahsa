@@ -1,11 +1,32 @@
-# WS1 — s.234E TDS-return late fee (₹200/day, capped at the TDS amount). Values mirror
-# app/domains/tax/tax_calc.py::late_fee_234e (cited primary source, §0.6(b)); ca_initials
-# PENDING until CA sign-off. Amounts are integer paise (₹200/day = 20000 paise).
+# WS1 — s.234E TDS/TCS-statement late fee (₹200/day, capped at the tax deductible/collectible).
+# Values mirror app/domains/tax/tax_calc.py::late_fee_234e. Provenance recorded per
+# docs/STATUTORY_SOURCING.md §3. Both statutory figures below were read verbatim in the
+# Income-tax Department's own text of s.234E — not from a restatement. Amounts are integer
+# paise (₹200/day = 20000 paise).
+#
+# NOTE for a re-verifier: incometaxindia.gov.in returns 403 to bare HTTP clients. Two independent
+# agents reported DIFFERENT header sets as the one that works, and neither recipe reproduced for
+# the other, so no recipe is documented here on purpose — treat a 403 as "fetch it another way",
+# not as evidence the citation is dead. The same text also serves at /w/section-234e and -2/-12/-14.
 
 - id: late_fee_234e_ten_days
   statute: Income-tax Act 1961
   section: "234E"
-  source: "app/domains/tax/tax_calc.py::late_fee_234e (₹200/day, capped at the TDS amount)"
+  provenance: primary
+  citation_url: https://www.incometaxindia.gov.in/w/section-234e-13
+  citation_locator: >-
+    s.234E(1) — "where a person fails to deliver or cause to be delivered a statement within the
+    time prescribed in sub-section (3) of section 200 or the proviso to sub-section (3) of
+    section 206C, he shall be liable to pay, by way of fee, a sum of two hundred rupees for
+    every day during which the failure continues."
+  source: >-
+    The ₹200-per-day rate is the express words of s.234E(1). ₹2,000 is then arithmetic:
+    ₹200 × 10 days. The s.234E(2) ceiling is inert here — ₹2,000 is well under the ₹1,00,000
+    tax deducted. NOTE: an earlier revision of this vector attributed the insertion of s.234E to
+    the Finance Act, 2012 "per a footnote on the cited page". An adversarial re-verifier fetched
+    the page in full and found no such footnote, so the attribution was removed rather than
+    reworded — an unreproducible attribution is a fabricated citation. Only the rate text above,
+    which was read verbatim, is relied on.
   ca_initials: PENDING
   ca_date: null
   target: late_fee_234e
@@ -18,7 +39,16 @@
 - id: late_fee_234e_capped_at_tds
   statute: Income-tax Act 1961
   section: "234E"
-  source: "app/domains/tax/tax_calc.py::late_fee_234e (fee capped at the TDS amount)"
+  provenance: primary
+  citation_url: https://www.incometaxindia.gov.in/w/section-234e-13
+  citation_locator: >-
+    s.234E(2) — "The amount of fee referred to in sub-section (1) shall not exceed the amount of
+    tax deductible or collectible, as the case may be." Read with s.234E(1) ("a sum of two
+    hundred rupees for every day during which the failure continues").
+  source: >-
+    The cap is the express words of s.234E(2), and the quantum it binds against (₹200 × 1000 days
+    = ₹2,00,000) is arithmetic from the s.234E(1) rate. Because ₹2,00,000 exceeds the ₹5,000 tax
+    deducted, s.234E(2) limits the fee to ₹5,000 — the statutory ceiling, not a chosen one.
   ca_initials: PENDING
   ca_date: null
   target: late_fee_234e
@@ -31,7 +61,15 @@
 - id: late_fee_234e_not_late
   statute: Income-tax Act 1961
   section: "234E"
-  source: "app/domains/tax/tax_calc.py::late_fee_234e (nil when not late)"
+  provenance: derived
+  citation_url: null
+  citation_locator: null
+  source: >-
+    Derived, not a statutory value. No figure is being asserted: the s.234E(1) charge accrues
+    "for every day during which the failure continues", so with zero days of failure the fee is
+    zero days × ₹200 = nil. That is an arithmetic consequence of the rate cited in
+    late_fee_234e_ten_days plus the boundary condition, with no external number of its own.
+    Recorded as a vector only to lock the non-negative/no-charge boundary against regression.
   ca_initials: PENDING
   ca_date: null
   target: late_fee_234e

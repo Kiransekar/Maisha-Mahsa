@@ -77,12 +77,22 @@ def tds_on_payment(
     if cfg is None:
         raise ValueError(f"unknown TDS section: {section}")
     amount = int(amount)
+    # STRICT ``>``, not ``>=``. Every one of these provisos exempts the payment when the amount
+    # "does not exceed" the threshold — so AT exactly the threshold no deduction arises, and the
+    # duty begins one paisa above it. Read verbatim from the Department's own text of the Acts and
+    # confirmed by an adversarial re-fetch (2026-07-21):
+    #   s.194J(1) first proviso cl.(B)(i) — "does not exceed ... fifty thousand rupees"
+    #   s.194I proviso                    — "does not exceed fifty thousand rupees" (per month)
+    #   s.194C(5)                         — "if such sum does not exceed thirty thousand rupees"
+    # The engine previously used ``>=`` and deducted AT the threshold, i.e. tax the statute does not
+    # require. Owner-approved correction 2026-07-21; mirrored in dif/src/recompute/tds.rs, which
+    # carried the identical defect.
     if cfg.get("per_month"):
         # 194I: month-granular — TDS on the full month's rent once the per-month threshold is
-        # crossed; annual aggregate does not apply (§WS1.C2). ``amount`` is one month's rent.
-        applies = amount >= cfg["single"]
+        # exceeded; annual aggregate does not apply (§WS1.C2). ``amount`` is one month's rent.
+        applies = amount > cfg["single"]
     else:
-        applies = amount >= cfg["single"] or (aggregate_ytd + amount) >= cfg["aggregate"]
+        applies = amount > cfg["single"] or (aggregate_ytd + amount) > cfg["aggregate"]
     if not applies:
         return {"applicable": False, "rate": Decimal("0"), "tds_paise": 0}
     rate = tds_rate(section, payee_type=payee_type, category=category)

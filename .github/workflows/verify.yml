@@ -1,0 +1,73 @@
+name: verify
+# §WS4.8 — the full gate, blocking on every push/PR to main. Every step lives in one place,
+# scripts/ci_gate.sh, and `make ci` runs that exact same script locally — so a suite being green
+# here means the same thing as being green on a laptop, and vice versa.
+#
+# THIS JOB IS EXPECTED TO BE FULLY GREEN. It used to be expected-red on the statutory-oracle step,
+# because a deliberately-unsourced vector (§0.6) and a genuine regression both showed up as the
+# same red row — so the row was permanently ignored and a real break could hide in it. That is
+# fixed: known §0.6 gaps are enumerated in KNOWN_STATUTORY_GAPS in scripts/ci_gate.sh, the
+# 'oracle: gaps vs regressions' step passes while printing them under a KNOWN STATUTORY GAP
+# label, and it goes red only on a real regression or a stale (now-passing) entry.
+# A red row here is therefore always a real defect. Never fix one by loosening a vector.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+
+    # The red-team leg (scripts/rls_redteam.sh) is the ONLY live cross-tenant isolation proof in
+    # the repo — it applies the schema to a throwaway database and asserts, as a non-superuser,
+    # that one org cannot reach another's rows. It skips cleanly when no Postgres is reachable,
+    # which on a laptop is fine and in CI is not: a silent skip on the tenant-isolation proof is
+    # exactly the fail-open this gate exists to prevent. So CI ships a database and ci_gate.sh
+    # treats a skip as a HARD FAILURE whenever CI=true (GitHub sets that automatically).
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: maisha
+          POSTGRES_PASSWORD: maisha
+          POSTGRES_DB: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U maisha"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Consumed by scripts/rls_redteam.sh — takes precedence over its docker-container path.
+      PG_PSQL: psql -h localhost -p 5432 -U maisha
+      PGPASSWORD: maisha
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # ubuntu-latest ships rustup + a stable toolchain already; clippy is the one component
+      # not guaranteed present, so make sure it is.
+      - run: rustup component add clippy
+
+      # Fail loudly and early if the service container is misconfigured, rather than letting it
+      # surface later as a confusing red-team error (or, worse, as a skip we then have to argue
+      # about). ubuntu-latest ships the psql client.
+      - name: assert the red-team database is reachable
+        run: $PG_PSQL -d postgres -c 'select 1'
+
+      - name: run the full gate (identical to `make ci` — see scripts/ci_gate.sh)
+        run: bash scripts/ci_gate.sh

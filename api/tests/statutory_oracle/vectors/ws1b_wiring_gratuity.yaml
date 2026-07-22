@@ -1,6 +1,8 @@
 # WS1.B1-wiring + WS1.B2 — PF/ESI routed through the s.2(y) wage base, and hybrid gratuity across
-# the 21-11-2025 Labour-Code transition. Values computed from the spec's stated algorithm (cited
-# primary source, §0.6(b)); ca_initials PENDING until confirmed. amounts are integer paise.
+# the 21-11-2025 Labour-Code transition. Amounts are integer paise. Provenance per vector below:
+# the wage-base rule, the 15/26 factor and the contribution rates are cited to primary instruments;
+# the boundary apportionment convention and the eligibility floor are interpretations and ship
+# BLOCKED (ca_initials PENDING). See docs/STATUTORY_SOURCING.md for the taxonomy.
 
 # ---- WS1.B1-wiring: PF & ESI use the added-back s.2(y) base, not raw Basic and not gross -------
 - id: wiring_pf_esi_on_underweighted_ctc
@@ -10,7 +12,34 @@
   # ₹2k over the ₹10k cap -> wage base ₹10,000. PF 12% of ₹10k = ₹1,200 (below ₹15k ceiling);
   # ESI on ₹10k = 0.75% ₹75 (ceil) / 3.25% ₹325. On raw Basic ₹8k it would be ₹960/₹60/₹260;
   # on gross ₹20k it would be ₹150/₹650 — so the asserted figures prove the wage base is used.
-  source: "MMX-1.0 §WS1.B1 (PF/ESI on the s.2(y) wage base ₹10,000, not Basic ₹8,000 or gross ₹20,000)"
+  provenance: primary
+  citation_url: "https://www.indiacode.nic.in/bitstream/123456789/15793/1/aA2019-29.pdf"
+  citation_locator: >-
+    Code on Wages, 2019 (Act 29 of 2019), s.2(y), FIRST PROVISO: "if payments made by the employer
+    to the employee under clauses (a) to (i) exceeds one-half ... of the all remuneration calculated
+    under this clause, the amount which exceeds such one-half ... shall be deemed as remuneration
+    and shall be accordingly added in wages under this clause". This proviso is what fixes the wage
+    base at ₹10,000 on these inputs (excluded HRA+special = ₹12,000 = 60% of ₹20,000 remuneration;
+    excess over one-half = ₹2,000 added back to Basic ₹8,000).
+  # Contribution rates applied to that base, each read on the administering authority's own
+  # published rate statement:
+  #   EPF 12% and the ₹15,000 wage ceiling — EPFO, "PRESENT RATES OF CONTRIBUTION", row EMPLOYEE
+  #   "EPF 12% /10% ##" and note "The contributions are payable on maximum wage ceiling of Rs.
+  #   15000/-" — https://www.epfindia.gov.in/site_docs/PDFs/MiscPDFs/ContributionRate.pdf
+  #   ESI 0.75% / 3.25% — ESIC, Contribution page: "Currently, the employee's contribution rate
+  #   (w.e.f. 01.07.2019) is 0.75% of the wages and that of employer's is 3.25% of the wages
+  #   paid/payable in respect of the employees in every wage period" —
+  #   https://esic.gov.in/contribution . The underlying amendment is G.S.R. 423(E) dated 13-06-2019
+  #   (w.e.f. 1-7-2019) substituting the rates in rule 51 of the ESI (Central) Rules, 1950 — see
+  #   footnotes 5 and 6 to rule 51 in
+  #   https://esic.gov.in/attachments/actfile/35df0691b900c1d011c6ceb7913eb1d6.pdf (that compiled
+  #   copy carries the pre-2019 figures in the rule body; only the footnotes record the
+  #   substitution, so the rate figures themselves are cited to the ESIC page above).
+  source: >-
+    Code on Wages, 2019 s.2(y) first proviso (wage base) + EPFO published contribution rates
+    (EPF 12%, ceiling ₹15,000) + ESIC published contribution rates (0.75% / 3.25% w.e.f.
+    01.07.2019). The asserted figures prove the wage base ₹10,000 is used, not Basic ₹8,000
+    (which would give 960/60/260) or gross ₹20,000 (which would give 150/650).
   ca_initials: PENDING
   ca_date: null
   target: payroll_components
@@ -35,7 +64,41 @@
   # 21-11-2025 boundary: 2021..2024 = 4 years on OLD base ₹26,000 -> (15/26)x26000x4 = ₹60,000.
   # The 2025-11-21 anniversary is ON the boundary -> post; 2026,2027 -> 3 years on NEW base
   # ₹52,000 -> (15/26)x52000x3 = ₹90,000. Total ₹1,50,000.
-  source: "MMX-1.0 §WS1.B2 (pre-boundary service on last-drawn Basic, post on s.2(y) wage base; 15/26 from statutory.py)"
+  provenance: interpretation
+  # The 15/26 factor itself IS primary — Code on Social Security, 2020 (Act 36 of 2020) s.53,
+  # Explanation 3: "in the case of a monthly rated employee, the fifteen days' wages shall be
+  # calculated by dividing the monthly rate of wages last drawn by him by twenty-six and
+  # multiplying the quotient by fifteen"
+  # (https://www.indiacode.nic.in/bitstream/123456789/16823/1/aA2020-36.pdf), identical to
+  # Payment of Gratuity Act, 1972 s.4(2) Explanation
+  # (https://clc.gov.in/clc/sites/default/files/PaymentofGratuityAct.pdf).
+  # What is NOT primary — and what this vector's ₹1,50,000 actually turns on — is the
+  # APPORTIONMENT CONVENTION at the 21-11-2025 boundary. Neither Code states a transition rule for
+  # service straddling commencement. We chose per-anniversary apportionment; that is a choice.
+  alternatives_considered:
+    - "CHOSEN — per-completed-year apportionment: each completed year is valued on the base in
+       force when its anniversary fell (anniversary strictly before 2025-11-21 -> old last-drawn
+       Basic; on/after -> new s.2(y) wage base). Gives ₹60,000 + ₹90,000 = ₹1,50,000 here."
+    - "Whole award on the regime in force at EXIT: all 7 years on the new s.2(y) base, i.e.
+       (15/26) x ₹52,000 x 7 = ₹2,10,000. This is the reading most consistent with the statutory
+       text, which computes gratuity on 'the rate of wages LAST DRAWN' (s.53(2)) with no
+       year-by-year base, and with MoLE's Additional FAQs on Labour Codes (as on 16.03.2026)
+       Sl. No. 17: 'The employee will be paid gratuity based on the rate of wages last drawn by
+       the employee at the time of superannuation or retirement or resignation or death etc, on
+       and after 21.11.2025 as per the provisions of Code on Social Security, 2020'
+       (https://www.labour.gov.in/static/uploads/2026/03/a4ccf4c6d97c4f1f36a6d83f8c64213d.pdf).
+       See value_disputes — this alternative may in fact be the correct one."
+    - "Pro-rata by DAYS of service either side of the boundary rather than by completed-year
+       anniversary. Differs from the chosen convention whenever the boundary falls mid-year;
+       here the 2025-11-21 anniversary coincides with the boundary so the two agree only by
+       accident of these inputs."
+    - "Whole award on the OLD base (grandfather all service accrued before commencement).
+       Rejected: MoLE FAQ Sl. No. 11 states gratuity calculation applies w.e.f. 21.11.2025, so a
+       wholly-old-base computation for a post-commencement exit has no support."
+  source: >-
+    15/26 factor is primary (Code on Social Security, 2020 s.53(2) + Explanation 3). The
+    pre/post-boundary apportionment is an INTERPRETATION: the Code prescribes no transition
+    convention for service straddling its 21-11-2025 commencement. Ships BLOCKED.
   ca_initials: PENDING
   ca_date: null
   target: gratuity_hybrid
@@ -52,7 +115,37 @@
   section: "2(y); 15/26"
   # Joined 2026-01-01 (after the boundary), exit 2028-01-01 = 2 completed years, both post ->
   # (15/26) x new_base ₹26,000 x 2 = ₹30,000. Old base is irrelevant on this path.
-  source: "MMX-1.0 §WS1.B2 (service entirely on/after 21-11-2025 -> new base only)"
+  provenance: interpretation
+  # The ARITHMETIC here is primary — Code on Social Security, 2020 (Act 36 of 2020) s.53,
+  # Explanation 3 (divide monthly last-drawn wages by twenty-six, multiply by fifteen), per
+  # completed year of service under s.53(2)
+  # (https://www.indiacode.nic.in/bitstream/123456789/16823/1/aA2020-36.pdf). The boundary
+  # convention is not exercised on this path — all service is post-boundary under every
+  # convention considered, so this vector does not turn on question 1.
+  # What it DOES turn on is ELIGIBILITY at 2 completed years, and that is a choice, because the
+  # vector's inputs carry no fixed-term-employment flag while the eligibility floor depends on it.
+  alternatives_considered:
+    - "CHOSEN — a >=1 completed year floor applied to every employee. Sourced from MoLE,
+       'Additional FAQs on Labour Codes (As on 16.03.2026)', Sl. No. 14: 'Fixed Term Employee
+       (FTE) will be eligible for gratuity if he/she renders service under the contract for a
+       period of one year (from start of contract)' (repeated at Sl. No. 19) —
+       https://www.labour.gov.in/static/uploads/2026/03/a4ccf4c6d97c4f1f36a6d83f8c64213d.pdf .
+       On these inputs (2 completed years) this yields (15/26) x ₹26,000 x 2 = ₹30,000."
+    - "A 5-year floor for anyone NOT on fixed-term employment. Code on Social Security, 2020
+       s.53(1): 'Gratuity shall be payable to an employee on the termination of his employment
+       after he has rendered continuous service for not less than five years', with the second
+       proviso disapplying five years only for death, disablement, or expiration of fixed term
+       employment, and the third proviso to s.53(2) making the fixed-term payment pro rata. Under
+       this reading a NON-FTE exiting at 2 completed years gets NIL, not ₹30,000. The one-year
+       floor is a fixed-term rule, and the vector does not state the employee is fixed-term."
+    - "Ask the employer to classify the employment type and branch on it, rather than assume one
+       floor for all. This is arguably the correct product answer; it changes the engine
+       signature, so it is recorded here rather than taken unilaterally."
+  source: >-
+    15/26 per completed year is primary (Code on Social Security, 2020 s.53(2) + Explanation 3).
+    The eligibility floor actually applied (>=1 completed year for all employees, taken from the
+    MoLE fixed-term-employment FAQ) is an INTERPRETATION and it decides whether this expected
+    value is ₹30,000 or nil. Ships BLOCKED.
   ca_initials: PENDING
   ca_date: null
   target: gratuity_hybrid
@@ -68,7 +161,23 @@
   statute: Code on Wages 2019 / Payment of Gratuity
   section: "2(y); FTE eligibility"
   # Under one completed year of service -> not eligible -> nil.
-  source: "MMX-1.0 §WS1.B2 (FTE eligibility >= 1 completed year)"
+  provenance: primary
+  citation_url: "https://www.labour.gov.in/static/uploads/2026/03/a4ccf4c6d97c4f1f36a6d83f8c64213d.pdf"
+  citation_locator: >-
+    Ministry of Labour & Employment, "Additional FAQs on Labour Codes (As on 16.03.2026)",
+    Sl. No. 14 (Code on Social Security, 2020): "Fixed Term Employee (FTE) will be eligible for
+    gratuity if he/she renders service under the contract for a period of one year (from start of
+    contract)." Same answer repeated at Sl. No. 19 (Industrial Relations Code, 2020).
+  # Unlike the other two gratuity vectors, this one is NOT sensitive to the eligibility-floor
+  # question: 5 months of service is below BOTH the one-year fixed-term floor cited above AND the
+  # five-year floor in Code on Social Security, 2020 s.53(1) ("after he has rendered continuous
+  # service for not less than five years",
+  # https://www.indiacode.nic.in/bitstream/123456789/16823/1/aA2020-36.pdf). Nil on either
+  # reading, so the expected value stands on cited law with no choice interposed.
+  source: >-
+    MoLE Additional FAQs on Labour Codes (16.03.2026) Sl. No. 14 — one-year eligibility floor for
+    fixed-term employment; and Code on Social Security, 2020 s.53(1) — five-year floor otherwise.
+    Service of 5 months clears neither, so nil is the answer on both readings.
   ca_initials: PENDING
   ca_date: null
   target: gratuity_hybrid

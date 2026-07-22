@@ -13,13 +13,13 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Respon
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from sqlalchemy import text
+from sqlalchemy import event, text
 from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.cfo_router import router as cfo_router
 from app.config import get_settings
-from app.core import auth, history_store, parallel, trace_store
+from app.core import auth, betterauth, history_store, parallel, trace_store
 from app.core.approvals import pending_approvals, record_decision
 from app.core.ask import answer_query
 from app.core.audit import verify_chain
@@ -32,6 +32,7 @@ from app.core.mahsa_client import MahsaClient, MahsaError
 from app.core.money import Paise
 from app.core.ocr import OcrUnavailable
 from app.core.overview import collect_kpis, upcoming_deadlines
+from app.core.principal import Principal, bind_org_guc, reset_current_org, set_current_org
 from app.core.strategy import cap_table as cfo_cap_table
 from app.core.strategy import investor_update, run_scenario
 from app.db import models as _models  # noqa: F401  registers all models on Base.metadata
@@ -55,6 +56,11 @@ from app.domains.treasury.router import router as treasury_router
 from app.domains.vault.router import router as vault_router
 from app.llm.tools import enrich
 from app.web.actions import actions_for, find_action
+from app.web.api_approvals import router as approvals_api_router
+from app.web.api_bulk import router as bulk_api_router
+from app.web.api_domains import router as domains_api_router
+from app.web.api_health import router as health_api_router
+from app.web.api_router import router as spa_api_router
 from app.web.charts import sparkline
 from app.web.exceptions_router import router as inbox_router
 from app.web.format import fact_rows, humanize
@@ -87,18 +93,78 @@ def create_app() -> FastAPI:
 
     # Schema: dev/test auto-create for convenience; production uses Alembic migrations
     # (`make migrate` / `alembic upgrade head`). P1-MIGRATE.
+    engine = session_factory().kw["bind"]
     if settings.environment != "production":
-        Base.metadata.create_all(bind=session_factory().kw["bind"])
+        Base.metadata.create_all(bind=engine)
 
-    # P1-AUTH: single-user login guard — every route needs a valid session cookie except
-    # the public allowlist (/health, /login, /static).
+    # §0.8 RLS BINDING: every connection this app checks out carries the org of the request
+    # being served — taken from the VERIFIED JWT claim only (app.core.principal._current_org,
+    # set by _authenticate below). Re-bound on every checkout, so a pooled connection can never
+    # serve request B while still holding request A's org; unauthenticated -> empty -> NULL ->
+    # `app_current_org()` matches no rows (infra/db/multitenant/001_tenancy.sql). No-op on
+    # SQLite (dev/test), which has neither GUCs nor RLS.
+    @event.listens_for(engine, "checkout")
+    def _bind_org_to_connection(dbapi_conn, _record, _proxy) -> None:
+        bind_org_guc(dbapi_conn, engine.dialect.name)
+
+    # AUTH-CONSOLIDATE: ONE authentication path. Better Auth (TypeScript, owner-configured)
+    # issues the JWT; this app only VERIFIES it via JWKS and resolves a Principal.
+    #
+    # Deny by default: this middleware covers EVERY route, so a new router cannot forget to
+    # authenticate. Order of decision, and there is no other order:
+    #   1. public allowlist (/health, /login, /static) -> through.
+    #   2. an Authorization: Bearer header present -> it MUST verify. 401/403 otherwise. It
+    #      NEVER falls through to the cookie: a bad token is a rejected request, not an
+    #      anonymous one. This is the fail-closed rule the whole ticket turns on.
+    #   3. no bearer header at all -> the legacy single-shared-password cookie, and only if
+    #      `legacy_password_auth_enabled` allows it (hard-off in production).
     @app.middleware("http")
-    async def _require_login(request: Request, call_next):
-        if auth.is_public(request.url.path) or auth.valid_cookie(
+    async def _authenticate(request: Request, call_next):
+        if auth.is_public(request.url.path):
+            return await call_next(request)
+
+        legacy_ok = betterauth.legacy_password_auth_enabled(environment=settings.environment)
+
+        if betterauth.bearer_token(request) is not None:
+            try:
+                principal = betterauth.principal_from_request(request)
+            except betterauth.AuthError as exc:
+                return JSONResponse({"detail": str(exc)}, status_code=401)
+            except betterauth.NoOrgError as exc:
+                return JSONResponse({"detail": str(exc)}, status_code=403)
+            # The verified identity, and the ONLY place request.state gets it. app.core.
+            # rbac_deps.resolve_principal reads exactly these attributes.
+            request.state.principal = principal
+            request.state.user_id = principal.user_id
+            request.state.role = principal.role
+            request.state.org_id = principal.org_id
+            org_token = set_current_org(principal.org_id)  # -> Postgres RLS, see above
+            try:
+                return await call_next(request)
+            finally:
+                reset_current_org(org_token)
+
+        if legacy_ok and auth.valid_cookie(
             request.cookies.get(auth.COOKIE_NAME), settings.session_secret
         ):
+            # Legacy dev login: authenticated, but carries NO role and NO org. It therefore
+            # sets no request.state — every RBAC capability check denies, and the RLS GUC stays
+            # empty. Fail-closed by construction, not by convention.
             return await call_next(request)
-        return RedirectResponse(url=f"/login?next={request.url.path}", status_code=303)
+
+        if legacy_ok:
+            return RedirectResponse(url=f"/login?next={request.url.path}", status_code=303)
+        return JSONResponse({"detail": "missing bearer token"}, status_code=401)
+
+    @app.get("/me")
+    async def whoami(principal: Principal = Depends(betterauth.get_principal)) -> dict[str, str]:
+        """The verified caller, straight from the token. The SPA's session probe."""
+        return {
+            "user_id": principal.user_id,
+            "org_id": principal.org_id,
+            "role": principal.role.value,
+            "email": principal.email,
+        }
 
     @app.get("/login", response_class=HTMLResponse)
     async def login_form(request: Request, next: str = "/") -> HTMLResponse:
@@ -110,6 +176,9 @@ def create_app() -> FastAPI:
     async def login_submit(
         request: Request, password: str = Form(...), next: str = Form("/")
     ) -> Response:
+        if not betterauth.legacy_password_auth_enabled(environment=settings.environment):
+            # Don't hand out a cookie the middleware will refuse to honour.
+            raise HTTPException(status_code=404, detail="password login is disabled")
         if auth.verify_password(password, settings.app_password):
             resp = RedirectResponse(url=next or "/", status_code=303)
             resp.set_cookie(
@@ -180,6 +249,11 @@ def create_app() -> FastAPI:
     app.include_router(cfo_router)
     app.include_router(today_router)
     app.include_router(inbox_router)
+    app.include_router(spa_api_router)
+    app.include_router(bulk_api_router)
+    app.include_router(approvals_api_router)
+    app.include_router(health_api_router)
+    app.include_router(domains_api_router)
 
     registry = build_registry()
 

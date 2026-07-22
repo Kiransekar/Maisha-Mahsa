@@ -6,6 +6,17 @@
   statute: CGST Act
   section: "49/49A/49B r/w Rule 88A"
   source: "gst_calc.itc_setoff: IGST credit first, then CGST, then SGST; CGST/SGST never cross"
+  provenance: primary
+  citation_url: "https://cbic-gst.gov.in/pdf/Circular-98-17-2019-GST.pdf"
+  citation_locator: >-
+    Circular No. 98/17/2019-GST dated 23.04.2019, para 4 table (numerals I-VII): IGST credit ->
+    IGST (I) then CGST/SGST (II) "in any order and in any proportion", IGST credit "to be
+    completely exhausted mandatorily" (III); CGST credit -> CGST (IV) then IGST (V), CGST ->
+    State tax "Not permitted"; SGST credit -> SGST (VI) then IGST (VII), SGST -> Central tax
+    "Not permitted". This table is the exact order this vector locks.
+  # Order-invariance note: the rule's "in any order" discretion for IGST credit against
+  # CGST/SGST is never reached here -- IGST credit 8000 is fully absorbed by IGST output
+  # 10000. Every step of this vector is mandated, none is chosen.
   ca_initials: PENDING
   ca_date: null
   target: itc_setoff
@@ -25,6 +36,20 @@
   statute: CGST Act
   section: "49/49A/49B r/w Rule 88A"
   source: "gst_calc.itc_setoff: excess IGST credit offsets all heads, remainder carries forward"
+  provenance: primary
+  citation_url: "https://cbic-gst.gov.in/pdf/24092021-CGST-Rules-2017-Part-A-Rules.pdf"
+  citation_locator: >-
+    CGST Rules 2017, rule 88A "Order of utilization of input tax credit" (page 97 of the CBIC
+    consolidated Part-A Rules PDF; inserted vide Notification No. 16/2019-Central Tax dated
+    29.03.2019, per footnote 191): "Input tax credit on account of integrated tax shall first be
+    utilised towards payment of integrated tax, and the amount remaining, if any, may be utilised
+    towards the payment of central tax and State tax or Union territory tax, as the case may be,
+    in any order". The unutilised remainder stays in the electronic credit ledger -- rule 88A
+    provides no lapse or forfeiture, hence carry-forward.
+  # Order-invariance note: the "in any order" discretion IS exercised here (engine applies IGST
+  # credit to CGST before SGST), but the expected values are invariant under either order --
+  # IGST credit remaining after IGST output (15000) exceeds total CGST+SGST output (6000), so
+  # both heads are fully discharged and 9000 remains either way. Nothing chosen is load-bearing.
   ca_initials: PENDING
   ca_date: null
   target: itc_setoff

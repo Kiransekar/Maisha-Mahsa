@@ -1,21 +1,70 @@
 # WS1.C — the five proven defects, regression-locked (MMX-1.0 §WS1.C).
-# Values sourced from the immutable spec (owner-cited primary source, §0.6(b)). Each vector is
-# ca_initials: PENDING until a CA initials it (§0.6 / WS1.E2). amounts are integer paise.
+# Provenance recorded per docs/STATUTORY_SOURCING.md §3. amounts are integer paise.
+#
+# Fetch note for a re-verifying agent: incometaxindia.gov.in returns 403 to bare clients and
+# needs a full browser User-Agent + Accept headers; esic.nic.in serves an incomplete TLS chain
+# (missing intermediate) so strict clients must fetch it via a browser or `curl -k`. Both URLs
+# below were fetched and read in full before being cited.
 
-- id: tds_194j_50k_boundary
+- id: tds_194j_50k_boundary_no_tds_at_threshold
   statute: Income-tax Act
   section: "194J"
-  source: "MMX-1.0 §WS1.C1 (Finance Act 2025; threshold 30k -> 50k)"
+  # RESOLVED 2026-07-21 (owner-approved). This vector previously expected applicable: true AT
+  # exactly Rs.50,000 — the engine used `amount >= single` and the vector agreed with the engine
+  # rather than with the statute, so a green suite locked the defect in. The proviso exempts the
+  # payment where the amount "does not exceed" the threshold, so AT Rs.50,000 no deduction arises.
+  # Both engines (Python payables_calc + Rust recompute::tds) were corrected to strict `>`.
+  provenance: primary
+  citation_url: https://www.incometaxindia.gov.in/w/section-194j-33
+  citation_locator: >-
+    s.194J(1), first proviso, clause (B)(i) — "no deduction shall be made under this section
+    where the amount of such sum or, as the case may be, the aggregate of the amounts of such
+    sums credited or paid or likely to be credited or paid during the financial year ... does
+    not exceed [fifty] thousand rupees, in the case of fees for professional services referred
+    to in clause ( a )". Footnote 43 on the same page: "Sub. for \"thirty\" by Act No. 7 of
+    2025, w.e.f. 1-4-2025."
+  source: >-
+    The exemption is worded "does not exceed", so the duty to deduct begins ABOVE the threshold,
+    not at it. Rs.50,000 exactly => no deduction. Paired with the vector below, which proves the
+    duty does arise one paisa higher.
   ca_initials: PENDING
   ca_date: null
   target: tds_on_payment
-  inputs: {section: "194J", amount: 5000000}   # ₹50,000 = at threshold -> TDS applies
-  expected: {applicable: true, tds_paise: 500000}  # 10% of ₹50,000 = ₹5,000
+  inputs: {section: "194J", amount: 5000000}   # exactly Rs.50,000 -> does NOT exceed -> no TDS
+  expected: {applicable: false, tds_paise: 0}
+
+- id: tds_194j_one_paisa_above_threshold
+  statute: Income-tax Act
+  section: "194J"
+  # The other half of the boundary. Without this, `applies = False` unconditionally would pass the
+  # vector above — the pair is what actually pins the comparison operator.
+  provenance: primary
+  citation_url: https://www.incometaxindia.gov.in/w/section-194j-33
+  citation_locator: >-
+    s.194J(1), first proviso, clause (B)(i) ("does not exceed [fifty] thousand rupees") read with
+    s.194J(1) ("ten per cent of such sum in other cases").
+  source: >-
+    One paisa above the threshold the sum DOES exceed Rs.50,000, so the duty arises and the rate
+    applies to the whole sum. 10% of Rs.50,000.01 = Rs.5,000.001, which _round_rupee rounds
+    half-up to Rs.5,000.
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_on_payment
+  inputs: {section: "194J", amount: 5000001}   # Rs.50,000.01 -> exceeds -> TDS applies
+  expected: {applicable: true, tds_paise: 500000}
 
 - id: tds_194j_below_new_threshold
   statute: Income-tax Act
   section: "194J"
-  source: "MMX-1.0 §WS1.C1"
+  provenance: primary
+  source: >-
+    Income-tax Act 1961 s.194J(1), first proviso clause (B)(i), as amended by the Finance Act
+    2025 (No. 7 of 2025) s.65 which substituted "fifty thousand rupees" for "thirty thousand
+    rupees" w.e.f. 1-4-2025. ₹40,000 does not exceed ₹50,000, so no deduction is made.
+  citation_url: "https://www.incometaxindia.gov.in/w/section-194j-33"
+  citation_locator: >-
+    s.194J(1), first proviso, clause (B)(i): "fifty thousand rupees, in the case of fees for
+    professional services referred to in clause (a)" (2026 compilation, footnote 43)
   ca_initials: PENDING
   ca_date: null
   target: tds_on_payment
@@ -25,7 +74,18 @@
 - id: tds_194i_40k_no_tds
   statute: Income-tax Act
   section: "194I"
-  source: "MMX-1.0 §WS1.C2 (₹50,000 per month or part thereof; no annual aggregate)"
+  provenance: primary
+  source: >-
+    Income-tax Act 1961 s.194-I, first proviso as substituted by the Finance Act 2025
+    (No. 7 of 2025) s.64 w.e.f. 1-4-2025. The substituted proviso is expressed per month or part
+    of a month; the pre-2025 proviso's annual-aggregate trigger was removed by the substitution,
+    which is why a large YTD aggregate cannot drag a ₹40,000 month into deduction.
+  citation_url: "https://www.incometaxindia.gov.in/w/section-194-i-19"
+  citation_locator: >-
+    s.194-I, first proviso: "Provided that no deduction shall be made under this section, where
+    the income by way of rent credited or paid for a month or part of a month by such person to
+    the account of, or to, the payee, does not exceed fifty thousand rupees" (footnote 88: Subs.
+    by Act No. 7 of 2025, w.e.f. 1-4-2025)
   ca_initials: PENDING
   ca_date: null
   target: tds_on_payment
@@ -36,7 +96,16 @@
 - id: tds_194i_55k_full_month
   statute: Income-tax Act
   section: "194I"
-  source: "MMX-1.0 §WS1.C2"
+  provenance: primary
+  source: >-
+    Income-tax Act 1961 s.194-I clause (b) (rate) read with the first proviso as substituted by
+    the Finance Act 2025 (No. 7 of 2025) s.64. ₹55,000 exceeds the ₹50,000 monthly proviso, so
+    the proviso does not bar deduction and s.194-I(b) applies at 10% to the whole month's rent.
+  citation_url: "https://www.incometaxindia.gov.in/w/section-194-i-19"
+  citation_locator: >-
+    s.194-I clause (b): "ten per cent for the use of any land or building (including factory
+    building) or land appurtenant to a building (including factory building) or furniture or
+    fittings"; first proviso: "does not exceed fifty thousand rupees"
   ca_initials: PENDING
   ca_date: null
   target: tds_on_payment
@@ -46,7 +115,23 @@
 - id: esi_20001_gross_ceil
   statute: ESI Act 1948
   section: "contribution rounding"
-  source: "MMX-1.0 §WS1.C3 (ceil the exact Decimal product before any int truncation)"
+  provenance: primary
+  source: >-
+    Employees' State Insurance (Central) Rules 1950, rule 51 as amended by G.S.R. 423(E) dated
+    13 June 2019 (w.e.f. 1-7-2019). ESIC's consolidated publication "As on 01.04.2021" carries
+    the amended rates in the rule text. The ceil convention is the rule's own words "rounded to
+    the next higher rupee" — it is statutory, not a house convention.
+    Caveat for a re-verifier: ESIC's later "As on 26.04.2024" compilation of the same rules
+    (esic.gov.in/attachments/actfile/35df0691b900c1d011c6ceb7913eb1d6.pdf) still prints the
+    PRE-2019 rates in the rule body while its footnotes 5 and 6 record the G.S.R. 423(E)
+    substitution — i.e. that edition failed to apply its own amendment. The 01.04.2021 edition
+    cited here is the one that reproduces the amended text.
+  citation_url: "https://www.esic.nic.in/attachments/actfile/b3f0e6aa6e4c00f697ae17292c7e3448.pdf"
+  citation_locator: >-
+    Rule 51 (Rate of contribution): "(a) employer's contribution, a sum (rounded to the next
+    higher rupee) equal to three and one-fourth per cent. of the wages payable to an employee;
+    and (b) employee's contribution, a sum (rounded to the next higher rupee) equal to
+    three-fourth per cent. of the wages payable to an employee."
   ca_initials: PENDING
   ca_date: null
   target: esi
@@ -56,7 +141,24 @@
 - id: company_115baa_1cr
   statute: Income-tax Act
   section: "115BAA"
-  source: "MMX-1.0 §WS1.C4 (22% + 10% surcharge + 4% cess = 25.168%; MAT excluded)"
+  provenance: primary
+  source: >-
+    Rate: Income-tax Act 1961 s.115BAA(1) — 22%. Surcharge: Finance Act 2025 (No. 7 of 2025)
+    s.2(9), the proviso beginning "Provided also that in case of every domestic company whose
+    income is chargeable to tax under section 115BAA or section 115BAB" — 10%, flat, with no
+    income threshold and no marginal-relief proviso attached to it. Cess: Finance Act 2025
+    s.2(12) — 4%. MAT exclusion: s.115JB(5A)(ii). 22% x 1.10 x 1.04 = 25.168%; that composite
+    percentage is arithmetic, each of its three inputs is cited above.
+  citation_url: "https://www.incometaxindia.gov.in/w/section-115baa-8"
+  citation_locator: >-
+    s.115BAA(1): "shall, at the option of such person, be computed at the rate of twenty-two per
+    cent"; s.115JB(5A)(ii) (https://www.incometaxindia.gov.in/w/section-115jb-25): "The
+    provisions of this section shall not apply to ... (ii) a person who has exercised the option
+    referred to under section 115BAA or section 115BAB"; Finance Act 2025 s.2(9) proviso
+    ("calculated at the rate of ten per cent. of such 'advance tax'") and s.2(12) ("Health and
+    Education Cess on income-tax, calculated at the rate of four per cent."), Gazette of India
+    Extraordinary Part II s.1, CG-DL-E-29032025-262125
+    (https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf)
   ca_initials: PENDING
   ca_date: null
   target: itr_computation
@@ -67,7 +169,19 @@
 - id: retention_invoice_8y_fy_end
   statute: "MCA/IT books retention"
   section: "statutory retention"
-  source: "MMX-1.0 §WS1.C5 (8 years from FY-end, not upload date)"
+  provenance: primary
+  source: >-
+    Companies Act 2013 s.128(5). The section counts in FINANCIAL YEARS, not from a document's
+    upload date — which is the whole point of defect WS1.C5. An invoice of FY 2025-26 falls
+    inside the eight financial years immediately preceding a financial year up to and including
+    FY 2033-34, whose last day is 2034-03-31; hence FY-end + 8 years. The 8 is primary; the
+    conversion of the rolling window to a single retain-until date is arithmetic on it.
+  citation_url: "https://www.indiacode.nic.in/bitstream/123456789/2114/5/A2013-18.pdf"
+  citation_locator: >-
+    s.128(5): "The books of account of every company relating to a period of not less than eight
+    financial years immediately preceding a financial year, or where the company had been in
+    existence for a period less than eight years, in respect of all the preceding years together
+    with the vouchers relevant to any entry in such books of account shall be kept in good order"
   ca_initials: PENDING
   ca_date: null
   target: retention_until
@@ -77,7 +191,18 @@
 - id: tds_194c_individual_1pct
   statute: Income-tax Act
   section: "194C"
-  source: "MMX-1.0 §WS1.C1 / payables_calc 194C: 1% for individual/HUF payee, 2% otherwise"
+  provenance: primary
+  source: >-
+    Income-tax Act 1961 s.194C(1)(i) — 1% where the payee is an individual or HUF — read with
+    s.194C(5), under which no deduction is made if the sum does not exceed ₹30,000. ₹40,000
+    exceeds ₹30,000, so the single-payment bar in s.194C(5) does not apply. The Finance Act 2025
+    did not amend s.194C (its clauses 56-69 cover 193, 194, 194A, 194B, 194BB, 194D, 194G, 194H,
+    194-I, 194J, 194K, 194LA, 194LBC, 194Q — 194C is absent).
+  citation_url: "https://www.incometaxindia.gov.in/w/section-194c-54"
+  citation_locator: >-
+    s.194C(1)(i): "one per cent where the payment is being made or credit is being given to an
+    individual or a Hindu undivided family"; s.194C(5): "No deduction shall be made from the
+    amount of any sum credited or paid ... if such sum does not exceed thirty thousand rupees"
   ca_initials: PENDING
   ca_date: null
   target: tds_on_payment
@@ -87,7 +212,14 @@
 - id: tds_194c_company_2pct
   statute: Income-tax Act
   section: "194C"
-  source: "MMX-1.0 §WS1.C1 / payables_calc 194C company rate 2%"
+  provenance: primary
+  source: >-
+    Income-tax Act 1961 s.194C(1)(ii) — 2% where the payee is a person other than an individual
+    or HUF — read with s.194C(5) (₹30,000 single-payment bar; ₹40,000 exceeds it).
+  citation_url: "https://www.incometaxindia.gov.in/w/section-194c-54"
+  citation_locator: >-
+    s.194C(1)(ii): "two per cent where the payment is being made or credit is being given to a
+    person other than an individual or a Hindu undivided family"
   ca_initials: PENDING
   ca_date: null
   target: tds_on_payment

@@ -1,10 +1,27 @@
 # WS1.A1 — dual-regime selector (Income-tax Act 1961 ↔ 2025). Boundary 2026-04-01, keyed on
 # the earlier of credit/payment (MMX-1.0 §WS1.A1). Structural rule from the spec, not a rate.
+#
+# Provenance note (docs/STATUTORY_SOURCING.md §3, §4c):
+#   The BOUNDARY DATE is a primary statutory fact — Income-tax Act, 2025 s.1(3), read from the
+#   Gazette of India Extraordinary Part II—Section 1 No. 35 dated 21 August 2025:
+#     "1. (1) This Act may be called the Income-tax Act, 2025.
+#      (2) It extends to the whole of India.
+#      (3) Save as otherwise provided in this Act, it shall come into force on the 1st April, 2026."
+#   The SELECTOR (which of two dates decides the regime) is NOT in that section — it is our
+#   structural rule, so vectors that exist only to exercise the selector are `derived`.
 
 - id: regime_credit_mar_pay_apr_is_1961
   statute: Income-tax Act
   section: "regime boundary"
-  source: "MMX-1.0 §WS1.A1 (earlier-of-credit-or-payment; boundary 2026-04-01)"
+  provenance: derived
+  source: >-
+    DERIVED — structural rule, not a statutory value. The commencement date itself (2026-04-01)
+    is cited on the boundary vectors below from Income-tax Act 2025 s.1(3). What this vector
+    exercises is the SELECTOR: when credit and payment straddle the commencement, we resolve on
+    the EARLIER of the two dates (mirroring the deduction-timing trigger the TDS chapter uses).
+    That tie-break is our engine's structural convention (MMX-1.0 §WS1.A1), not a figure lifted
+    from an instrument, so there is no legal citation to give and none is invented here.
+    docs/STATUTORY_SOURCING.md §4c classifies exactly this case as derived.
   ca_initials: PENDING
   ca_date: null
   target: regime_for
@@ -14,7 +31,11 @@
 - id: regime_advance_pay_mar_credit_apr_is_1961
   statute: Income-tax Act
   section: "regime boundary"
-  source: "MMX-1.0 §WS1.A1"
+  provenance: derived
+  source: >-
+    DERIVED — the mirror image of the vector above (advance paid before commencement, credited
+    after). Same structural earlier-of-credit-or-payment selector; no statutory figure is being
+    asserted, only that the selector is symmetric in its two arguments. docs/STATUTORY_SOURCING.md §4c.
   ca_initials: PENDING
   ca_date: null
   target: regime_for
@@ -23,8 +44,20 @@
 
 - id: regime_both_april_is_2025
   statute: Income-tax Act
-  section: "regime boundary"
-  source: "MMX-1.0 §WS1.A1"
+  section: "s.1(3) — short title, extent and commencement"
+  provenance: primary
+  citation_url: "https://egazette.gov.in/WriteReadData/2025/265620.pdf"
+  citation_locator: >-
+    Income-tax Act, 2025 (No. 30 of 2025), Chapter I — Preliminary, section 1(3), page 1 of the
+    Act text: "Save as otherwise provided in this Act, it shall come into force on the 1st April,
+    2026." Gazette of India, Extraordinary, Part II—Section 1, No. 35, New Delhi, Thursday,
+    August 21, 2025 (CG-DL-E-22082025-265620); assented 21 August 2025.
+  source: >-
+    PRIMARY. Both dates fall after commencement, so no selector tie-break is involved — the
+    expected regime follows directly from the commencement date in s.1(3) as printed in the
+    Gazette. PDF fetched and section 1 read verbatim (egazette.gov.in serves an incomplete TLS
+    chain: the Let's Encrypt "YR2" intermediate must be supplied from http://yr2.i.lencr.org/
+    for verification to succeed; the chain then validates to a trusted root).
   ca_initials: PENDING
   ca_date: null
   target: regime_for
@@ -33,8 +66,18 @@
 
 - id: regime_on_boundary_is_2025
   statute: Income-tax Act
-  section: "regime boundary"
-  source: "MMX-1.0 §WS1.A1 (2025 Act applies on/after 2026-04-01)"
+  section: "s.1(3) — short title, extent and commencement"
+  provenance: primary
+  citation_url: "https://egazette.gov.in/WriteReadData/2025/265620.pdf"
+  citation_locator: >-
+    Income-tax Act, 2025 (No. 30 of 2025), section 1(3): "Save as otherwise provided in this Act,
+    it shall come into force on the 1st April, 2026." Gazette of India, Extraordinary,
+    Part II—Section 1, No. 35, dated August 21, 2025 (CG-DL-E-22082025-265620).
+  source: >-
+    PRIMARY. This vector pins the INCLUSIVITY of the boundary: an event on 2026-04-01 itself is
+    governed by the 2025 Act. "come into force ON the 1st April, 2026" makes that day the first
+    day the Act operates, so the boundary is closed on the left — which is what the engine's
+    `< REGIME_BOUNDARY` test implements. Read verbatim from the fetched Gazette PDF.
   ca_initials: PENDING
   ca_date: null
   target: regime_for
@@ -43,8 +86,27 @@
 
 - id: regime_form_map_salary_cert_2025
   statute: Income-tax Act
-  section: "form map"
-  source: "MMX-1.0 §WS1.A1 (16->130, 16A->131, 24Q->138, 3CD->26, 15G/H->121)"
+  section: "Income-tax Rules, 2026 — rule 215, Form No. 130; s.395(4) of the Income-tax Act, 2025"
+  provenance: primary
+  citation_url: "https://www.incometaxindia.gov.in/documents/d/guest/fn-130-131-132-133"
+  citation_locator: >-
+    Departmental document "Form No. 130_131_132_133 (Earlier Form No. 16/16A/16B/16C/16D/16E/27D)",
+    heading: "TDS/TCS certificates under section 395(4) of the Income-tax Act, 2025 in Form Nos.
+    130_131_132_133". Page-1 mapping table: Form 16 (I.T. Rules, 1962) -> Form 130 (I.T. Rules,
+    2026); corresponding section 203 (1961 Act) -> 395(4) (2025 Act); corresponding rule 31/37D
+    (1962 Rules) -> rule 215 (2026 Rules). Page-2 certificate table Sl.No.1: "Form No. 130
+    (earlier Form 16 as per old Income-tax Act, 1961)", issued against Form No. 138 (earlier
+    24Q), due 15th June of the financial year following the Tax Year.
+  source: >-
+    PRIMARY. The Income Tax Department's own forms document on incometaxindia.gov.in — a
+    departmental host, not commentary — read verbatim (4-page PDF, pages 1-2). The instrument
+    it publishes under is the Income-tax Rules, 2026 (CBDT Notification No. 22/2026
+    [F.No. 370142/41/2025-TPL] / G.S.R. 198(E) dated 20 March 2026); the document itself names
+    rule 215 and s.395(4). The live URL is Akamai-blocked from this build environment; the PDF
+    was retrieved via the Internet Archive snapshot of the SAME departmental URL
+    (web.archive.org/web/20260412144536/https://www.incometaxindia.gov.in/documents/d/guest/fn-130-131-132-133)
+    and both pages read directly, not summarised from a secondary site. Bonus confirmations for
+    the wider form map: 16A->131, 16B/16C/16D/16E->132, 27D->133, 24Q->138.
   ca_initials: PENDING
   ca_date: null
   target: form_name
@@ -53,8 +115,21 @@
 
 - id: regime_form_map_salary_cert_1961
   statute: Income-tax Act
-  section: "form map"
-  source: "MMX-1.0 §WS1.A1"
+  section: "Income-tax Rules, 1962 — rule 31(1)(a), Appendix II Form No. 16"
+  provenance: primary
+  citation_url: "https://traces61contents.tdscpc.gov.in/forms/Form-16.pdf"
+  citation_locator: >-
+    Prescribed Form No. 16, page 1 header: "FORM NO. 16 / [See rule 31(1)(a)] / PART A /
+    Certificate under section 203 of the Income-tax Act, 1961 for tax deducted at source on
+    salary paid to an employee under section 192 or pension or interest income of specified
+    senior citizen under section 194P."
+  source: >-
+    PRIMARY. The prescribed form itself, as published by the Income Tax Department's TDS
+    Reconciliation Analysis and Correction Enabling System (TRACES, tdscpc.gov.in) — a
+    departmental host, not a commentary site. The form's own rubric carries its authority
+    (rule 31(1)(a) of the Income-tax Rules, 1962), which is precisely the mapping this vector
+    asserts: under the 1961 regime the salary TDS certificate is Form 16. PDF fetched and the
+    header read verbatim.
   ca_initials: PENDING
   ca_date: null
   target: form_name

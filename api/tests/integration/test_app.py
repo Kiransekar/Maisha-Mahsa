@@ -324,3 +324,31 @@ def test_capture_then_domain_trend_renders():
     body = resp.text
     assert "Trends" in body
     assert "<svg" in body and "captures" in body
+
+
+# ── SPA JSON API (frontend/) ──────────────────────────────────────────────────
+# The React SPA reads the SAME assemblers the HTMX pages render. Mahsa is absent in this
+# module, so these also pin the honest-degradation contract: 200 + mahsa_up:false and an
+# empty view — never a figure that looks verified without a live recompute gate.
+def test_api_today_json_shape_and_honest_degradation():
+    resp = client.get("/api/today")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["mahsa_up"] is False  # no sidecar in this module
+    assert set(body) >= {"as_of", "cash_strip", "needs_you", "trouble", "penalties_avoided"}
+    # every cash figure is honest-pending, never a fabricated ✓ (WS7.1 T1 invariant)
+    assert body["cash_strip"], "cash strip must render its panels"
+    assert all(p["state"] == "honest_pending" for p in body["cash_strip"])
+    assert body["needs_you"] == []  # approvals need Mahsa; honest-empty, not invented
+
+
+def test_api_inbox_json_shape_and_honest_degradation():
+    resp = client.get("/api/inbox")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["mahsa_up"] is False
+    assert body["items"] == []  # honest-empty without the recompute gate
+    # all five queues are still described so the SPA can render honest empty states
+    keys = [q["key"] for q in body["queues"]]
+    assert len(keys) == 5 and "awaiting_approval" in keys and "mahsa_blocked" in keys
+    assert all("empty" in q and "label" in q for q in body["queues"])

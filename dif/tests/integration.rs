@@ -334,11 +334,14 @@ async fn fold_without_domain_runs_global_only() {
 #[tokio::test]
 async fn fold_recompute_mismatch_blocks() {
     // Prime-Directive gate (§0.4): a claimed figure Mahsa recomputes differently must BLOCK.
-    // 194J TDS on ₹50,000 is 10% = ₹5,000 (500000 paise); claim a wrong ₹9,999.99.
+    // 194J TDS on ₹60,000 is 10% = ₹6,000 (600000 paise); claim a wrong ₹9,999.99.
+    // NB ₹60,000 not ₹50,000: at exactly the ₹50,000 threshold the correct answer is now 0 (the
+    // proviso exempts a sum that "does not exceed" it), which would make this a no-TDS test
+    // rather than a mismatch test.
     let (status, v) = post_fold(json!({
         "snapshot": { "cash": 50000000, "monthly_burn": 2000000, "monthly_revenue": 3000000 },
         "recompute_claims": [
-            { "target": "tds_on_payment", "inputs": { "section": "194J", "amount": 5000000 },
+            { "target": "tds_on_payment", "inputs": { "section": "194J", "amount": 6000000 },
               "claimed_paise": 999999, "label": "payables.tds_194j" }
         ]
     }))
@@ -350,7 +353,7 @@ async fn fold_recompute_mismatch_blocks() {
         .iter().any(|t| t["id"] == "MAHSA-PARITY-001"));
     let checks = v["recompute"].as_array().unwrap();
     assert_eq!(checks[0]["matches"], false);
-    assert_eq!(checks[0]["recomputed_paise"], 500000);
+    assert_eq!(checks[0]["recomputed_paise"], 600000);
 }
 
 #[tokio::test]

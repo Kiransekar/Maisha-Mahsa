@@ -7,6 +7,8 @@ from datetime import UTC, date, datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core.entitlement_deps import entitlement_payload, require_feature
+from app.core.entitlements import GuardDecision
 from app.core.loop import run_loop
 from app.core.mahsa_client import MahsaClient
 from app.db.models.payroll import Employee
@@ -61,7 +63,7 @@ def set_salary(employee_id: int, body: SalaryInput, db: Session = Depends(get_se
     }
 
 
-@router.get("/preview")
+@router.get("/preview", dependencies=[Depends(require_feature("salary_structure"))])
 def preview(
     basic: int,
     hra: int,
@@ -81,7 +83,7 @@ def preview(
     )
 
 
-@router.post("/runs")
+@router.post("/runs", dependencies=[Depends(require_feature("payroll_run"))])
 def run(month_year: str, db: Session = Depends(get_session)) -> PayrollRunResult:
     run_date = datetime.now(UTC).date().isoformat()
     result = _service.run_payroll(db, month_year, run_date)
@@ -89,7 +91,7 @@ def run(month_year: str, db: Session = Depends(get_session)) -> PayrollRunResult
     return PayrollRunResult(**result)
 
 
-@router.post("/fold")
+@router.post("/fold", dependencies=[Depends(require_feature("payroll_run"))])
 async def fold(
     as_of: str | None = None,
     db: Session = Depends(get_session),
@@ -111,3 +113,16 @@ async def fold(
         "domain_intent": outcome.fold.domain_intent,
         "audit_hash": outcome.audit_hash,
     }
+
+
+@router.get("/lwf")
+def lwf(
+    period: str,
+    db: Session = Depends(get_session),
+    # STATUTORY FILING: "lwf" is in entitlements.STATUTORY_GRACE_FEATURES, so guard() lets a
+    # tenant whose plan does NOT include it through (grace) instead of 402-ing. A legal filing
+    # is never blocked mid-flow; the upsell is recorded AFTER the fact, in the response below.
+    ent: GuardDecision = Depends(require_feature("lwf")),
+) -> dict:
+    """Labour Welfare Fund due for `period` (state calendars) — thin over the service."""
+    return {**_service.lwf_due(db, period=period), "entitlement": entitlement_payload(ent)}

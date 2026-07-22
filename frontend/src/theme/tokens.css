@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+/* Maisha-Mahsa brand tokens — see docs/BRAND_THEME.md for the research and the reasoning.
+   Warm-paper canvas, one reserved brass accent, borders-not-shadows.
+
+   THREE COLOUR FAMILIES THAT MUST NEVER BLEED (BRAND_THEME §4):
+     verification (has this been recomputed?) · money direction (in/out) · brand (primary action)
+   Brass sits outside all three ramps — that is why it was chosen.
+
+   The verification hues keep the SAME hue families as the HTMX app's tokens.css (teal / indigo /
+   violet); only lightness is retuned for a light canvas so they stay accessible on paper. */
+@theme {
+  /* ── Ground: warm paper, never pure white ─────────────────────────────── */
+  --color-ground: #faf8f4;
+  --color-surface: #ffffff;
+  --color-surface-sunk: #f2efe8;
+  --color-border: #e3ded3;        /* hairline — the ONLY elevation primitive */
+  --color-border-strong: #cfc7b6;
+
+  /* ── Ink ───────────────────────────────────────────────────────────────── */
+  --color-ink: #1c1a17;
+  --color-ink-muted: #6b6459;
+  --color-ink-faint: #9a9287;
+
+  /* ── Brand: brass. One reserved chromatic note. ────────────────────────── */
+  --color-accent: #8a6a1f;
+  --color-accent-hover: #6f5518;
+  --color-accent-sunk: #f5eeda;   /* selected-row tint only */
+  --color-on-accent: #ffffff;     /* ink on a solid accent/status fill — never a bare #fff literal */
+
+  /* ── Verification family — NOT money colours ───────────────────────────── */
+  --color-verify: #0f766e;         /* ✓ recomputed by Mahsa */
+  --color-verify-pending: #4338ca; /* ◐ honest-pending — never a fabricated ✓ */
+  --color-verify-unbacked: #6d28d9;/* ✕ unbacked */
+
+  /* ── Money direction — NOT verification colours ────────────────────────── */
+  --color-money-in: #15803d;
+  --color-money-out: #b91c1c;
+  --color-warn: #9a6700;
+
+  /* ── Type: hierarchy from size + tracking, not weight (BRAND_THEME §4) ─── */
+  --font-sans: Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* ── Closed radius set. Nothing else. ──────────────────────────────────── */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+}
+
+:root { color-scheme: light; }
+
+body {
+  margin: 0;
+  background: var(--color-ground);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Every figure. Non-negotiable — BRAND_THEME §4 pattern #4. */
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* Statutory identifiers (GSTIN/PAN/CIN/IRN/ARN, verdict hashes) get the mono face. */
+.ident { font-family: var(--font-mono); font-size: 0.9em; letter-spacing: -0.01em; }
+
+/* The one permitted expressive motion in the product: ◐ → ✓ lock-in. Nothing else animates. */
+@keyframes verify-lock-in {
+  0% { transform: scale(0.85); opacity: 0.4; }
+  60% { transform: scale(1.06); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.verify-locked { animation: verify-lock-in 260ms ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .verify-locked { animation: none; }
+}

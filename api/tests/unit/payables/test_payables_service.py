@@ -27,10 +27,13 @@ def test_create_bill_deducts_tds(session):
         bill_number="B1",
         vendor_id=v.id,
         bill_date="2026-05-10",
-        subtotal=Paise.from_rupees(50000),
+        # Rs.60,000 — deliberately clear of the Rs.50,000 threshold. This test exercises the
+        # service WIRING, not the boundary; the boundary itself is pinned by the paired tests in
+        # test_payables_calc.py and by the statutory oracle vectors.
+        subtotal=Paise.from_rupees(60000),
     )
-    assert res["tds_amount"] == Paise.from_rupees(5000)  # 10% of 50k
-    assert res["total_amount"] == Paise.from_rupees(45000)  # 50k - 5k TDS
+    assert res["tds_amount"] == Paise.from_rupees(6000)  # 10% of 60k
+    assert res["total_amount"] == Paise.from_rupees(54000)  # 60k - 6k TDS
     assert res["tds_section"] == "194J"
 
 

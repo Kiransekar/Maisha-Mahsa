@@ -301,9 +301,11 @@ mod claim_tests {
 
     #[test]
     fn wrong_claim_is_a_mismatch() {
-        let c = check_claim(&claim("tds_on_payment", json!({"section": "194J", "amount": 5000000}), 999999));
+        // ₹60,000 (not ₹50,000): at exactly the threshold the correct answer is now 0, which
+        // would make a "wrong claim" test accidentally assert against the no-TDS path.
+        let c = check_claim(&claim("tds_on_payment", json!({"section": "194J", "amount": 6000000}), 999999));
         assert!(!c.matches);
-        assert_eq!(c.recomputed_paise, Some(500000)); // 10% of ₹50,000
+        assert_eq!(c.recomputed_paise, Some(600000)); // 10% of ₹60,000
         assert!(c.note.contains("MISMATCH"));
     }
 

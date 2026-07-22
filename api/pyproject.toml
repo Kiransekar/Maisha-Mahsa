@@ -20,6 +20,10 @@ dependencies = [
     "aiosmtplib>=3.0",
     "tzdata>=2024.1",
     "reportlab>=4.0",
+    # Verifies Better Auth's JWTs locally via its JWKS endpoint. [crypto] pulls `cryptography`,
+    # which is what supports EdDSA/Ed25519 — Better Auth's DEFAULT signing algorithm.
+    # Not hand-rolled on purpose: JWT verification is a trust boundary.
+    "PyJWT[crypto]>=2.8",
 ]
 
 [project.optional-dependencies]
