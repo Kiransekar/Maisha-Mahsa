@@ -234,6 +234,7 @@ export function VerifiedNumber({
   working,
   asOf,
   stale = false,
+  spark,
 }: {
   label: string;
   value: string;
@@ -242,6 +243,9 @@ export function VerifiedNumber({
   working?: Working;
   asOf?: string;
   stale?: Freshness;
+  // P2-3: an optional trend sparkline (Sparkline component) — a figure with no real ≥2-point
+  // history simply omits this prop, so the card carries no trend, not a fabricated flat one.
+  spark?: React.ReactNode;
 }) {
   const shown = effectiveState(state, stale);
   return (
@@ -255,7 +259,10 @@ export function VerifiedNumber({
         flex: "1 1 220px",
       }}
     >
-      <div style={{ color: "var(--color-ink-muted)", fontSize: 12 }}>{label}</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+        <div style={{ color: "var(--color-ink-muted)", fontSize: 12 }}>{label}</div>
+        {spark}
+      </div>
       <div className="tnum" style={{ fontSize: 24, letterSpacing: "-0.02em", margin: "4px 0 6px" }}>
         {value}
       </div>

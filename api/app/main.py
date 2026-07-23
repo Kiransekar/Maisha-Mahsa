@@ -18,8 +18,8 @@ from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.cfo_router import router as cfo_router
-from app.config import get_settings
-from app.core import auth, betterauth, ca_threads, history_store, parallel, trace_store
+from app.config import DEFAULT_SESSION_SECRET, get_settings
+from app.core import betterauth, ca_threads, history_store, parallel, trace_store
 from app.core.approvals import pending_approvals, record_decision
 from app.core.ask import answer_query
 from app.core.audit import verify_chain
@@ -64,6 +64,7 @@ from app.web.api_approvals import router as approvals_api_router
 from app.web.api_bulk import router as bulk_api_router
 from app.web.api_domains import router as domains_api_router
 from app.web.api_filings import router as filings_api_router
+from app.web.api_gst import router as gst_spa_router
 from app.web.api_health import router as health_api_router
 from app.web.api_investor import router as investor_api_router
 from app.web.api_payroll import router as payroll_api_router
@@ -89,14 +90,27 @@ def _wants_html(request: Request) -> bool:
     return "text/html" in request.headers.get("accept", "")
 
 
+def _is_public(path: str) -> bool:
+    """Routes reachable without authenticating: liveness, the sign-in redirect, static assets."""
+    return path == "/health" or path.startswith("/login") or path.startswith("/static")
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
-    # P1-SECRETS: never boot production with the shipped default secrets.
-    auth.assert_production_secrets(
-        environment=settings.environment,
-        app_password=settings.app_password,
-        session_secret=settings.session_secret,
-    )
+    # P1-SECRETS successor (P2-6): the HMAC password login is gone, so the secrets to refuse are
+    # (a) a missing Better Auth URL — every request would 401 anyway, but fail loud at boot —
+    # and (b) the shipped default preview-token HMAC key (api_actions signs with it).
+    if settings.environment == "production":
+        if not betterauth.better_auth_base_url():
+            raise RuntimeError(
+                "Refusing to start in production without MAISHA_BETTER_AUTH_URL — "
+                "authentication is Better Auth JWT only (see docs/DEPLOYMENT.md §4)."
+            )
+        if settings.session_secret == DEFAULT_SESSION_SECRET:
+            raise RuntimeError(
+                "Refusing to start in production with the default MAISHA_SESSION_SECRET "
+                "(it signs action preview tokens). Set it in the environment."
+            )
     app = FastAPI(title=settings.app_name, version=settings.version)
 
     # Schema: dev/test auto-create for convenience; production uses Alembic migrations
@@ -115,54 +129,52 @@ def create_app() -> FastAPI:
     def _bind_org_to_connection(dbapi_conn, _record, _proxy) -> None:
         bind_org_guc(dbapi_conn, engine.dialect.name)
 
-    # AUTH-CONSOLIDATE: ONE authentication path. Better Auth (TypeScript, owner-configured)
-    # issues the JWT; this app only VERIFIES it via JWKS and resolves a Principal.
+    # AUTH-CONSOLIDATE (P2-6 complete): ONE authentication system. Better Auth (TypeScript,
+    # owner-configured) issues the JWT; this app only VERIFIES it via JWKS and resolves a
+    # Principal. The SPA sends it as `Authorization: Bearer`; the HTMX surface carries the SAME
+    # JWT in the `maisha_jwt` cookie. The legacy HMAC-password cookie is deleted.
     #
     # Deny by default: this middleware covers EVERY route, so a new router cannot forget to
     # authenticate. Order of decision, and there is no other order:
     #   1. public allowlist (/health, /login, /static) -> through.
-    #   2. an Authorization: Bearer header present -> it MUST verify. 401/403 otherwise. It
-    #      NEVER falls through to the cookie: a bad token is a rejected request, not an
-    #      anonymous one. This is the fail-closed rule the whole ticket turns on.
-    #   3. no bearer header at all -> the legacy single-shared-password cookie, and only if
-    #      `legacy_password_auth_enabled` allows it (hard-off in production).
+    #   2. a token present (header first, else cookie — header always wins) -> it MUST verify.
+    #      401/403 otherwise. A bad bearer token NEVER falls through to the cookie: a bad token
+    #      is a rejected request, not an anonymous one.
+    #   3. no token at all -> 401; a browser page-load is redirected to /login (the sign-in
+    #      redirect) instead, which is still a rejection, not an anonymous pass-through.
     @app.middleware("http")
     async def _authenticate(request: Request, call_next):
-        if auth.is_public(request.url.path):
+        if _is_public(request.url.path):
             return await call_next(request)
 
-        legacy_ok = betterauth.legacy_password_auth_enabled(environment=settings.environment)
+        if betterauth.request_token(request) is None:
+            if _wants_html(request):
+                return RedirectResponse(url=f"/login?next={request.url.path}", status_code=303)
+            return JSONResponse({"detail": "missing bearer token"}, status_code=401)
 
-        if betterauth.bearer_token(request) is not None:
-            try:
-                principal = betterauth.principal_from_request(request)
-            except betterauth.AuthError as exc:
-                return JSONResponse({"detail": str(exc)}, status_code=401)
-            except betterauth.NoOrgError as exc:
-                return JSONResponse({"detail": str(exc)}, status_code=403)
-            # The verified identity, and the ONLY place request.state gets it. app.core.
-            # rbac_deps.resolve_principal reads exactly these attributes.
-            request.state.principal = principal
-            request.state.user_id = principal.user_id
-            request.state.role = principal.role
-            request.state.org_id = principal.org_id
-            org_token = set_current_org(principal.org_id)  # -> Postgres RLS, see above
-            try:
-                return await call_next(request)
-            finally:
-                reset_current_org(org_token)
-
-        if legacy_ok and auth.valid_cookie(
-            request.cookies.get(auth.COOKIE_NAME), settings.session_secret
-        ):
-            # Legacy dev login: authenticated, but carries NO role and NO org. It therefore
-            # sets no request.state — every RBAC capability check denies, and the RLS GUC stays
-            # empty. Fail-closed by construction, not by convention.
+        try:
+            principal = betterauth.principal_from_request(request)
+        except betterauth.AuthError as exc:
+            if betterauth.bearer_token(request) is None and _wants_html(request):
+                # A stale/bad COOKIE on a browser page-load: drop it and send them to sign in.
+                # (A bad bearer HEADER is always a hard 401 — the API contract.)
+                resp = RedirectResponse(url=f"/login?next={request.url.path}", status_code=303)
+                resp.delete_cookie(betterauth.TOKEN_COOKIE)
+                return resp
+            return JSONResponse({"detail": str(exc)}, status_code=401)
+        except betterauth.NoOrgError as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=403)
+        # The verified identity, and the ONLY place request.state gets it. app.core.
+        # rbac_deps.resolve_principal reads exactly these attributes.
+        request.state.principal = principal
+        request.state.user_id = principal.user_id
+        request.state.role = principal.role
+        request.state.org_id = principal.org_id
+        org_token = set_current_org(principal.org_id)  # -> Postgres RLS, see above
+        try:
             return await call_next(request)
-
-        if legacy_ok:
-            return RedirectResponse(url=f"/login?next={request.url.path}", status_code=303)
-        return JSONResponse({"detail": "missing bearer token"}, status_code=401)
+        finally:
+            reset_current_org(org_token)
 
     @app.get("/me")
     async def whoami(principal: Principal = Depends(betterauth.get_principal)) -> dict[str, str]:
@@ -174,41 +186,19 @@ def create_app() -> FastAPI:
             "email": principal.email,
         }
 
-    @app.get("/login", response_class=HTMLResponse)
-    async def login_form(request: Request, next: str = "/") -> HTMLResponse:
-        return templates.TemplateResponse(
-            request, "login.html", {"settings": settings, "next": next, "error": None}
-        )
-
-    @app.post("/login")
-    async def login_submit(
-        request: Request, password: str = Form(...), next: str = Form("/")
-    ) -> Response:
-        if not betterauth.legacy_password_auth_enabled(environment=settings.environment):
-            # Don't hand out a cookie the middleware will refuse to honour.
-            raise HTTPException(status_code=404, detail="password login is disabled")
-        if auth.verify_password(password, settings.app_password):
-            resp = RedirectResponse(url=next or "/", status_code=303)
-            resp.set_cookie(
-                auth.COOKIE_NAME,
-                auth.sign(settings.session_secret),
-                httponly=True,
-                samesite="lax",
-                secure=settings.secure_cookies,
-                max_age=60 * 60 * 24 * 14,  # 2 weeks
-            )
-            return resp
-        return templates.TemplateResponse(
-            request,
-            "login.html",
-            {"settings": settings, "next": next, "error": "Incorrect password."},
-            status_code=401,
-        )
+    @app.get("/login")
+    async def login_redirect() -> RedirectResponse:
+        """The HMAC password form is gone (P2-6): one auth system. Send the browser to the
+        Better Auth sign-in (the SPA route); after sign-in the frontend/TS layer places the JWT
+        in the `maisha_jwt` cookie, which the middleware above verifies via JWKS."""
+        return RedirectResponse(url=settings.signin_url, status_code=303)
 
     @app.post("/logout")
     async def logout() -> RedirectResponse:
+        """Drops the local JWT cookie. Better Auth session revocation itself lives in the TS
+        layer — this only signs the HTMX surface out of this app."""
         resp = RedirectResponse(url="/login", status_code=303)
-        resp.delete_cookie(auth.COOKIE_NAME)
+        resp.delete_cookie(betterauth.TOKEN_COOKIE)
         return resp
 
     # P6-VALIDATION: reject oversized request bodies before they're read into memory.
@@ -265,6 +255,7 @@ def create_app() -> FastAPI:
     app.include_router(health_api_router)
     app.include_router(domains_api_router)
     app.include_router(actions_api_router)
+    app.include_router(gst_spa_router)
     app.include_router(statements_api_router)
     app.include_router(investor_api_router)
 

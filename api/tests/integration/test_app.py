@@ -10,28 +10,28 @@ os.environ.setdefault("MAISHA_DATABASE_URL", "sqlite://")
 
 from fastapi.testclient import TestClient  # noqa: E402
 
-from app.core.betterauth import get_principal  # noqa: E402
+from app.core.betterauth import TOKEN_COOKIE, get_principal  # noqa: E402
 from app.core.principal import Principal  # noqa: E402
 from app.core.rbac import Role  # noqa: E402
 from app.main import app  # noqa: E402
 
 client = TestClient(app)
-# P1-AUTH: every route below the allowlist now needs a session — log the client in once
-# (default dev password). httpx persists the cookie across subsequent requests.
-client.post("/login", data={"password": "change-me"})
 
 
 @pytest.fixture(scope="module", autouse=True)
-def _act_as_owner():
-    """WS5.1 (fix:rbac-api): mutating and /api routes are capability-gated, and the legacy
-    dev cookie carries NO role. This file tests page/flow semantics, not RBAC, so it overrides
-    the one auth seam with an Owner — the same blessed pattern as test_api_bulk.py. RBAC itself
-    is proven over real signed tokens in test_rbac_matrix.py. Module-scoped and popped on the
-    way out so it can never leak into that file."""
+def _act_as_owner(betterauth_owner_env):
+    """P2-6: the legacy password login is deleted, so the middleware is satisfied the way the
+    HTMX surface is in production — a real signed owner JWT in the `maisha_jwt` cookie (the
+    `betterauth_owner_env` JWKS fixture). This file tests page/flow semantics, not RBAC, so it
+    still overrides the one auth seam with an Owner — the same blessed pattern as
+    test_api_bulk.py; RBAC itself is proven over real signed tokens in test_rbac_matrix.py.
+    Module-scoped and popped on the way out so it can never leak into that file."""
+    client.cookies.set(TOKEN_COOKIE, betterauth_owner_env.token)
     app.dependency_overrides[get_principal] = lambda: Principal(
         user_id="u-owner", org_id="org-7", role=Role.OWNER, email="owner@example.com"
     )
     yield
+    client.cookies.delete(TOKEN_COOKIE)
     app.dependency_overrides.pop(get_principal, None)
 
 

@@ -1,10 +1,12 @@
-"""Better Auth JWT verification (WS4.3-betterauth-api).
+"""Better Auth JWT verification (WS4.3-betterauth-api · P2-6 hmac-retire).
 
 Better Auth (better-auth.com) is TypeScript-only and runs in the Node layer; it owns
 credentials, 2FA and sessions. This module does exactly one job: verify the JWTs it issues and
 resolve them to a :class:`app.core.principal.Principal`. It never runs, reimplements, or
-proxies Better Auth itself, and it never touches the legacy single-password flow in
-``app.core.auth`` (left untouched, unremoved, per the ticket).
+proxies Better Auth itself. The legacy HMAC-cookie password flow (``app.core.auth``) is DELETED
+(P2-6): the SPA carries the JWT in the Authorization header, the HTMX surface carries the SAME
+JWT in the :data:`TOKEN_COOKIE` cookie, and both go through the same JWKS verification below —
+one auth system, one verifier.
 
 Verified facts this module is built against (better-auth.com, fetched this session):
   - JWKS endpoint: ``BASE_URL + "/api/auth/jwks"``.
@@ -45,8 +47,9 @@ ALLOWED_ALGORITHMS: tuple[str, ...] = ("EdDSA", "ES256", "RS256")
 ACTIVE_ORG_CLAIM = "activeOrganizationId"
 ROLE_CLAIM = "role"
 
-#: Env values that turn an optional flag ON. Anything else (including unset) is OFF.
-_TRUTHY = frozenset({"1", "true", "yes", "on"})
+#: The HTMX surface's JWT carrier (P2-6). The frontend/Better Auth TS layer sets this cookie to
+#: the SAME JWT the SPA sends as a bearer header; verification is identical either way.
+TOKEN_COOKIE = "maisha_jwt"
 
 
 def _env(name: str) -> str:
@@ -77,23 +80,6 @@ def better_auth_mfa_claim() -> str:
     """``MAISHA_BETTER_AUTH_MFA_CLAIM`` — name of the boolean JWT claim asserting the caller
     completed 2FA. UNSET = MFA is not enforced by this API (see :func:`assert_mfa_satisfied`)."""
     return _env("MAISHA_BETTER_AUTH_MFA_CLAIM").strip()
-
-
-def legacy_password_auth_enabled(*, environment: str) -> bool:
-    """Is the legacy shared-password cookie login (``app.core.auth``) available?
-
-    HARD OFF in production regardless of the environment variable — a single shared password is
-    not an acceptable production control, and this must not be switchable back on by a stray env
-    var. Outside production it defaults ON so local dev and the existing test suite keep working;
-    set ``MAISHA_LEGACY_PASSWORD_AUTH=0`` to run dev on Better Auth only.
-
-    This is NOT a fallback: it is consulted only when the request carries NO bearer token at
-    all. A present-but-invalid bearer token is rejected outright and never reaches this path.
-    """
-    if environment == "production":
-        return False
-    raw = _env("MAISHA_LEGACY_PASSWORD_AUTH").strip().lower()
-    return raw in _TRUTHY if raw else True
 
 
 @lru_cache(maxsize=8)
@@ -208,8 +194,15 @@ def bearer_token(request: Request) -> str | None:
     return token.strip() or None
 
 
+def request_token(request: Request) -> str | None:
+    """The request's JWT: bearer header first (SPA/API), else the :data:`TOKEN_COOKIE` cookie
+    (HTMX pages). A present bearer header always wins — a bad header token is a rejected
+    request, never a fall-through to the cookie (the P2-6 no-fallback rule)."""
+    return bearer_token(request) or request.cookies.get(TOKEN_COOKIE) or None
+
+
 def principal_from_request(request: Request) -> Principal:
-    """Verify this request's bearer token against the configured Better Auth JWKS.
+    """Verify this request's token (header or cookie) against the configured Better Auth JWKS.
 
     THE one entry point production authentication goes through (see the ``_authenticate``
     middleware in :mod:`app.main`). Raises :class:`AuthError` (-> 401) for a missing, malformed,
@@ -217,7 +210,7 @@ def principal_from_request(request: Request) -> Principal:
     unreachable JWKS endpoint — and :class:`NoOrgError` (-> 403) for a verified token with no
     active org, an unmapped role, or unsatisfied MFA. It never returns an unverified Principal.
     """
-    token = bearer_token(request)
+    token = request_token(request)
     if token is None:
         raise AuthError("missing bearer token")
     return verify_token(
@@ -264,11 +257,13 @@ if __name__ == "__main__":  # ponytail: one runnable check for the config-plumbi
     else:
         raise AssertionError("unconfigured better auth must fail closed")
 
-    # Legacy shared-password login can never be switched on in production.
-    os.environ["MAISHA_LEGACY_PASSWORD_AUTH"] = "1"
-    assert legacy_password_auth_enabled(environment="production") is False
-    assert legacy_password_auth_enabled(environment="development") is True
-    os.environ["MAISHA_LEGACY_PASSWORD_AUTH"] = "0"
-    assert legacy_password_auth_enabled(environment="development") is False
-    del os.environ["MAISHA_LEGACY_PASSWORD_AUTH"]
+    # P2-6: header wins over cookie; cookie alone works; neither -> None.
+    from types import SimpleNamespace as _NS
+
+    def _req(hdr: str, ck: dict[str, str]) -> Request:
+        return _NS(headers={"authorization": hdr}, cookies=ck)  # type: ignore[return-value]
+
+    assert request_token(_req("Bearer h.h.h", {TOKEN_COOKIE: "c.c.c"})) == "h.h.h"
+    assert request_token(_req("", {TOKEN_COOKIE: "c.c.c"})) == "c.c.c"
+    assert request_token(_req("", {})) is None
     print("betterauth self-check ok")

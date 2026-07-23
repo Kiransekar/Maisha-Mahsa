@@ -16,9 +16,13 @@ import {
   honestState,
   ocrResultToPrefill,
   receiptDateToIso,
+  vaultEmptyText,
+  VaultResults,
   type Deadline,
   type DomainData,
   type Figure,
+  type HistoryPoint,
+  type VaultDoc,
 } from "./Domain";
 import { kpiValue, runwayText } from "./Domains";
 
@@ -114,6 +118,68 @@ describe("FigureGrid — P1-6: connection-health/payload-age staleness downgrade
     // honestState() already downgrades a verified figure during an outage — confirms the default
     // `stale = false` doesn't mask that pre-existing behaviour.
     expect(html).toContain("not yet sealed"); // the ◐ chip label
+  });
+});
+
+describe("FigureGrid — P2-3: trend sparklines are keyed to the figure's own fact key", () => {
+  const figure = (key: string): Figure => ({
+    key,
+    label: "GST payable",
+    value: "₹1,000",
+    raw: null,
+    state: "verified",
+  });
+  const pts = (...values: number[]): HistoryPoint[] =>
+    values.map((value, i) => ({ captured_at: `2026-07-0${i + 1}`, value }));
+
+  it("renders a sparkline for a figure with >=2 real captured points", () => {
+    const html = renderToStaticMarkup(
+      createElement(FigureGrid, {
+        figures: [figure("gst_payable")],
+        mahsaUp: true,
+        asOf: "2026-07-22",
+        history: { gst_payable: pts(100, 200) },
+      }),
+    );
+    expect(html).toContain("<svg");
+    expect(html).toContain("<polyline");
+  });
+
+  it("renders no sparkline when history is entirely absent", () => {
+    const html = renderToStaticMarkup(
+      createElement(FigureGrid, {
+        figures: [figure("gst_payable")],
+        mahsaUp: true,
+        asOf: "2026-07-22",
+      }),
+    );
+    expect(html).not.toContain("<svg");
+  });
+
+  it("MUTATION GUARD: a single real capture must not render a fabricated line", () => {
+    // If FigureGrid (or Sparkline) ever padded a lone real point into a fake second one, this
+    // would start rendering an <svg> — the exact fabrication the ticket's ≥2-point rule forbids.
+    const html = renderToStaticMarkup(
+      createElement(FigureGrid, {
+        figures: [figure("gst_payable")],
+        mahsaUp: true,
+        asOf: "2026-07-22",
+        history: { gst_payable: pts(100) },
+      }),
+    );
+    expect(html).not.toContain("<svg");
+  });
+
+  it("never borrows another figure's series — an unrelated key's history stays absent here", () => {
+    const html = renderToStaticMarkup(
+      createElement(FigureGrid, {
+        figures: [figure("gst_payable")],
+        mahsaUp: true,
+        asOf: "2026-07-22",
+        history: { some_other_metric: pts(1, 2, 3) },
+      }),
+    );
+    expect(html).not.toContain("<svg");
   });
 });
 
@@ -365,5 +431,116 @@ describe("Domain() — the real wiring: booksFreshness() must actually reach the
     const html = renderDomain(health());
     expect(html).toContain("recomputed"); // the ✓ chip label
     expect(html).not.toContain("Downgraded from ✓");
+  });
+});
+
+// ── P2-1: vault browser — search/list, integrity state, retention, and role-clearance lock chips ──
+
+describe("vaultEmptyText — an empty vault and an empty search result are different facts", () => {
+  it("says the vault itself is empty when there was no query", () => {
+    expect(vaultEmptyText("")).toBe("No documents are in the vault yet.");
+    expect(vaultEmptyText("   ")).toBe("No documents are in the vault yet.");
+  });
+
+  it("names the query on a genuine no-match", () => {
+    expect(vaultEmptyText("acme")).toBe("No document matches “acme”.");
+  });
+});
+
+describe("VaultResults — renders real hits, an honest empty state, and loud integrity failures", () => {
+  const okDoc: VaultDoc = {
+    id: "1",
+    file_name: "invoice.pdf",
+    doc_type: "invoice",
+    sensitivity: "internal",
+    retention_until: "2035-03-31",
+    retention_overdue: false,
+    restricted: false,
+    integrity_ok: true,
+  };
+
+  it("renders the honest empty state instead of a blank list when there are no hits", () => {
+    const html = renderToStaticMarkup(createElement(VaultResults, { hits: [], query: "acme" }));
+    expect(html).toContain("No document matches “acme”.");
+  });
+
+  it("renders a healthy document with its retention and a quiet SHA-256-ok chip", () => {
+    const html = renderToStaticMarkup(createElement(VaultResults, { hits: [okDoc], query: "" }));
+    expect(html).toContain("invoice.pdf");
+    expect(html).toContain("✓ SHA-256 verified");
+    expect(html).toContain("2035-03-31");
+    expect(html).not.toContain("INTEGRITY CHECK FAILED");
+  });
+
+  it("renders an integrity failure LOUDLY — the ✕ chip AND a standalone alert block", () => {
+    // THE mutation this guards: a doc whose content no longer hashes to its stored SHA-256 must
+    // not read the same as a healthy one, or as a quiet ◐ — it gets its own alert.
+    const html = renderToStaticMarkup(
+      createElement(VaultResults, { hits: [{ ...okDoc, integrity_ok: false }], query: "" }),
+    );
+    expect(html).toContain("✕ INTEGRITY CHECK FAILED");
+    expect(html).toContain("no longer matches its recorded SHA-256 hash");
+  });
+
+  it("flags a retention-overdue document without claiming an integrity problem", () => {
+    const html = renderToStaticMarkup(
+      createElement(VaultResults, {
+        hits: [{ ...okDoc, retention_until: "2020-01-01", retention_overdue: true }],
+        query: "",
+      }),
+    );
+    expect(html).toContain("overdue for archival");
+    expect(html).not.toContain("INTEGRITY CHECK FAILED");
+  });
+
+  it("renders a restricted document as a visible lock, never its content and never absent", () => {
+    // Server-enforced clearance (VaultService.browse / app.core.landing.can_view_sensitivity):
+    // the row still appears — existence is not hidden — but with a lock chip and reason, and no
+    // integrity/retention detail (this role never received the content to verify).
+    const html = renderToStaticMarkup(
+      createElement(VaultResults, {
+        hits: [
+          {
+            id: "2",
+            file_name: "board-minutes.pdf",
+            doc_type: "board_resolution",
+            sensitivity: "restricted",
+            retention_until: null,
+            retention_overdue: false,
+            restricted: true,
+            reason: "requires restricted clearance",
+          },
+        ],
+        query: "",
+      }),
+    );
+    expect(html).toContain("board-minutes.pdf");
+    expect(html).toContain("restricted — requires restricted clearance");
+    expect(html).not.toContain("SHA-256");
+  });
+
+  it("renders healthy and restricted documents side by side without cross-contaminating state", () => {
+    const html = renderToStaticMarkup(
+      createElement(VaultResults, {
+        hits: [
+          okDoc,
+          {
+            id: "2",
+            file_name: "cap-table.pdf",
+            doc_type: "cap_table",
+            sensitivity: "restricted",
+            retention_until: null,
+            retention_overdue: false,
+            restricted: true,
+            reason: "requires restricted clearance",
+          },
+        ],
+        query: "",
+      }),
+    );
+    expect(html).toContain("invoice.pdf");
+    expect(html).toContain("✓ SHA-256 verified");
+    expect(html).toContain("cap-table.pdf");
+    expect(html).toContain("restricted — requires restricted clearance");
   });
 });

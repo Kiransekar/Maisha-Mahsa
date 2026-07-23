@@ -42,3 +42,7 @@ class ItcRegister(Base):
     eligible_itc: Mapped[int] = mapped_column(Integer, default=1)  # 1 = eligible
     in_2b: Mapped[int] = mapped_column(Integer, default=0)  # 1 = appears in GSTR-2B
     claimed_in_return: Mapped[str | None] = mapped_column(String)
+    # WS1.D4 IMS: the recipient's action to date ("accept"/"reject", NULL = no action taken).
+    # Only the ACTION is stored; the disposition (accepted/rejected/pending/deemed_accepted)
+    # is always recomputed by app.domains.gst.ims.ims_disposition, never persisted.
+    ims_action: Mapped[str | None] = mapped_column(String)

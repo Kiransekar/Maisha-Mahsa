@@ -19,11 +19,12 @@ Bring up: `make dev` (local) or `docker compose -f infra/docker-compose.yml up -
 
 ## 2. First-time production setup
 
-1. Copy `api/.env.example` → `.env`; set **`MAISHA_ENVIRONMENT=production`**, a strong
-   `MAISHA_APP_PASSWORD` and `MAISHA_SESSION_SECRET`
-   (`python -c "import secrets; print(secrets.token_hex(32))"`), `MAISHA_SECURE_COOKIES=true`,
-   real `MAISHA_SMTP_*`, and `MAISHA_COMPANY_GSTIN`. The app **refuses to boot** in production
-   with default secrets.
+1. Copy `api/.env.example` → `.env`; set **`MAISHA_ENVIRONMENT=production`**,
+   `MAISHA_BETTER_AUTH_URL` (auth is Better Auth JWT only — the password login is deleted,
+   see docs/DEPLOYMENT.md §3/§4), a strong `MAISHA_SESSION_SECRET`
+   (`python -c "import secrets; print(secrets.token_hex(32))"`; it signs action preview
+   tokens), real `MAISHA_SMTP_*`, and `MAISHA_COMPANY_GSTIN`. The app **refuses to boot** in
+   production without Better Auth or with the default session secret.
 2. Apply schema: `make migrate` (`alembic upgrade head`). Do **not** rely on auto-create in prod.
 3. (Optional) `make seed` only on a demo box — never on the real company DB.
 4. Start the stack; confirm `GET /health` shows `db: ok`, `mahsa: ok`.
@@ -36,9 +37,9 @@ migrations run once before api starts; no MailHog).
 ```bash
 # on the VPS (Docker + compose plugin installed):
 git clone <repo> /opt/maisha && cd /opt/maisha/infra
-cp ../api/.env.example .env          # then edit: MAISHA_ENVIRONMENT=production, strong
-                                     # MAISHA_APP_PASSWORD + MAISHA_SESSION_SECRET, MAISHA_DOMAIN,
-                                     # real MAISHA_SMTP_*, MAISHA_COMPANY_GSTIN
+cp ../api/.env.example .env          # then edit: MAISHA_ENVIRONMENT=production,
+                                     # MAISHA_BETTER_AUTH_URL + strong MAISHA_SESSION_SECRET,
+                                     # MAISHA_DOMAIN, real MAISHA_SMTP_*, MAISHA_COMPANY_GSTIN
 ./deploy.sh                          # builds, runs migrations, starts the stack, waits for health
 ```
 
@@ -103,14 +104,15 @@ docker compose -f infra/docker-compose.yml start api scheduler
 |---|---|---|
 | Numbers won't finalise | Mahsa down (`/health` → `mahsa: down`) | restart `dif`; the app degrades safely meanwhile |
 | App returns 500s | check `maisha.web` logs (stack traces are logged, never shown to users) | fix; redeploy |
-| Login impossible | wrong `MAISHA_APP_PASSWORD` / rotated `MAISHA_SESSION_SECRET` (logs everyone out) | reset env, restart |
+| Login impossible | Better Auth down / wrong `MAISHA_BETTER_AUTH_URL` (JWKS unreachable ⇒ fail-closed 401) | fix the auth layer or env, restart |
 | Disk filling | restic cache / logs | check retention; `restic prune` |
 | Audit banner red | tamper or corruption | §5 |
 
 ## 6b. Rotating secrets
 
-- **App password:** change `MAISHA_APP_PASSWORD` in `.env`, `docker compose ... up -d api`.
-- **Session secret:** change `MAISHA_SESSION_SECRET` (this logs out every device immediately).
+- **Auth:** credentials/sessions live in YOUR Better Auth deployment — rotate there. Key
+  rotation propagates via JWKS (the API re-fetches on unknown `kid`).
+- **Session secret:** change `MAISHA_SESSION_SECRET` (invalidates in-flight action previews).
 - **SMTP / cloud creds:** update `MAISHA_SMTP_*` / `MAISHA_CLAUDE_API_KEY`, restart `api` +
   `scheduler`. Secrets live only in `.env` (gitignored) and the restic password file — never in VCS.
 

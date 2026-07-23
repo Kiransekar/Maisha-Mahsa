@@ -149,12 +149,23 @@ auto-provisions TLS for `MAISHA_DOMAIN` (`infra/Caddyfile`). To use Postgres ins
 on-volume SQLite, set `MAISHA_DATABASE_URL` in `infra/.env` — compose interpolates it into the
 `migrate`/`api`/`scheduler` services (falls back to SQLite when unset).
 
-Production boot behaviour (verified in `app/main.py` / `app/core/auth.py` /
-`app/core/betterauth.py`): with `MAISHA_ENVIRONMENT=production` the app **refuses to start**
-with the default `MAISHA_APP_PASSWORD` or `MAISHA_SESSION_SECRET`, the legacy shared-password
-login is **hard off**, and every request needs a Better Auth JWT (§4). Public paths are only
-`/health`, `/login`, `/static`. Schema is NOT auto-created in production — migrations are the
-only path (`main.py` gates `create_all` on non-production).
+Production boot behaviour (verified in `app/main.py` / `app/core/betterauth.py`): with
+`MAISHA_ENVIRONMENT=production` the app **refuses to start** without `MAISHA_BETTER_AUTH_URL`
+or with the default `MAISHA_SESSION_SECRET` (it signs action preview tokens). Every request
+needs a Better Auth JWT (§4). Public paths are only `/health`, `/login`, `/static`. Schema is
+NOT auto-created in production — migrations are the only path (`main.py` gates `create_all` on
+non-production).
+
+**ONE auth system (P2-6 — the legacy HMAC password login is DELETED).** HTMX pages and the SPA
+share the same Better Auth JWT, verified through the same JWKS path
+(`app/core/betterauth.py`): the SPA sends `Authorization: Bearer <jwt>`; the HTMX surface
+carries the SAME JWT in the `maisha_jwt` cookie (a present bearer header always wins — a bad
+header token is rejected, never replaced by the cookie). `GET /login` is now only a redirect to
+the sign-in page (`MAISHA_SIGNIN_URL`, default `/sign-in`, the SPA route); `POST /logout` just
+drops the cookie. **OWNER-STEP:** after Better Auth sign-in, your frontend/TS layer must place
+the JWT (from `GET {BETTER_AUTH_URL}/api/auth/token`) in the `maisha_jwt` cookie for the API's
+origin — until it does, the HTMX pages redirect to sign-in and only the SPA (bearer header) is
+usable. There is no password fallback, deliberately.
 
 ### 3b. Bare uvicorn (if you skip docker)
 

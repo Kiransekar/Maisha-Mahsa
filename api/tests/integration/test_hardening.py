@@ -4,13 +4,23 @@ import os
 
 os.environ.setdefault("MAISHA_DATABASE_URL", "sqlite://")
 
+import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
+from app.core.betterauth import TOKEN_COOKIE  # noqa: E402
 from app.jobs import run_audit_verify  # noqa: E402
 from app.main import app  # noqa: E402
 
 client = TestClient(app)
-client.post("/login", data={"password": "change-me"})
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _authed(betterauth_owner_env):
+    """P2-6: the password login is deleted — authenticate the HTMX way, a real signed owner
+    JWT in the `maisha_jwt` cookie against the fixture's live JWKS endpoint."""
+    client.cookies.set(TOKEN_COOKIE, betterauth_owner_env.token)
+    yield
+    client.cookies.delete(TOKEN_COOKIE)
 
 
 def test_oversized_body_rejected_413():

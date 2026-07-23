@@ -30,6 +30,8 @@ import {
 } from "../components/VerifiedNumber";
 import { ErrorState } from "../components/ErrorState";
 import { ActionDrawer } from "../components/ActionDrawer";
+import { Sparkline } from "../components/Sparkline";
+import { GstDetail } from "./GstDetail";
 import { BankCsvImport } from "../components/BankCsvImport";
 import { useConnectionHealth } from "../components/ConnectionHealth";
 import { booksFreshness, useNow } from "../lib/freshness";
@@ -93,6 +95,12 @@ export type DomainData = {
   deadlines: Deadline[];
   actions: ActionSpec[];
 };
+
+// P2-3: GET /api/domains/{domain}/history — the SAME honest ≥2-point rule as the HTMX
+// sparklines (app/web/charts.py): a metric with fewer than two real captures is simply absent
+// from `series`, never a fabricated single-point or flat line.
+export type HistoryPoint = { captured_at: string; value: number };
+export type DomainHistory = { domain: string; series: Record<string, HistoryPoint[]> };
 
 // ── pure logic (tested in Domain.test.ts) ────────────────────────────────────
 
@@ -238,6 +246,14 @@ function DomainBody({
   const [receiptPrefill, setReceiptPrefill] = useState<Record<string, string> | undefined>();
   const [receiptNonce, setReceiptNonce] = useState(0);
 
+  // P2-3: trend sparklines, fetched separately so a slow/failed history read never blocks the
+  // figures themselves rendering — `historyQuery.data` simply stays undefined and every card
+  // renders with no spark (Sparkline's own ≥2-point guard would drop it anyway).
+  const historyQuery = useQuery({
+    queryKey: ["domain-history", data.domain],
+    queryFn: () => api<DomainHistory>(`/domains/${encodeURIComponent(data.domain)}/history`),
+  });
+
   const verified = data.figures.filter(
     (f) => !isRestricted(f) && honestState(f.state, data.mahsa_up) === "verified",
   );
@@ -303,9 +319,14 @@ function DomainBody({
             mahsaUp={data.mahsa_up}
             asOf={data.as_of}
             stale={stale}
+            history={historyQuery.data?.series}
           />
         </>
       )}
+
+      {/* P2-2: GST deep flows (ITC recon, artifacts, IMS, QRMP/CMP-08 visibility). The badge
+          gate is the SAME honestState wiring every other badge on this screen passes through. */}
+      {data.domain === "gst" && <GstDetail badge={(s) => honestState(s, data.mahsa_up)} />}
 
       {/* P0-5: re-import reuses the SAME dry-run -> confirm component Onboarding's first
           statement uses (components/BankCsvImport.tsx) — no second parser, no second preview.
@@ -314,6 +335,17 @@ function DomainBody({
         <>
           <Section>Re-import bank statement</Section>
           <TreasuryReimport onImported={() => void refetch()} />
+        </>
+      )}
+
+      {/* P2-1: vault browser — document list, full-text search, per-doc retention/integrity/
+          clearance. Vault-only: no other domain has a document concept. The plain-text "Ingest
+          document" ActionDrawer below (Actions section) is untouched — this adds browsing +
+          the OCR-scan path alongside it. */}
+      {data.domain === "vault" && (
+        <>
+          <Section>Documents</Section>
+          <VaultBrowser />
         </>
       )}
 
@@ -447,6 +479,217 @@ function TreasuryReimport({ onImported }: { onImported: () => void }) {
   );
 }
 
+// ── P2-1: vault browser (document list + full-text search + integrity/retention/clearance) ──
+//
+// GET /api/vault/search?q= is BOTH the search AND the document list: an empty `q` matches every
+// document (vault_calc.search's substring check on ""), so no second "list all" endpoint exists
+// or is needed. Results are already role-masked server-side (VaultService.browse, over the ONE
+// canonical clearance lattice, app.core.landing.can_view_sensitivity) — a document above the
+// caller's clearance still appears (existence is not a secret) as a locked row, never silently
+// dropped and never with its content.
+
+export type VaultDoc = {
+  id: string;
+  file_name: string;
+  doc_type: string | null;
+  sensitivity: string;
+  retention_until: string | null;
+  retention_overdue: boolean;
+  restricted: boolean;
+  reason?: string;
+  tags?: string | null;
+  /** Present only when `restricted` is false — SHA-256 verify state. Absent, never a guessed
+   *  true, on a restricted row whose content this role never received. */
+  integrity_ok?: boolean;
+};
+
+/** Honest-empty copy: "no results for this search" and "the vault is empty" are different facts
+ *  and must not share a sentence. */
+export function vaultEmptyText(query: string): string {
+  return query.trim() === ""
+    ? "No documents are in the vault yet."
+    : `No document matches “${query.trim()}”.`;
+}
+
+/** The results list, given already-fetched hits — split out from the query-owning shell below
+ *  so it renders (and is tested) without a network call, same pattern as `FigureGrid`. */
+export function VaultResults({ hits, query }: { hits: VaultDoc[]; query: string }) {
+  if (hits.length === 0) return <Empty>{vaultEmptyText(query)}</Empty>;
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      {hits.map((d) => (
+        <VaultDocRow key={d.id} doc={d} />
+      ))}
+    </div>
+  );
+}
+
+function VaultDocRow({ doc }: { doc: VaultDoc }) {
+  const integrityFailed = !doc.restricted && doc.integrity_ok === false;
+  return (
+    <div
+      style={{
+        border: `1px solid ${integrityFailed ? "var(--color-verify-unbacked)" : "var(--color-border)"}`,
+        background: "var(--color-surface)",
+        borderRadius: 6,
+        padding: "8px 12px",
+        fontSize: 13,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "baseline" }}>
+        <strong style={{ fontWeight: 500 }}>{doc.file_name}</strong>
+        {doc.restricted && <LockChip reason={doc.reason ?? "restricted"} />}
+      </div>
+      <div style={{ color: "var(--color-ink-muted)", fontSize: 12, marginTop: 2 }}>
+        {doc.doc_type ?? "unclassified"} · {doc.sensitivity}
+      </div>
+      {!doc.restricted && (
+        <div style={{ display: "flex", gap: 14, fontSize: 12, marginTop: 6, flexWrap: "wrap" }}>
+          <span style={{ color: doc.integrity_ok ? "var(--color-verify)" : "var(--color-verify-unbacked)" }}>
+            {doc.integrity_ok ? "✓ SHA-256 verified" : "✕ INTEGRITY CHECK FAILED"}
+          </span>
+          <span
+            className="tnum"
+            style={{ color: doc.retention_overdue ? "var(--color-warn)" : "var(--color-ink-faint)" }}
+          >
+            {doc.retention_until
+              ? `retain until ${doc.retention_until}${doc.retention_overdue ? " — overdue for archival" : ""}`
+              : "permanent record"}
+          </span>
+        </div>
+      )}
+      {/* LOUD: a content-hash mismatch is not a quiet ◐, it is its own alert. */}
+      {integrityFailed && (
+        <div
+          style={{
+            marginTop: 8,
+            border: "1px solid var(--color-verify-unbacked)",
+            borderRadius: 4,
+            padding: "8px 10px",
+            fontSize: 12,
+            color: "var(--color-verify-unbacked)",
+            fontWeight: 500,
+          }}
+        >
+          This document's content no longer matches its recorded SHA-256 hash — it may have been
+          altered outside the app. Do not rely on it until this is investigated.
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The query-owning shell: search box, OCR-scan capture, and the results list above. */
+function VaultBrowser() {
+  const [q, setQ] = useState("");
+  const traceId = useTraceId("vault-search");
+  const search = useQuery({
+    queryKey: ["vault-search", q],
+    queryFn: () => api<VaultDoc[]>(`/vault/search?q=${encodeURIComponent(q)}`),
+  });
+
+  return (
+    <div>
+      <input
+        type="search"
+        aria-label="Search vault documents"
+        placeholder="Search file names, OCR text, tags…"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        style={{
+          display: "block",
+          width: "100%",
+          maxWidth: 420,
+          padding: "7px 10px",
+          borderRadius: 4,
+          border: "1px solid var(--color-border-strong)",
+          background: "var(--color-surface)",
+          color: "var(--color-ink)",
+          fontSize: 13,
+          fontFamily: "inherit",
+          marginBottom: 10,
+        }}
+      />
+      <VaultOcrCapture onUploaded={() => void search.refetch()} />
+      {search.isLoading ? (
+        <p style={{ color: "var(--color-ink-muted)", fontSize: 13 }}>Loading…</p>
+      ) : search.error ? (
+        <ErrorState error={search.error} traceId={traceId} onRetry={() => void search.refetch()} />
+      ) : (
+        <VaultResults hits={search.data ?? []} query={q} />
+      )}
+    </div>
+  );
+}
+
+/** OCR-scan ingest — thin multipart POST to `/api/vault/ocr-ingest` (app/domains/vault/router.py),
+ *  the SAME `VaultService.ingest_image` the pre-existing `/d/vault/ocr-ingest` HTMX route calls.
+ *  Unlike the expense receipt capture (which only prefills a form), this ingest IS the write —
+ *  it mirrors the shipped HTMX behaviour for this exact endpoint (content-hash dedup makes a
+ *  re-scan idempotent, and nothing here touches money), so it commits directly rather than
+ *  routing through the generic preview→confirm ActionDrawer. */
+function VaultOcrCapture({ onUploaded }: { onUploaded: () => void }) {
+  const traceId = useTraceId("vault-ocr-ingest");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+
+  async function chooseFile(file: File | null) {
+    if (!file || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append("file", file, file.name);
+      form.append("upload_date", new Date().toISOString().slice(0, 10));
+      const res = await fetch(`${API_BASE}/api/vault/ocr-ingest`, {
+        method: "POST",
+        credentials: "include",
+        headers: await authHeaders(),
+        body: form,
+      });
+      if (!res.ok) throw new Error(await res.text().catch(() => `${res.status}`));
+      onUploaded();
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      style={{
+        border: "1px solid var(--color-border)",
+        background: "var(--color-surface)",
+        borderRadius: 4,
+        padding: "7px 12px",
+        marginBottom: 10,
+      }}
+    >
+      <label style={{ fontSize: 12, color: "var(--color-ink-muted)", display: "block" }}>
+        Scan a document — OCR reads it straight into the vault, searchable immediately.
+        <input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          aria-label="Document photo"
+          disabled={busy}
+          onChange={(e) => void chooseFile(e.target.files?.[0] ?? null)}
+          style={{ display: "block", marginTop: 4 }}
+        />
+      </label>
+      {busy && (
+        <p style={{ fontSize: 12, color: "var(--color-ink-faint)", margin: "6px 0 0" }}>
+          Reading the document…
+        </p>
+      )}
+      {error !== null && (
+        <ErrorState error={error} traceId={traceId} operation="write" onRetry={() => setError(null)} />
+      )}
+    </div>
+  );
+}
+
 /** P1-8 — receipt capture for the expense claim form. Uploads to `/api/expense/ocr-receipt`
  *  (a thin wrapper over the SAME `ExpenseService.ocr_capture` the HTMX drawer calls) and hands
  *  the parsed {amount_paise, gstin, date} up as an ActionDrawer prefill. OCR is never
@@ -526,11 +769,15 @@ export function FigureGrid({
   mahsaUp,
   asOf,
   stale = false,
+  history,
 }: {
   figures: (Figure | RestrictedField)[];
   mahsaUp: boolean;
   asOf: string;
   stale?: Freshness;
+  // P2-3: keyed by the SAME fact key the figure carries — absent (or <2 points) simply means
+  // that card gets no `spark`, never a fabricated one (Sparkline enforces the ≥2 rule itself).
+  history?: Record<string, HistoryPoint[]>;
 }) {
   return (
     <div
@@ -571,6 +818,7 @@ export function FigureGrid({
             // T7: every badged figure stays interrogable. Only what the server actually sent goes
             // in here — the fact key that decided the badge, and no invented formula or citation.
             working={{ inputs: [{ label: "Fact key", value: f.key }] }}
+            spark={<Sparkline values={(history?.[f.key] ?? []).map((p) => p.value)} />}
           />
         ),
       )}

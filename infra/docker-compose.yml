@@ -18,7 +18,8 @@ services:
     environment:
       MAISHA_MAHSA_URL: "http://dif:8088"
       MAISHA_DATABASE_URL: "sqlite:////data/maisha.db"
-      MAISHA_APP_PASSWORD: "${MAISHA_APP_PASSWORD:-change-me}"
+      MAISHA_BETTER_AUTH_URL: "${MAISHA_BETTER_AUTH_URL:-}"
+      MAISHA_SESSION_SECRET: "${MAISHA_SESSION_SECRET:-dev-insecure-session-secret-change-me}"
     volumes:
       - maisha_data:/data
     ports:

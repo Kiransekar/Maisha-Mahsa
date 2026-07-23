@@ -8,7 +8,7 @@
 # the environment win over the file (so `MAISHA_X=y scripts/preflight.sh` works).
 #
 # What counts as REQUIRED tracks the code, not opinion:
-#   · app/core/auth.assert_production_secrets refuses default secrets in production;
+#   · app/main.create_app refuses missing Better Auth / default secrets in production;
 #   · betterauth.legacy_password_auth_enabled hard-disables password login in production, so
 #     MAISHA_BETTER_AUTH_URL is the only way anyone authenticates;
 #   · a Postgres MAISHA_DATABASE_URL needs the psycopg2 driver (api[pg] extra).
@@ -52,20 +52,17 @@ echo "mode: MAISHA_ENVIRONMENT=$ENVIRONMENT"
 echo
 
 # ---- 1. secrets (the app itself refuses these defaults in production) --------------------------
-if [ "${MAISHA_APP_PASSWORD:-change-me}" = "change-me" ]; then
-  req "MAISHA_APP_PASSWORD is the shipped default — the app refuses to boot in production"
-else ok "MAISHA_APP_PASSWORD set (non-default)"; fi
+# P2-6: the legacy password login (MAISHA_APP_PASSWORD) is deleted; the session secret now only
+# signs action preview tokens — still refused at its shipped default in production.
 if [ "${MAISHA_SESSION_SECRET:-dev-insecure-session-secret-change-me}" = "dev-insecure-session-secret-change-me" ]; then
   req "MAISHA_SESSION_SECRET is the shipped default — the app refuses to boot in production"
 else ok "MAISHA_SESSION_SECRET set (non-default)"; fi
-if [ "${MAISHA_SECURE_COOKIES:-false}" = "true" ]; then ok "MAISHA_SECURE_COOKIES=true"
-else req "MAISHA_SECURE_COOKIES should be true behind HTTPS"; fi
 
 # ---- 2. auth layer -----------------------------------------------------------------------------
 if [ -n "${MAISHA_BETTER_AUTH_URL:-}" ]; then
   ok "MAISHA_BETTER_AUTH_URL=$MAISHA_BETTER_AUTH_URL"
 else
-  req "MAISHA_BETTER_AUTH_URL unset — in production the legacy password login is HARD OFF, so nobody could authenticate"
+  req "MAISHA_BETTER_AUTH_URL unset — auth is Better Auth JWT ONLY (the password login is deleted), so nobody could authenticate; the app refuses to boot in production"
 fi
 [ -n "${MAISHA_BETTER_AUTH_MFA_CLAIM:-}" ] \
   && ok "MFA claim enforced: ${MAISHA_BETTER_AUTH_MFA_CLAIM}" \

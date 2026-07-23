@@ -30,7 +30,6 @@ services:
       MAISHA_ENVIRONMENT: "production"
       MAISHA_MAHSA_URL: "http://dif:8088"
       MAISHA_DATABASE_URL: "${MAISHA_DATABASE_URL:-sqlite:////data/maisha.db}"
-      MAISHA_SECURE_COOKIES: "true"
     volumes:
       - maisha_data:/data
     expose: ["8000"]

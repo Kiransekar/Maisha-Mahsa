@@ -26,7 +26,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.core import ca_seat, ca_threads
+from app.core import ca_seat, ca_threads, history_store
 from app.core.ask import answer_query
 from app.core.audit import verify_chain
 from app.core.audit_pack import build_audit_pack, pack_to_csv_zip
@@ -202,6 +202,27 @@ async def domain_json(
         "figures": _figures_for(db, domain, principal.role),
         "deadlines": [e for e in upcoming_deadlines(db, as_of) if e.get("domain") == domain],
         "actions": actions,
+    }
+
+
+@router.get("/domains/{domain}/history")
+async def domain_history_json(
+    domain: str,
+    db: Session = Depends(get_session),
+) -> dict[str, Any]:
+    """P2-3: trend series for the SPA sparklines — the SAME query the HTMX /domains page's
+    sparklines already read (``history_store.domain_series``), so the two surfaces can never
+    disagree on what was actually captured. Honest >=2-point rule: a metric with fewer than two
+    real captures is omitted entirely — never a fabricated flat line."""
+    _known_domain(domain)
+    series = history_store.domain_series(db, domain)
+    return {
+        "domain": domain,
+        "series": {
+            metric: [{"captured_at": t, "value": v} for t, v in points]
+            for metric, points in series.items()
+            if len(points) >= 2
+        },
     }
 
 

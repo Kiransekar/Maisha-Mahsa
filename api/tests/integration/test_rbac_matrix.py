@@ -109,8 +109,6 @@ def auth_server(monkeypatch):
     monkeypatch.delenv("MAISHA_BETTER_AUTH_ISSUER", raising=False)
     monkeypatch.delenv("MAISHA_BETTER_AUTH_AUDIENCE", raising=False)
     monkeypatch.delenv("MAISHA_BETTER_AUTH_MFA_CLAIM", raising=False)
-    # The legacy shared-password cookie must not be able to answer for any of these requests.
-    monkeypatch.setenv("MAISHA_LEGACY_PASSWORD_AUTH", "0")
     try:
         yield SimpleNamespace(base_url=base_url, kid=kid, priv_pem=priv_pem)
     finally:
@@ -379,6 +377,8 @@ API_ROUTE_GATES: dict[str, tuple[str, ...]] = {
     "GET /api/health/connections": ("read",),
     "GET /api/domains": ("read",),
     "GET /api/domains/{domain}": ("read",),
+    # P2-3: trend series for the SPA sparklines — read-only, same query the HTMX page reads.
+    "GET /api/domains/{domain}/history": ("read",),
     # P1-1 Ask Maisha SPA screen (app/web/api_domains.py): read-only, same pipeline as HTMX /ask.
     "POST /api/ask": ("read",),
     # P0-2 generic action preview/commit: preview is a dry-run (read, api_bulk precedent);
@@ -444,6 +444,13 @@ API_ROUTE_GATES: dict[str, tuple[str, ...]] = {
     "POST /api/gst/gstr1": ("read",),  # builds the return payload; files nothing
     "GET /api/gst/itc/reconcile": ("read",),
     "POST /api/gst/fold": ("read",),
+    # P2-2 GST detail SPA surface (app/web/api_gst.py): detail is a read; the IMS action route
+    # is read at the router level with an in-handler `write` on confirm=true (api_bulk
+    # precedent); artifact downloads wear the same `export` gate as every other /api download.
+    "GET /api/gst/detail": ("read",),
+    "POST /api/gst/ims/action": ("read",),
+    "GET /api/gst/gstr1.json": ("read", "export"),
+    "GET /api/gst/einvoice.json": ("read", "export"),
     # revenue
     "POST /api/revenue/customers": ("read", "write"),
     "POST /api/revenue/invoices": ("read", "write"),
@@ -502,6 +509,8 @@ API_ROUTE_GATES: dict[str, tuple[str, ...]] = {
     # vault
     "POST /api/vault/documents": ("read", "write"),
     "GET /api/vault/search": ("read",),
+    # P2-1: OCR-scan ingest, same gate as the text-content ingest above.
+    "POST /api/vault/ocr-ingest": ("read", "write"),
     "POST /api/vault/fold": ("read",),
 }
 

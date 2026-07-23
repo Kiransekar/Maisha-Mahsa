@@ -6,6 +6,9 @@ from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+#: Shipped default for the preview-token HMAC key — production refuses to boot with it.
+DEFAULT_SESSION_SECRET = "dev-insecure-session-secret-change-me"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MAISHA_", env_file=".env", extra="ignore")
@@ -19,15 +22,19 @@ class Settings(BaseSettings):
     # Database — single SQLite file (PRD §3). ":memory:" handled by tests.
     database_url: str = "sqlite:///./data/maisha.db"
 
-    # Single-user auth (PRD §11.1). Set MAISHA_APP_PASSWORD in production.
-    app_password: str = "change-me"
-    # Session-cookie signing + hardening (P1-AUTH / P1-SECRETS). Rotating the secret logs out.
-    session_secret: str = "dev-insecure-session-secret-change-me"
-    secure_cookies: bool = False  # set True behind HTTPS in production
-    environment: str = "development"  # "production" refuses the shipped default secrets
+    # HMAC key for action preview tokens (app/web/api_actions.py). The old password-login
+    # cookie signing is retired (P2-6) — auth is Better Auth JWT only (app/core/betterauth.py).
+    session_secret: str = DEFAULT_SESSION_SECRET
+    environment: str = "development"  # "production" refuses default/missing secrets at boot
+    # Where an unauthenticated browser is sent to sign in: the SPA's Better Auth sign-in route.
+    # Override (MAISHA_SIGNIN_URL) when the frontend is served from a different origin.
+    signin_url: str = "/sign-in"
 
     # Filer GSTIN for GSTR-1 JSON export (set MAISHA_COMPANY_GSTIN in production).
     company_gstin: str = ""
+    # GST filing profile for the QRMP/composition obligation calendar (WS1.D2):
+    # "monthly" | "qrmp" | "composition". Set MAISHA_GST_FILING_PROFILE per registration.
+    gst_filing_profile: str = "monthly"
 
     # Default acting user for audit entries until full auth lands.
     default_user_id: str = "founder"

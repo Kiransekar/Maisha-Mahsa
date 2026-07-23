@@ -17,6 +17,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.core import history_store
 from app.core.audit_store import append
 from app.core.betterauth import get_principal
 from app.core.mahsa_client import MahsaClient
@@ -25,6 +26,7 @@ from app.core.rbac import Role
 from app.db.models.shared import AuditLog
 from app.db.session import get_session
 from app.deps import get_mahsa
+from app.domains import build_registry
 from app.web.api_domains import router
 
 pytestmark = pytest.mark.integration
@@ -96,6 +98,47 @@ def test_domain_detail_never_hardcodes_verified(session, mahsa_server):
     # Ledger's action registry (app/web/actions.py) is surfaced, not re-derived here.
     assert any(a["key"] == "create-account" for a in body["actions"])
     assert all(e.get("domain") == "ledger" for e in body["deadlines"])
+
+
+# --- P2-3 trend history for the SPA sparklines ------------------------------------------------
+
+
+def test_history_is_honestly_empty_under_two_captures(session, mahsa_server):
+    """Zero captures -> no series. One capture -> still no series (a single point is not a
+    trend) — the endpoint never fabricates a second point to draw a line."""
+    client = _client(session, mahsa_server)
+
+    empty = client.get("/api/domains/ledger/history").json()
+    assert empty["domain"] == "ledger"
+    assert empty["series"] == {}
+
+    history_store.capture(
+        session, build_registry(), captured_at="2026-07-01", as_of=None
+    )
+    session.commit()
+
+    one_point = client.get("/api/domains/ledger/history").json()
+    assert one_point["series"] == {}
+
+
+def test_history_returns_real_two_point_series(session, mahsa_server):
+    client = _client(session, mahsa_server)
+    registry = build_registry()
+    history_store.capture(session, registry, captured_at="2026-07-01", as_of=None)
+    history_store.capture(session, registry, captured_at="2026-07-02", as_of=None)
+    session.commit()
+
+    body = client.get("/api/domains/ledger/history").json()
+    assert body["series"], "ledger should have at least one captured metric series"
+    for metric, points in body["series"].items():
+        assert len(points) >= 2, metric
+        assert [p["captured_at"] for p in points] == sorted(p["captured_at"] for p in points)
+
+
+def test_history_unknown_domain_is_404(session, mahsa_server):
+    client = _client(session, mahsa_server)
+    resp = client.get("/api/domains/not-a-real-domain/history")
+    assert resp.status_code == 404
 
 
 def test_audit_room_reports_a_tampered_chain_truthfully(session, mahsa_server):

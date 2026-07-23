@@ -20,7 +20,7 @@ os.environ.setdefault("MAISHA_DATABASE_URL", "sqlite://")
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.core.audit_store import load_chain  # noqa: E402
-from app.core.betterauth import get_principal  # noqa: E402
+from app.core.betterauth import TOKEN_COOKIE, get_principal  # noqa: E402
 from app.core.mahsa_client import MahsaClient  # noqa: E402
 from app.core.money import Paise  # noqa: E402
 from app.core.principal import Principal  # noqa: E402
@@ -41,9 +41,10 @@ if not any(getattr(r, "path", None) == "/api/inbox/bulk" for r in app.routes):
 TREASURY_ID = "approval:treasury"
 
 
-def _login(client: TestClient) -> None:
-    # P1-AUTH: every route below the allowlist needs a session (default dev password).
-    client.post("/login", data={"password": "change-me"})
+def _login(client: TestClient, env) -> None:
+    # P2-6: the password login is deleted — the middleware wants a real Better Auth JWT, here
+    # carried the HTMX way in the `maisha_jwt` cookie (signed by the fixture's live JWKS).
+    client.cookies.set(TOKEN_COOKIE, env.token)
 
 
 def _seed_distressed_treasury(session) -> None:
@@ -66,7 +67,7 @@ def _seed_distressed_treasury(session) -> None:
 
 
 @pytest.fixture
-def live(session, mahsa_server):
+def live(session, mahsa_server, betterauth_owner_env):
     """The app wired to a real Mahsa and an isolated seeded DB."""
     _seed_distressed_treasury(session)
     app.dependency_overrides[get_mahsa] = lambda: MahsaClient(mahsa_server)
@@ -79,7 +80,7 @@ def live(session, mahsa_server):
         user_id="u-owner", org_id="org-7", role=Role.OWNER, email="owner@example.com"
     )
     client = TestClient(app)
-    _login(client)
+    _login(client, betterauth_owner_env)
     try:
         yield client
     finally:
@@ -87,7 +88,7 @@ def live(session, mahsa_server):
 
 
 @pytest.fixture
-def mahsa_down(session):
+def mahsa_down(session, betterauth_owner_env):
     """Same app and DB, but the ambient Mahsa URL is a dead port (see tests/conftest.py)."""
     _seed_distressed_treasury(session)
     app.dependency_overrides[get_session] = lambda: session
@@ -95,7 +96,7 @@ def mahsa_down(session):
         user_id="u-owner", org_id="org-7", role=Role.OWNER, email="owner@example.com"
     )
     client = TestClient(app)
-    _login(client)
+    _login(client, betterauth_owner_env)
     try:
         yield client
     finally:

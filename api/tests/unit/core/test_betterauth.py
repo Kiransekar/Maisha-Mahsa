@@ -298,26 +298,28 @@ def test_get_principal_returns_the_verified_principal():
     assert betterauth.get_principal(request) is principal  # type: ignore[arg-type]
 
 
-# --- legacy shared-password flow: explicit setting, and never in production ---------------
+# --- P2-6: the request token — bearer header first, JWT cookie second, no other source ----
 
 
-def test_legacy_password_auth_is_hard_off_in_production(monkeypatch):
-    """Not switchable back on by an env var — a single shared password is not a production
-    control."""
-    for raw in ("1", "true", "YES", "on", "0", ""):
-        monkeypatch.setenv("MAISHA_LEGACY_PASSWORD_AUTH", raw)
-        assert betterauth.legacy_password_auth_enabled(environment="production") is False
+def test_request_token_prefers_the_bearer_header_over_the_cookie():
+    """A present header ALWAYS wins — a bad bearer token must be rejected, never quietly
+    replaced by a (possibly valid) cookie. request_token's ordering is what guarantees it."""
+    request = SimpleNamespace(
+        headers={"authorization": "Bearer head.er.token"},
+        cookies={betterauth.TOKEN_COOKIE: "coo.kie.token"},
+    )
+    assert betterauth.request_token(request) == "head.er.token"  # type: ignore[arg-type]
 
 
-def test_legacy_password_auth_is_opt_outable_outside_production(monkeypatch):
-    monkeypatch.delenv("MAISHA_LEGACY_PASSWORD_AUTH", raising=False)
-    assert betterauth.legacy_password_auth_enabled(environment="development") is True
-    for raw in ("1", "true", "On"):
-        monkeypatch.setenv("MAISHA_LEGACY_PASSWORD_AUTH", raw)
-        assert betterauth.legacy_password_auth_enabled(environment="development") is True
-    for raw in ("0", "false", "no", "off", "nonsense"):
-        monkeypatch.setenv("MAISHA_LEGACY_PASSWORD_AUTH", raw)
-        assert betterauth.legacy_password_auth_enabled(environment="development") is False
+def test_request_token_falls_back_to_the_jwt_cookie_only_without_a_header():
+    request = SimpleNamespace(headers={}, cookies={betterauth.TOKEN_COOKIE: "coo.kie.token"})
+    assert betterauth.request_token(request) == "coo.kie.token"  # type: ignore[arg-type]
+
+
+def test_request_token_none_when_neither_is_present():
+    for cookies in ({}, {betterauth.TOKEN_COOKIE: ""}, {"some_other_cookie": "x"}):
+        request = SimpleNamespace(headers={}, cookies=cookies)
+        assert betterauth.request_token(request) is None  # type: ignore[arg-type]
 
 
 # --- MFA policy ported from the retired app.core.identity --------------------------------

@@ -112,7 +112,6 @@ def auth_server(monkeypatch):
     monkeypatch.delenv("MAISHA_BETTER_AUTH_ISSUER", raising=False)
     monkeypatch.delenv("MAISHA_BETTER_AUTH_AUDIENCE", raising=False)
     monkeypatch.delenv("MAISHA_BETTER_AUTH_MFA_CLAIM", raising=False)
-    monkeypatch.setenv("MAISHA_LEGACY_PASSWORD_AUTH", "0")
     try:
         yield SimpleNamespace(base_url=base_url, kid=kid, priv_pem=priv_pem)
     finally:

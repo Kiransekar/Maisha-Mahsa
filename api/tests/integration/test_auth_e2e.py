@@ -95,8 +95,6 @@ def auth_server(monkeypatch):
     monkeypatch.delenv("MAISHA_BETTER_AUTH_ISSUER", raising=False)
     monkeypatch.delenv("MAISHA_BETTER_AUTH_AUDIENCE", raising=False)
     monkeypatch.delenv("MAISHA_BETTER_AUTH_MFA_CLAIM", raising=False)
-    # Better Auth only: the legacy shared password must not be able to answer for these tests.
-    monkeypatch.setenv("MAISHA_LEGACY_PASSWORD_AUTH", "0")
     try:
         yield SimpleNamespace(base_url=base_url, kid=kid, priv_pem=priv_pem)
     finally:
@@ -281,33 +279,43 @@ def test_unmapped_role_is_403_not_downgraded(auth_server, client):
 
 
 # ---------------------------------------------------------------------------------------
-# Fail closed: the bearer path never degrades into the legacy path.
+# Fail closed: the bearer path never degrades into the cookie path (P2-6: the cookie now
+# carries the SAME JWT, but a bad header still always loses — no fallback, ever).
 # ---------------------------------------------------------------------------------------
 
 
-def test_bad_token_does_not_fall_back_to_a_valid_legacy_cookie(auth_server, client, monkeypatch):
-    """THE fail-open a reviewer would hunt for: hold a perfectly good legacy session cookie AND
-    present a bad bearer token. The bad token must lose. 401, not 200."""
-    monkeypatch.setenv("MAISHA_LEGACY_PASSWORD_AUTH", "1")
-    assert client.post("/login", data={"password": "change-me"}).status_code in (200, 303)
-    assert client.get("/").status_code == 200  # the cookie alone works (legacy dev login)
+def test_bad_bearer_does_not_fall_back_to_a_valid_jwt_cookie(auth_server, client):
+    """THE fail-open a reviewer would hunt for: hold a perfectly good JWT cookie AND present a
+    bad bearer token. The bad header must lose. 401, not 200."""
+    client.cookies.set(betterauth.TOKEN_COOKIE, _token(auth_server))
+    assert client.get("/").status_code == 200  # the cookie alone works (the HTMX path)
     assert client.get("/", headers=_bearer("not-a-jwt")).status_code == 401
     assert client.get("/", headers=_bearer(_token(auth_server, exp=1))).status_code == 401
 
 
-def test_legacy_cookie_session_has_no_principal_and_no_org(auth_server, client, monkeypatch):
-    """The legacy dev login authenticates but carries no identity: /me must refuse it rather
-    than invent one, and it must not bind any org for RLS."""
-    monkeypatch.setenv("MAISHA_LEGACY_PASSWORD_AUTH", "1")
-    client.post("/login", data={"password": "change-me"})
-    assert client.get("/me").status_code == 401
+def test_cookie_jwt_yields_the_tokens_own_principal(auth_server, client):
+    """The cookie path is the SAME verifier: /me returns the cookie token's identity, and a
+    different cookie token yields a different identity (no cached/invented principal)."""
+    client.cookies.set(betterauth.TOKEN_COOKIE, _token(auth_server))
+    resp = client.get("/me")
+    assert resp.status_code == 200
+    assert resp.json()["user_id"] == "user-42" and resp.json()["org_id"] == "org-7"
+    client.cookies.set(
+        betterauth.TOKEN_COOKIE,
+        _token(auth_server, sub="user-99", activeOrganizationId="org-42", role="ca"),
+    )
+    other = client.get("/me").json()
+    assert other["user_id"] == "user-99" and other["org_id"] == "org-42"
 
 
-def test_legacy_login_disabled_returns_404_not_a_cookie(auth_server, client):
-    """With legacy off (its production state), POST /login must not mint a cookie at all."""
+def test_password_login_is_deleted(auth_server, client):
+    """The HMAC flow is gone: POST /login is 405 (the route is now a GET-only redirect to the
+    Better Auth sign-in) and mints nothing."""
     resp = client.post("/login", data={"password": "change-me"})
-    assert resp.status_code == 404
+    assert resp.status_code == 405
     assert not resp.cookies
+    redirect = client.get("/login", follow_redirects=False)
+    assert redirect.status_code == 303
 
 
 def test_unreachable_jwks_is_401_never_accepted_unverified(auth_server, client, monkeypatch):
@@ -351,17 +359,17 @@ def test_verified_org_is_bound_to_the_db_connection(auth_server, client, monkeyp
     assert set(seen) == {"org-42"}, "a pooled connection kept the previous request's org"
 
 
-def test_no_org_is_bound_for_an_unauthenticated_legacy_session(auth_server, client, monkeypatch):
-    """Fail-closed: the legacy cookie path binds NO org, so RLS matches no rows."""
+def test_cookie_jwt_binds_the_verified_org_to_the_db_connection(auth_server, client, monkeypatch):
+    """The HTMX cookie path is subject to the SAME RLS binding as the bearer path: the org on
+    the connection is the cookie token's org, never absent and never something else."""
     import app.main as main
 
     seen: list[str | None] = []
     monkeypatch.setattr(main, "bind_org_guc", lambda c, d: seen.append(current_org()) or False)
-    monkeypatch.setenv("MAISHA_LEGACY_PASSWORD_AUTH", "1")
-    client.post("/login", data={"password": "change-me"})
+    client.cookies.set(betterauth.TOKEN_COOKIE, _token(auth_server))
 
     assert client.get("/").status_code == 200
-    assert seen and set(seen) == {None}
+    assert seen and set(seen) == {"org-7"}
 
 
 def test_org_context_does_not_leak_after_the_request(auth_server, client):
