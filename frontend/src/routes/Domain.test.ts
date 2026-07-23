@@ -543,4 +543,31 @@ describe("VaultResults — renders real hits, an honest empty state, and loud in
     expect(html).toContain("cap-table.pdf");
     expect(html).toContain("restricted — requires restricted clearance");
   });
+
+  // CITE.P1-2: the `/d/vault?doc=<sha>` deep-link from a citation's working panel.
+  it("highlights the deep-linked document and says why", () => {
+    const html = renderToStaticMarkup(
+      createElement(VaultResults, { hits: [okDoc], query: "", highlightId: "1" }),
+    );
+    expect(html).toContain("Cited source document — linked from a citation.");
+    expect(html).not.toContain("is not in these results");
+  });
+
+  it("states honestly when the deep-linked document is not in the results", () => {
+    const html = renderToStaticMarkup(
+      createElement(VaultResults, {
+        hits: [okDoc],
+        query: "",
+        highlightId: "deadbeefdeadbeefdeadbeef",
+      }),
+    );
+    expect(html).toContain("The cited document (deadbeefdead…) is not in these results.");
+    expect(html).not.toContain("Cited source document");
+  });
+
+  it("renders no citation highlight or missing-doc note without a deep-link", () => {
+    const html = renderToStaticMarkup(createElement(VaultResults, { hits: [okDoc], query: "" }));
+    expect(html).not.toContain("Cited source document");
+    expect(html).not.toContain("is not in these results");
+  });
 });

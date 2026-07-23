@@ -113,18 +113,20 @@ def get_cfo(db: Session, principal: Principal) -> dict[str, Any]:
 
 
 def _seal(
-    db: Session, principal: Principal, action: str, query: str, now: str
+    db: Session, org_id: str, user_id: str, action: str, query: str, now: str
 ) -> tuple[str, int | None]:
     """Seal an event onto the ORG'S OWN hash chain (WS4.4 per-tenant genesis) and return
-    ``(this_hash, audit_log_row_id)`` so history rows can link to the sealed event."""
+    ``(this_hash, audit_log_row_id)`` so history rows can link to the sealed event. Takes the
+    org/user directly so the cron path (:func:`evolve`, which has no human Principal) seals
+    exactly like the API path does."""
     entry = audit_store.append_for(
         db,
-        principal.org_id,
+        org_id,
         {
             "timestamp": now,
             "action": action,
             "domain": "memory",
-            "user_id": principal.user_id,
+            "user_id": user_id,
             "query": query,
             "intent_global": None,
             "intent_domain": None,
@@ -156,7 +158,8 @@ def set_cfo(db: Session, principal: Principal, content: str, *, now: str) -> dic
     digest = hashlib.sha256(next_content.encode()).hexdigest()
     this_hash, seq = _seal(
         db,
-        principal,
+        principal.org_id,
+        principal.user_id,
         "memory.update",
         f"kind={KIND_CFO} sha256={digest} chars={len(next_content)}",
         now,
@@ -219,6 +222,72 @@ def get_history(db: Session, principal: Principal, limit: int = 50) -> list[dict
 
 
 # ---------------------------------------------------------------------------------------
+# Offline evolution (MEM.P1-1, survey §5.2/§7.8) — nightly re-consolidation + bounded archive
+# ---------------------------------------------------------------------------------------
+
+#: Author recorded on evolve-driven writes — the cron path has no human Principal, and a
+#: sealed event must never fabricate one.
+EVOLVE_USER = "system:evolve"
+#: Bounded retention window for ``org_memory_history`` (api-nest ``evolve`` default, ported).
+KEEP_VERSIONS = 20
+
+
+def evolve(
+    db: Session, org_id: str, *, now: str, keep_versions: int = KEEP_VERSIONS
+) -> dict[str, Any]:
+    """Port of api-nest ``evolve()``: re-consolidate the hot layer and cap the archive.
+
+    Deterministic, LLM-free and idempotent — writes already consolidate on the way in
+    (:func:`set_cfo`), so the re-consolidation is normally a no-op; it exists to heal any
+    block that drifted past the write path (a direct DB edit, an import). When it DOES
+    change the block it behaves exactly like a human update: prior version archived to
+    ``org_memory_history`` and the change sealed as ``memory.update`` on the org's own
+    chain, attributed to :data:`EVOLVE_USER`. The archive prune then bounds the history to
+    ``keep_versions`` rows (survey §7.8 forgetting-pressure), oldest dropped first — the
+    sealed audit events themselves are never touched. A second run the same day finds
+    nothing to consolidate and nothing to prune: no-op, nothing sealed.
+    """
+    row = _row(db, org_id)
+    consolidated = False
+    if row is not None and row.content:
+        deduped = consolidate(row.content)
+        if deduped != row.content:
+            digest = hashlib.sha256(deduped.encode()).hexdigest()
+            _, seq = _seal(
+                db,
+                org_id,
+                EVOLVE_USER,
+                "memory.update",
+                f"kind={KIND_CFO} sha256={digest} chars={len(deduped)}",
+                now,
+            )
+            db.add(
+                OrgMemoryHistory(
+                    org_id=org_id,
+                    kind=KIND_CFO,
+                    content=row.content,
+                    superseded_at=now,
+                    superseded_by=EVOLVE_USER,
+                    audit_seq=seq,
+                )
+            )
+            row.content = deduped
+            row.updated_at = now
+            row.updated_by = EVOLVE_USER
+            consolidated = True
+    stale = db.scalars(
+        select(OrgMemoryHistory)
+        .where(OrgMemoryHistory.org_id == org_id, OrgMemoryHistory.kind == KIND_CFO)
+        .order_by(OrgMemoryHistory.id.desc())
+        .offset(keep_versions)
+    ).all()
+    for r in stale:
+        db.delete(r)
+    db.flush()
+    return {"consolidated": consolidated, "history_pruned": len(stale)}
+
+
+# ---------------------------------------------------------------------------------------
 # Org profile block — derived live, never stored, never stale (Letta memory-block pattern)
 # ---------------------------------------------------------------------------------------
 
@@ -263,6 +332,41 @@ def _tokens(text: str) -> set[str]:
     }
 
 
+#: MEM.P1-3 light query rewrite — a tiny FIXED alias table from common user phrasing to the
+#: vocabulary sealed entries actually use (our 12 domain names + hyphenated GST form ids).
+#: Deterministic and LLM-free by design; extend the table, never add a model.
+_ALIASES: dict[str, str] = {
+    "gstr3b": "gstr-3b",
+    "gstr1": "gstr-1",
+    "salary": "payroll",
+    "salaries": "payroll",
+    "wages": "payroll",
+    "vendor": "payables",
+    "vendors": "payables",
+    "customer": "revenue",
+    "customers": "revenue",
+    "invoice": "revenue",
+    "invoices": "revenue",
+    "cash": "treasury",
+    "runway": "treasury",
+}
+
+
+def _rewrite(query: str) -> set[str]:
+    """Light deterministic query rewrite (MEM.P1-3): every original token is KEPT, and the
+    set is widened with its domain-vocabulary alias plus a naive singular/plural fold.
+    Expansion-only — a rewrite can broaden recall but never redirect or drop a term."""
+    out: set[str] = set()
+    for t in _tokens(query):
+        out.add(t)
+        alias = _ALIASES.get(t)
+        if alias:
+            out.add(alias)
+        if len(t) > 3:  # ponytail: naive s-fold; a stemmer if recall ever needs morphology
+            out.add(t[:-1] if t.endswith("s") else t + "s")
+    return out
+
+
 def recall_decisions(
     db: Session, principal: Principal, query: str, limit: int = 3
 ) -> list[dict[str, Any]]:
@@ -277,8 +381,13 @@ def recall_decisions(
 
     Returns decision + audit hash, never a number-as-truth (§A4): the caller renders these as
     citations pointing at the tamper-evident chain, not as figures.
+
+    MEM.P1-3 polish, both deterministic and LLM-free: the query is widened by
+    :func:`_rewrite` (fixed alias table + plural fold, expansion-only), and a recency
+    post-filter re-ranks the top lexical matches (a 2x over-fetch) newest-first — an old
+    strong match no longer buries a recent decision.
     """
-    want = _tokens(query)
+    want = _rewrite(query)
     if not want:
         return []
     scored: list[tuple[int, int, Any]] = []
@@ -288,6 +397,9 @@ def recall_decisions(
         if score:
             scored.append((score, pos, e))
     scored.sort(key=lambda t: (-t[0], -t[1]))  # best lexical match first, then most recent
+    window = scored[: limit * 2]
+    window.sort(key=lambda t: -t[1])  # recency post-filter: newest of the good matches first
+    scored = window
     return [
         {
             "action": e.action,
@@ -345,7 +457,7 @@ def record_feedback(
         row.verdict = verdict
         row.created_at = now
         row.created_by = principal.user_id
-    _seal(db, principal, f"playbook.{verdict}", playbook_id, now)
+    _seal(db, principal.org_id, principal.user_id, f"playbook.{verdict}", playbook_id, now)
     db.flush()
     return {"playbook_id": playbook_id, "verdict": verdict}
 

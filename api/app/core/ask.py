@@ -14,18 +14,21 @@ from dataclasses import dataclass, field
 from datetime import date
 from typing import Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core import memory as org_memory
+from app.core.anchors import bank_anchors
 from app.core.domain import BaseDomainService
 from app.core.mahsa_client import MahsaClient, MahsaError
 from app.core.mahsa_coverage import is_recomputed
 from app.core.principal import Principal
 from app.core.router import DomainRouter
 from app.core.verify import FigureVerdict
+from app.db.models.treasury import BankTransaction
 from app.llm.client import build_client
 from app.llm.maisha import ClaimProducer, MaishaGenerator
-from app.llm.retry import allowed_values, generate_verified
+from app.llm.retry import DraftResult, allowed_values, generate_verified
 from app.llm.schema import ActionClaim
 from app.llm.tools import enrich
 from app.web.format import fmt_value, humanize
@@ -104,7 +107,7 @@ def _verdict(target: str, fact_backed: bool) -> FigureVerdict:
 
 
 def _badge(target: str, fact_backed: bool) -> str:
-    """"warn" if the figure isn't even backed by a deterministic fact (the more severe,
+    """ "warn" if the figure isn't even backed by a deterministic fact (the more severe,
     genuinely-unbacked case); otherwise "check" only when Mahsa independently recomputed
     ``target``, else "pending" (honest, shown as-is). Thin projection of ``_verdict`` — that
     is the single source of truth, this just maps it to the display-string API callers pin."""
@@ -192,31 +195,47 @@ async def answer_query(
     mem: str | None = None
     if principal is not None:
         mem = org_memory.profile_text(session, principal) or None
-    # Passed as **kwargs only when present so ClaimProducer stubs predating `memory` still work.
-    extra: dict[str, str] = {"memory": mem} if mem else {}
 
     claim: ActionClaim | None = None
     verified: bool | None = None
+    draft: DraftResult | None = None
     if gen is not None:
-        if fold is not None:
-            draft = await generate_verified(
-                gen,
-                snapshot=snapshot,
-                query=query,
-                domain=domain,
-                fold=fold,
-                max_retries=settings.llm_max_retries,
-                memory=mem,
-            )
-            claim, verified = draft.claim, draft.verified
-        else:
-            claim = await gen.produce(snapshot=snapshot, query=query, domain=domain, **extra)
+        # EVERY LLM draft runs through the number firewall (retry.generate_verified) — fold
+        # or no fold. With Mahsa down (fold None) each stated number is still checked against
+        # the deterministic facts (so a memory-only figure can never ship, §A4/§0.4) and the
+        # draft is flagged requires_approval: the gatekeeper never saw the books, fail closed.
+        draft = await generate_verified(
+            gen,
+            snapshot=snapshot,
+            query=query,
+            domain=domain,
+            fold=fold,
+            max_retries=settings.llm_max_retries,
+            memory=mem,
+        )
+        claim, verified = draft.claim, draft.verified
 
     figures = _figures(facts, claim)
     citations = [
         Citation(t.id, t.description, f"{t.statute} / {t.section}", t.domain)
         for t in (fold.validation.triggered if fold else [])
     ]
+    # CITE.P1-2 (§B4.3): treasury figures derive from imported bank rows — echo their
+    # cell-level anchors as citations (TableRAG grounding, §B1), each carrying its live
+    # resolution state and the /d/vault deep-link. Other domains' figures come from typed
+    # input today, so no anchor exists for them and none is fabricated (§B5).
+    if domain == "treasury":
+        txns = session.scalars(select(BankTransaction).order_by(BankTransaction.id)).all()
+        citations += [
+            Citation(
+                rule_id=f"source:{a['doc_sha256'][:12]}",
+                text=a["excerpt"],
+                citation=f"{a['file_name']}, row {a['locator']['source_row']}",
+                domain=domain,
+                anchor=a,
+            )
+            for a in bank_anchors(session, txns)
+        ]
     # Episodic recall (§A1 type 3): lexical, LLM-free, over the caller's org's OWN sealed
     # chain — works identically with the LLM off. Rendered as decision+hash citations.
     if principal is not None:
@@ -231,14 +250,20 @@ async def answer_query(
             for r in org_memory.recall_decisions(session, principal, query)
         ]
     status = fold.validation.status if fold else None
-    requires_approval = (fold.shape.requires_approval if fold else False) or (verified is False)
+    # The draft's own flag already folds in fallback-after-exhaustion AND the fail-closed
+    # no-fold case (retry.generate_verified); the books' flag rides alongside as before.
+    requires_approval = (fold.shape.requires_approval if fold else False) or (
+        draft.requires_approval if draft else False
+    )
 
     label = getattr(gen, "label", None)
     if label:
         prov = f"Maisha · {domain} · drafted by {label}"
-        if verified:
+        if verified and fold is not None:
             prov += " · ✓ verified by Mahsa"
-        elif verified is False:
+        elif verified is not None:
+            # Unverified draft, or a number-checked draft Mahsa never saw (fold None) —
+            # never claim Mahsa verification the gatekeeper didn't perform (§0.4).
             prov += " · pending review"
     else:
         prov = f"{domain} · deterministic figures"

@@ -16,7 +16,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { authHeaders } from "../lib/auth";
 import {
@@ -527,23 +527,46 @@ export function vaultEmptyText(query: string): string {
 
 /** The results list, given already-fetched hits — split out from the query-owning shell below
  *  so it renders (and is tested) without a network call, same pattern as `FigureGrid`. */
-export function VaultResults({ hits, query }: { hits: VaultDoc[]; query: string }) {
+export function VaultResults({
+  hits,
+  query,
+  highlightId,
+}: {
+  hits: VaultDoc[];
+  query: string;
+  /** CITE.P1-2: a `?doc=<sha>` deep-link from a citation's working panel — the matching
+   *  document is highlighted; a missing match is stated honestly, never silently ignored. */
+  highlightId?: string | null;
+}) {
+  const missingNote =
+    highlightId && !hits.some((d) => d.id === highlightId)
+      ? `The cited document (${highlightId.slice(0, 12)}…) is not in these results.`
+      : null;
   if (hits.length === 0) return <Empty>{vaultEmptyText(query)}</Empty>;
   return (
     <div style={{ display: "grid", gap: 8 }}>
+      {missingNote && (
+        <p style={{ fontSize: 12, color: "var(--color-warn)", margin: 0 }}>{missingNote}</p>
+      )}
       {hits.map((d) => (
-        <VaultDocRow key={d.id} doc={d} />
+        <VaultDocRow key={d.id} doc={d} highlighted={d.id === highlightId} />
       ))}
     </div>
   );
 }
 
-function VaultDocRow({ doc }: { doc: VaultDoc }) {
+function VaultDocRow({ doc, highlighted = false }: { doc: VaultDoc; highlighted?: boolean }) {
   const integrityFailed = !doc.restricted && doc.integrity_ok === false;
   return (
     <div
       style={{
-        border: `1px solid ${integrityFailed ? "var(--color-verify-unbacked)" : "var(--color-border)"}`,
+        border: `1px solid ${
+          integrityFailed
+            ? "var(--color-verify-unbacked)"
+            : highlighted
+              ? "var(--color-accent)"
+              : "var(--color-border)"
+        }`,
         background: "var(--color-surface)",
         borderRadius: 6,
         padding: "8px 12px",
@@ -557,6 +580,11 @@ function VaultDocRow({ doc }: { doc: VaultDoc }) {
       <div style={{ color: "var(--color-ink-muted)", fontSize: 12, marginTop: 2 }}>
         {doc.doc_type ?? "unclassified"} · {doc.sensitivity}
       </div>
+      {highlighted && (
+        <div style={{ color: "var(--color-accent)", fontSize: 12, marginTop: 2 }}>
+          Cited source document — linked from a citation.
+        </div>
+      )}
       {!doc.restricted && (
         <div style={{ display: "flex", gap: 14, fontSize: 12, marginTop: 6, flexWrap: "wrap" }}>
           <span style={{ color: doc.integrity_ok ? "var(--color-verify)" : "var(--color-verify-unbacked)" }}>
@@ -596,6 +624,11 @@ function VaultDocRow({ doc }: { doc: VaultDoc }) {
 /** The query-owning shell: search box, OCR-scan capture, and the results list above. */
 function VaultBrowser() {
   const [q, setQ] = useState("");
+  // CITE.P1-2: `/d/vault?doc=<sha>` — the deep-link a citation's working panel emits
+  // (app.core.anchors). The empty-q search lists every document, so the target is in the
+  // result set (restricted docs still appear as locked rows) and gets highlighted.
+  const [params] = useSearchParams();
+  const linkedDocId = params.get("doc");
   const traceId = useTraceId("vault-search");
   const search = useQuery({
     queryKey: ["vault-search", q],
@@ -630,7 +663,7 @@ function VaultBrowser() {
       ) : search.error ? (
         <ErrorState error={search.error} traceId={traceId} onRetry={() => void search.refetch()} />
       ) : (
-        <VaultResults hits={search.data ?? []} query={q} />
+        <VaultResults hits={search.data ?? []} query={q} highlightId={linkedDocId} />
       )}
     </div>
   );

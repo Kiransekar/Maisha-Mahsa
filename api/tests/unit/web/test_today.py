@@ -87,7 +87,7 @@ def test_cash_strip_carries_resolved_citation_anchors(session: Session) -> None:
         [doc] = panel["documents"]
         assert doc["label"] == "HDFC-May.csv, row 2: 2026-07-01 NEFT-000123 ₹1,20,000.00 Cr"
         assert doc["resolution"] == "resolved"
-        assert doc["url"].startswith("/vault?doc=")
+        assert doc["url"].startswith("/d/vault?doc=")
 
 
 def test_cash_strip_states_broken_citation_never_silently(session: Session) -> None:

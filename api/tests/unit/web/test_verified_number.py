@@ -86,7 +86,7 @@ def test_verified_figure_shows_check_with_verification_class_and_matching_hash()
     )
 
     assert "✓" in html
-    assert 'vglyph--verified' in html  # the VERIFICATION class family, not a money class
+    assert "vglyph--verified" in html  # the VERIFICATION class family, not a money class
     assert "vmark--ok" not in html  # this is the new standalone chip, not the legacy badge
     assert "--c-green" not in html and "c-red" not in html  # never rendered as a money class
     assert "Output tax" in html and "₹6,000.00" in html  # inputs
@@ -140,15 +140,24 @@ def test_answer_card_chip_preserves_legacy_glyphs_and_adds_working_panel() -> No
     # not replace it.
     figures = [
         Figure(
-            "Recomputed figure", "₹1.00", True, "check",
+            "Recomputed figure",
+            "₹1.00",
+            True,
+            "check",
             FigureVerdict(verified=True, blocked=False, honest_pending=False),
         ),
         Figure(
-            "Pending figure", "₹2.00", True, "pending",
+            "Pending figure",
+            "₹2.00",
+            True,
+            "pending",
             FigureVerdict(verified=False, blocked=False, honest_pending=True),
         ),
         Figure(
-            "Unbacked figure", "₹3.00", False, "warn",
+            "Unbacked figure",
+            "₹3.00",
+            False,
+            "warn",
             FigureVerdict(verified=False, blocked=True, honest_pending=False),
         ),
     ]
@@ -161,12 +170,70 @@ def test_answer_card_chip_preserves_legacy_glyphs_and_adds_working_panel() -> No
     assert "✓" in html and "○" in html and "⚠" in html
     assert "Mahsa cannot yet independently verify this figure" in html
     # The chip: each badge is now an expandable disclosure in the verification-token family.
-    assert 'vnum vnum--verified' in html
-    assert 'vnum vnum--honest_pending' in html
-    assert 'vnum vnum--unbacked' in html
+    assert "vnum vnum--verified" in html
+    assert "vnum vnum--honest_pending" in html
+    assert "vnum vnum--unbacked" in html
     # The working panel is present (drill-to-source) and carries the real citation through.
     assert "Report an issue" in html
     assert "GST-001" in html and "CGST Act 2017 / Sec 47" in html
+
+
+# ── §B2 (SPEC-MEMCITE-1.0): the HTMX-side BROKEN-citation badge downgrade (MED-3) ─────────
+# The standalone chip's ✓→◐ rule lives in working_panel.html itself (vnum_broken/vnum_state),
+# mirroring the SPA's effectiveState — these tests pin the template so a template edit cannot
+# break it while the SPA tests stay green.
+
+_BROKEN_DOC = {
+    "label": "hdfc-may.csv, row 2: Opening ₹1,000.00 Cr",
+    "url": "/d/vault?doc=abc",
+    "resolution": "broken",
+    # No apostrophe: autoescape would entity-encode it and the assertion below is verbatim.
+    "note": "no row in the stored source file matches this content hash",
+}
+_MOVED_DOC = {
+    "label": "hdfc-may.csv, row 2: Opening ₹1,000.00 Cr",
+    "url": "/d/vault?doc=abc",
+    "resolution": "moved",
+    "note": "row moved from 2 to 3",
+}
+
+
+def test_broken_citation_downgrades_verified_chip_to_half_circle_with_visible_note() -> None:
+    html = _render_panel(state="verified", documents=[_BROKEN_DOC])
+    assert "vnum--honest_pending" in html and "vnum--verified" not in html
+    # The summary glyph downgraded too, not just the class (the ✓ in the banner text below
+    # is the only ✓ left — no verified glyph renders).
+    assert "vglyph--honest_pending" in html and "vglyph--verified" not in html
+    assert "◐" in html
+    assert "Downgraded from ✓: a source citation behind this figure is broken" in html
+    assert "citation broken" in html  # the Linked-documents row states it plainly
+    assert _BROKEN_DOC["note"] in html
+
+
+def test_moved_citation_keeps_check_with_visible_note() -> None:
+    html = _render_panel(state="verified", documents=[_MOVED_DOC])
+    assert "vnum--verified" in html and "✓" in html  # MOVED resolves — no downgrade
+    assert "row moved from 2 to 3" in html  # ...but never silently
+    assert "Downgraded from ✓" not in html
+
+
+def test_pending_and_unbacked_never_upgrade_and_get_no_false_downgrade_banner() -> None:
+    pending = _render_panel(state="honest_pending", documents=[_BROKEN_DOC])
+    assert "vnum--honest_pending" in pending and "✓" not in pending
+    assert "Downgraded from ✓" not in pending  # it was never ✓ — no false banner
+
+    unbacked = _render_panel(state="unbacked", documents=[_BROKEN_DOC])
+    assert "vnum--unbacked" in unbacked and "✕" in unbacked
+    assert "◐" not in unbacked  # a broken citation must never SOFTEN ✕ into ◐
+    assert "Downgraded from ✓" not in unbacked
+
+
+def test_document_without_resolution_key_causes_no_downgrade() -> None:
+    # Legacy coarse file-level refs carry no resolution claim (§B5) — a missing key is not
+    # a broken citation and must not cost the figure its ✓.
+    html = _render_panel(state="verified", documents=[{"label": "GSTR-3B draft", "url": "/d/gst"}])
+    assert "vnum--verified" in html and "✓" in html
+    assert "Downgraded from ✓" not in html and "citation broken" not in html
 
 
 def test_css_verification_family_stays_separate_from_money_colours() -> None:

@@ -19,6 +19,7 @@ from app.core.anchors import (
     MOVED,
     RESOLVED,
     any_broken,
+    bank_anchors,
     bank_documents,
     resolve_csv_anchors,
 )
@@ -169,7 +170,7 @@ def test_bank_documents_renders_spec_rule_excerpts(session: Session) -> None:
         "hdfc-may.csv, row 4: 2026-05-10 AWS invoice ₹20,000.00 Dr",
     ]
     assert all(d["resolution"] == RESOLVED for d in docs)
-    assert all(d["url"].startswith("/vault?doc=") for d in docs)
+    assert all(d["url"].startswith("/d/vault?doc=") for d in docs)
     assert not any_broken(docs)
 
 
@@ -198,6 +199,52 @@ def test_bank_documents_summary_line_carries_broken_state(session: Session) -> N
     assert any_broken(docs)
     assert docs[3]["resolution"] == BROKEN
     assert docs[3]["note"] == "2 broken among these rows"
+
+
+# ── Ask anchor structs (§B4.3, CITE.P1-2) ─────────────────────────────────────────────────
+
+
+def test_bank_anchors_returns_full_b1_structs_with_live_resolution(session: Session) -> None:
+    """The Ask answer layer's anchor payload: the complete §B1 struct — doc_sha256, file_name,
+    csv_row locator, row_hash, occurrence, excerpt — plus the live §B2 resolution state and
+    the /d/vault deep-link. Hash and sha recomputed independently here, not echoed."""
+    doc_id = _import(session)
+    t1, t2 = _txns(session)
+    a1, a2 = bank_anchors(session, [t1, t2])
+    assert a1 == {
+        "doc_sha256": hashlib.sha256(CSV_TEXT.encode("utf-8")).hexdigest(),
+        "file_name": "hdfc-may.csv",
+        "locator": {"kind": "csv_row", "source_row": 2},
+        "row_hash": t1.row_hash,
+        "occurrence": 1,
+        "excerpt": "hdfc-may.csv, row 2: 2026-05-05 Opening ₹1,00,000.00 Cr",
+        "resolution": RESOLVED,
+        "note": None,
+        "url": f"/d/vault?doc={doc_id}",
+    }
+    assert a2["locator"] == {"kind": "csv_row", "source_row": 4}  # blank raw line counted
+    assert a2["resolution"] == RESOLVED
+
+
+def test_bank_anchors_carries_broken_state_and_caps_per_document(session: Session) -> None:
+    rows = "\n".join(f"2026-05-{5 + i:02d},Txn {i},R{i},100,0" for i in range(5))
+    csv_text = f"date,description,reference,debit,credit\n{rows}\n"
+    doc_id = _import(session, csv_text, file_name="big.csv")
+    doc = session.get(Document, doc_id)
+    assert doc is not None
+    doc.raw_content = b"tampered"
+    session.flush()
+    out = bank_anchors(session, _txns(session))
+    assert len(out) == 3  # display cap — the working panel stays the exhaustive surface
+    assert all(a["resolution"] == BROKEN for a in out)  # tamper is never softened
+    assert all(a["note"] and "integrity" in a["note"] for a in out)
+
+
+def test_bank_anchors_skips_legacy_rows(session: Session) -> None:
+    acct = _account(session)
+    session.add(BankTransaction(account_id=acct.id, txn_date="2026-01-01", debit=100, credit=0))
+    session.flush()
+    assert bank_anchors(session, _txns(session)) == []
 
 
 def test_legacy_rows_without_anchors_render_document_less(session: Session) -> None:

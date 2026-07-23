@@ -41,14 +41,16 @@ def unbacked_numbers(claim: ActionClaim, allowed: set[str]) -> list[tuple[str, s
     return [(k, v) for k, v in claim.claims.items() if v not in allowed]
 
 
-def _triggered_assertions(fold: FoldResult) -> list[RuleAssertion]:
+def _triggered_assertions(fold: FoldResult | None) -> list[RuleAssertion]:
+    if fold is None:  # Mahsa down: no rules were evaluated, so none are asserted
+        return []
     return [
         RuleAssertion(rule_id=t.id, statute=t.statute, section=t.section)
         for t in fold.validation.triggered
     ]
 
 
-def fallback_claim(domain: str, facts: dict[str, Any], fold: FoldResult) -> ActionClaim:
+def fallback_claim(domain: str, facts: dict[str, Any], fold: FoldResult | None) -> ActionClaim:
     """A fully-backed claim assembled directly from the facts + Mahsa's triggered rules. Used
     when the model can't produce a verified draft within the retry budget."""
     claims = {k: _canon(v) for k, v in facts.items() if isinstance(v, (int, float))}
@@ -63,9 +65,9 @@ def fallback_claim(domain: str, facts: dict[str, Any], fold: FoldResult) -> Acti
     )
 
 
-def _feedback(bad: list[tuple[str, str]], facts: dict[str, Any], fold: FoldResult) -> str:
+def _feedback(bad: list[tuple[str, str]], facts: dict[str, Any], fold: FoldResult | None) -> str:
     bad_str = "; ".join(f"{k}={v}" for k, v in bad)
-    triggered = ", ".join(t.id for t in fold.validation.triggered) or "none"
+    triggered = (", ".join(t.id for t in fold.validation.triggered) if fold else "") or "none"
     return (
         f"These reported numbers are not in the FACTS block and must not be used: {bad_str}. "
         f"State only values present in FACTS. Mahsa triggered these rules: {triggered}."
@@ -78,7 +80,7 @@ async def generate_verified(
     snapshot: dict[str, Any],
     query: str,
     domain: str,
-    fold: FoldResult,
+    fold: FoldResult | None,
     max_retries: int,
     memory: str | None = None,
 ) -> DraftResult:
@@ -97,11 +99,13 @@ async def generate_verified(
         )
         bad = unbacked_numbers(claim, allowed)
         if not bad:
+            # With Mahsa down (fold is None) the numbers are fact-checked here but the
+            # gatekeeper never saw the books — fail closed: the draft needs a human (§0.4).
             return DraftResult(
                 claim=claim,
                 attempts=attempt,
                 verified=True,
-                requires_approval=fold.shape.requires_approval,
+                requires_approval=fold.shape.requires_approval if fold is not None else True,
             )
         feedback = _feedback(bad, facts, fold)
 

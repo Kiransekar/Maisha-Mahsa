@@ -15,12 +15,31 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { useTraceId } from "../lib/trace";
-import { VerifiedNumber, type VerifyState } from "../components/VerifiedNumber";
+import { VerifiedNumber, type VerifyState, type Working } from "../components/VerifiedNumber";
 import { ErrorState } from "../components/ErrorState";
 import { Header, H2, Empty } from "./Today";
 
 type AskFigure = { label: string; value: string; state: string };
-type AskCitation = { rule_id: string; text: string; citation: string; domain: string };
+// SPEC-MEMCITE-1.0 §B1/§B4.3 (CITE.P1-2): a cell-level anchor riding an Ask citation — the
+// server mints it only where a figure derives from an anchored source row; absent otherwise.
+export type AskAnchor = {
+  doc_sha256: string;
+  file_name: string;
+  locator: { kind: string; source_row?: number };
+  row_hash: string;
+  occurrence: number;
+  excerpt: string;
+  resolution?: "resolved" | "moved" | "broken";
+  note?: string | null;
+  url?: string | null;
+};
+type AskCitation = {
+  rule_id: string;
+  text: string;
+  citation: string;
+  domain: string;
+  anchor?: AskAnchor | null;
+};
 type AskAnswer = {
   query: string;
   domain: string | null;
@@ -46,6 +65,29 @@ const SUGGESTIONS = [
  *  VerifyChip already applies to an unrecognised state. */
 export function toVerifyState(raw: string): VerifyState {
   return raw === "verified" || raw === "honest_pending" || raw === "unbacked" ? raw : "unbacked";
+}
+
+/** CITE.P1-2: the working panel for an answer's figures. Every citation stays a text line;
+ *  anchored ones ALSO become Documents entries — excerpt, /d/vault deep-link and §B2
+ *  resolution state — so a broken anchor downgrades the badge via `hasBrokenCitation`,
+ *  exactly as on every other surface. No citations -> no panel (never a fabricated trail). */
+export function askWorking(citations: AskCitation[]): Working | undefined {
+  if (!citations.length) return undefined;
+  return {
+    citations: citations.map((c) => ({ text: `${c.rule_id} · ${c.citation}` })),
+    documents: citations.flatMap((c) =>
+      c.anchor
+        ? [
+            {
+              label: c.anchor.excerpt,
+              url: c.anchor.url,
+              resolution: c.anchor.resolution,
+              note: c.anchor.note,
+            },
+          ]
+        : [],
+    ),
+  };
 }
 
 export function Ask() {
@@ -172,9 +214,7 @@ export function Ask() {
 function AnswerCard({ answer }: { answer: AskAnswer }) {
   // The HTMX answer_card.html reuses the SAME citations list as the working panel for every
   // figure (it has no per-figure citation split) — mirrored here rather than inventing one.
-  const working = answer.citations.length
-    ? { citations: answer.citations.map((c) => ({ text: `${c.rule_id} · ${c.citation}` })) }
-    : undefined;
+  const working = askWorking(answer.citations);
 
   return (
     <div style={{ marginTop: 20 }}>

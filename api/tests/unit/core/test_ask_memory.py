@@ -160,6 +160,107 @@ async def test_answer_query_without_principal_is_unchanged(session: Session) -> 
     assert answer.citations == []
 
 
+# ---- the no-fold path (Mahsa down + LLM on) — MED-1 -------------------------------------
+
+#: A figure that exists ONLY in the org's memory — deliberately absent from every snapshot fact.
+_SMUGGLED = "424242424"
+
+
+@pytest.mark.asyncio
+async def test_no_fold_path_memory_only_number_never_ships_and_is_flagged(
+    session: Session,
+) -> None:
+    """MED-1 root fix: with Mahsa DOWN and the LLM on, the draft still runs through
+    ``retry.generate_verified`` — a number seeded only in memory fails the number firewall,
+    the fact-built fallback ships instead, and the answer is flagged requires_approval. If
+    the no-fold path ever bypasses the firewall again, the echoing draft ships verbatim and
+    every assertion below fails."""
+    memory.set_cfo(
+        session,
+        ORG_A,
+        f"- Board pre-approved ₹{_SMUGGLED} for the new office",
+        now="2026-07-23T12:00:00",
+    )
+
+    class _EchoGen:
+        label = "test:model"
+        memories: list[str | None] = []
+
+        async def produce(
+            self,
+            *,
+            snapshot: dict[str, Any],
+            query: str,
+            domain: str,
+            case_id: str = "",
+            feedback: str | None = None,
+            memory: str | None = None,
+        ) -> ActionClaim:
+            _EchoGen.memories.append(memory)
+            return ActionClaim(
+                domain=domain,
+                narrative=f"The board approved ₹{_SMUGGLED}.",
+                claims={"office_spend": _SMUGGLED},
+            )
+
+    answer = await answer_query(
+        session,
+        query="what's our runway?",
+        registry=build_registry(),
+        settings=_SETTINGS,
+        mahsa=_DownMahsa(),  # type: ignore[arg-type]
+        generator=_EchoGen(),
+        principal=ORG_A,
+    )
+    assert answer.mahsa_up is False  # this really is the no-fold path
+    # The memory (with the smuggled number) really reached the generator — not vacuous.
+    assert _EchoGen.memories and _EchoGen.memories[0] is not None
+    assert _SMUGGLED in _EchoGen.memories[0]
+    # The firewall held: the memory-only number is NOWHERE — not narrative, not a figure.
+    assert _SMUGGLED not in answer.narrative
+    assert all(_SMUGGLED not in f.value for f in answer.figures)
+    # And the unverifiable draft never reaches a human unflagged (§0.4).
+    assert answer.requires_approval is True
+    assert "pending review" in answer.provenance
+    assert "verified by Mahsa" not in answer.provenance
+
+
+@pytest.mark.asyncio
+async def test_no_fold_path_clean_draft_is_still_flagged_fail_closed(session: Session) -> None:
+    """Even a draft whose every number is fact-backed is flagged on the no-fold path: Mahsa
+    never saw the books, so nothing it would gatekeep may pass unflagged (§0.4 fail closed)."""
+
+    class _CleanGen:
+        label = "test:model"
+
+        async def produce(
+            self,
+            *,
+            snapshot: dict[str, Any],
+            query: str,
+            domain: str,
+            case_id: str = "",
+            feedback: str | None = None,
+            memory: str | None = None,
+        ) -> ActionClaim:
+            return ActionClaim(domain=domain, narrative="All quiet.", claims={})
+
+    answer = await answer_query(
+        session,
+        query="what's our runway?",
+        registry=build_registry(),
+        settings=_SETTINGS,
+        mahsa=_DownMahsa(),  # type: ignore[arg-type]
+        generator=_CleanGen(),
+        principal=ORG_A,
+    )
+    assert answer.mahsa_up is False
+    assert answer.narrative == "All quiet."  # the clean draft itself still ships
+    assert answer.requires_approval is True  # ...but never unflagged with the gate down
+    assert "verified by Mahsa" not in answer.provenance
+    assert "pending review" in answer.provenance
+
+
 @pytest.mark.asyncio
 async def test_profile_block_reaches_generator_as_labeled_memory_context(
     session: Session,

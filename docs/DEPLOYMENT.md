@@ -253,10 +253,13 @@ own `/today`, `/inbox`, … (`app/main.py` routes vs `frontend/src/App.tsx`). Th
 ## 6 · Scheduled jobs (cron)
 
 One CLI, verified in `app/jobs.py`:
-`python -m app.jobs {capture|brief|dunning|alerts|audit-verify|all|serve}` — each runs once and
-exits (exit 0 = no job errored; idempotent same-period re-runs are no-ops via the `job_run`
-ledger, migration 0008), `serve` is the long-lived loop the docker `scheduler` service runs
-(fires at `MAISHA_BRIEF_HOUR`:`MAISHA_BRIEF_MINUTE` `MAISHA_BRIEF_TZ`, default 20:00 IST).
+`python -m app.jobs {capture|brief|dunning|alerts|evolve|audit-verify|all|serve}` — each runs
+once and exits (exit 0 = no job errored; idempotent same-period re-runs are no-ops via the
+`job_run` ledger, migration 0008), `serve` is the long-lived loop the docker `scheduler`
+service runs (fires at `MAISHA_BRIEF_HOUR`:`MAISHA_BRIEF_MINUTE` `MAISHA_BRIEF_TZ`, default
+20:00 IST). `evolve` is the nightly company-memory evolution (MEM.P1-1: deterministic
+re-consolidation + bounded history prune, audit-sealed); it is part of `all`, so the cron
+line below already runs it nightly.
 
 Docker stack: nothing to do — the `scheduler` service is included. External cron instead
 (from the module's own docstring):

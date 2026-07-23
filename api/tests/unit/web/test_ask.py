@@ -154,6 +154,69 @@ async def test_answer_query_unroutable_abstains(session: Session) -> None:
     assert answer.figures == []
 
 
+# ---- CITE.P1-2 (§B4.3): Ask citations carry cell-level anchors ----------------------------
+
+
+@pytest.mark.asyncio
+async def test_treasury_answer_citations_carry_anchors_from_imported_rows(
+    session: Session,
+) -> None:
+    """A treasury answer whose figures derive from an imported bank statement echoes each
+    anchored row as a citation carrying the full §B1 anchor struct — excerpt, /d/vault
+    deep-link, live resolution state. Statutory citations keep anchor=None (§B5)."""
+    from app.db.models.treasury import BankAccount
+    from app.domains.treasury.service import TreasuryService
+
+    acct = BankAccount(bank_name="HDFC", account_number="9", ifsc="HDFC0009")
+    session.add(acct)
+    session.flush()
+    TreasuryService().import_csv(
+        session,
+        acct.id,
+        "date,description,debit,credit\n2026-07-01,NEFT-000123,0,120000\n",
+        file_name="HDFC-May.csv",
+    )
+
+    answer = await answer_query(
+        session,
+        query="what's our runway?",
+        registry=build_registry(),
+        settings=_SETTINGS,
+        mahsa=_FakeMahsa([]),
+    )
+    assert answer.domain == "treasury"
+    anchored = [c for c in answer.citations if c.anchor is not None]
+    assert len(anchored) == 1
+    c = anchored[0]
+    assert c.text == "HDFC-May.csv, row 2: 2026-07-01 NEFT-000123 ₹1,20,000.00 Cr"
+    assert c.citation == "HDFC-May.csv, row 2"
+    assert c.rule_id == f"source:{c.anchor['doc_sha256'][:12]}"
+    assert c.anchor["locator"] == {"kind": "csv_row", "source_row": 2}
+    assert c.anchor["resolution"] == "resolved"
+    assert c.anchor["url"] == f"/d/vault?doc={c.anchor['doc_sha256']}"
+    # And the HTMX card renders the anchored citation as a working-panel document entry
+    # with the deep-link — the same surface the SPA maps from `anchor`.
+    html = _env.get_template("partials/answer_card.html").render(answer=answer)
+    assert f"/d/vault?doc={c.anchor['doc_sha256']}" in html
+    assert "HDFC-May.csv, row 2" in html
+
+
+@pytest.mark.asyncio
+async def test_non_treasury_answer_citations_have_no_anchor(session: Session) -> None:
+    _seed_late_gst(session)
+    answer = await answer_query(
+        session,
+        query="is our gstr-3b on time?",
+        registry=build_registry(),
+        settings=_SETTINGS,
+        as_of=date(2026, 7, 10),
+        mahsa=_FakeMahsa([]),
+    )
+    assert answer.domain == "gst"
+    # GST figures come from typed input — no anchor exists, none is fabricated (§B5).
+    assert all(c.anchor is None for c in answer.citations)
+
+
 # ---- WS3.5b: honest-state badge, tri-state driven off mahsa_coverage (§0.4) ----------------
 
 # Pull a ported and an unported target straight from the coverage map itself (not a literal
@@ -181,16 +244,25 @@ def test_badge_is_coverage_driven_not_hardcoded() -> None:
 def test_answer_card_renders_hollow_circle_for_pending_and_check_for_recomputed() -> None:
     figures = [
         Figure(
-            "Recomputed figure", "₹1.00", True,
-            _badge(_PORTED_TARGET, True), _verdict(_PORTED_TARGET, True),
+            "Recomputed figure",
+            "₹1.00",
+            True,
+            _badge(_PORTED_TARGET, True),
+            _verdict(_PORTED_TARGET, True),
         ),
         Figure(
-            "Pending figure", "₹2.00", True,
-            _badge(_UNPORTED_TARGET, True), _verdict(_UNPORTED_TARGET, True),
+            "Pending figure",
+            "₹2.00",
+            True,
+            _badge(_UNPORTED_TARGET, True),
+            _verdict(_UNPORTED_TARGET, True),
         ),
         Figure(
-            "Unbacked figure", "₹3.00", False,
-            _badge(_PORTED_TARGET, False), _verdict(_PORTED_TARGET, False),
+            "Unbacked figure",
+            "₹3.00",
+            False,
+            _badge(_PORTED_TARGET, False),
+            _verdict(_PORTED_TARGET, False),
         ),
     ]
     answer = Answer(

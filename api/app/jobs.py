@@ -1,8 +1,9 @@
 """Scheduled jobs (PRD Layer 6): the daily snapshot capture (for trends) and the 8pm CFO brief.
 
 Two ways to run, both using this module:
-* cron-style — ``python -m app.jobs capture|brief|all`` runs once and exits (drive it from a
-  crontab or any scheduler);
+* cron-style — ``python -m app.jobs capture|brief|evolve|all`` runs once and exits (drive it
+  from a crontab or any scheduler); ``all`` includes the nightly memory ``evolve``
+  (MEM.P1-1), so the standard daily cron line below already runs it;
 * long-lived — ``python -m app.jobs serve`` sleeps until the next configured local time and runs
   the jobs, forever (the ``scheduler`` service in docker-compose uses this).
 
@@ -54,7 +55,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 import app.db.models as _models  # noqa: F401  registers models on Base.metadata
 from app.config import Settings, get_settings
-from app.core import history_store
+from app.core import history_store, memory
 from app.core.audit import verify_chain
 from app.core.audit_store import load_chain, load_chain_for, verify_chain_for
 from app.core.cfo import collect_health, compose_brief
@@ -65,6 +66,7 @@ from app.core.mahsa_client import MahsaClient
 from app.core.principal import bind_org_guc, reset_current_org, set_current_org
 from app.core.router import DomainRouter
 from app.db.base import Base
+from app.db.models.memory import OrgMemory
 from app.db.models.shared import JobRun, Org
 from app.db.session import session_factory
 from app.domains import build_registry
@@ -119,6 +121,32 @@ async def run_alerts(
     ctx = compose_compliance_alert(alerts, as_of.isoformat())
     await channel.send_compliance_alert(to=to, ctx=ctx)
     return {"job": "alerts", "dispatched": len(alerts)}
+
+
+def run_evolve(session: Session, org: str | None, *, now: str) -> dict[str, Any]:
+    """Nightly memory evolution (MEM.P1-1): :func:`app.core.memory.evolve` — deterministic
+    re-consolidation of the org's CFO block (archive-on-supersede + ``memory.update`` seal,
+    exactly like the API write path, attributed to ``system:evolve``) and the bounded
+    history prune. Idempotent twice over: the (org, job, period) ledger makes a same-day
+    re-run a no-op before this is even called, and evolve itself finds nothing to change on
+    a second pass. On the legacy single-tenant pass (``org=None``) it walks every org that
+    actually has memory rows."""
+    org_ids: list[str] = (
+        [org] if org is not None else sorted(session.scalars(select(OrgMemory.org_id).distinct()))
+    )
+    consolidated = 0
+    pruned = 0
+    for oid in org_ids:
+        out = memory.evolve(session, oid, now=now)
+        consolidated += int(out["consolidated"])
+        pruned += out["history_pruned"]
+    session.commit()
+    return {
+        "job": "evolve",
+        "memory_orgs": len(org_ids),
+        "consolidated": consolidated,
+        "history_pruned": pruned,
+    }
 
 
 def run_audit_verify(session: Session, org: str | None = None) -> dict[str, Any]:
@@ -258,6 +286,12 @@ async def _run_org(
             return await run_alerts(session, channel(), to=settings.cfo_email, as_of=today)
 
         await guarded("alerts", _alerts)
+    if command in ("evolve", "all"):
+
+        async def _evolve() -> dict[str, Any]:
+            return run_evolve(session, org, now=now_utc.isoformat())
+
+        await guarded("evolve", _evolve)
     if command in ("audit-verify", "all"):
 
         async def _audit() -> dict[str, Any]:
@@ -345,7 +379,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="app.jobs", description="Maisha scheduled jobs")
     parser.add_argument(
         "command",
-        choices=["capture", "brief", "dunning", "alerts", "audit-verify", "all", "serve"],
+        choices=["capture", "brief", "dunning", "alerts", "evolve", "audit-verify", "all", "serve"],
     )
     args = parser.parse_args(argv)
     settings = get_settings()

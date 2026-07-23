@@ -21,6 +21,14 @@
     <p class="muted">Not enough data to answer confidently — add the underlying records first.</p>
   {% endif %}
 
+  {# CITE.P1-2: anchored citations (app.core.ask, §B4.3) render as working-panel documents —
+     the same excerpt + /d/vault deep-link + resolution state the SPA maps from `anchor`, so
+     the two surfaces cannot disagree. Citations without an anchor stay chips only (§B5). #}
+  {% set anchor_docs = [] %}
+  {% for c in answer.citations if c.anchor %}
+    {% set _ = anchor_docs.append({"label": c.anchor.excerpt, "url": c.anchor.url,
+                                   "resolution": c.anchor.resolution, "note": c.anchor.note}) %}
+  {% endfor %}
   {% if answer.figures %}
   <div class="figrows">
     {% for f in answer.figures %}
@@ -44,7 +52,7 @@
         {{ vnum_body({
           "label": f.label, "value": f.value, "state": vstate,
           "inputs": [], "formula": none, "note": none,
-          "citations": answer.citations, "documents": [],
+          "citations": answer.citations, "documents": anchor_docs,
           "verdict_hash": none, "rule_pack_version": none,
         }) }}
       </details>

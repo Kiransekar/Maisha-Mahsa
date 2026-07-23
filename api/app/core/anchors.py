@@ -167,7 +167,9 @@ def bank_documents(session: Session, txns: Sequence[Any]) -> list[dict[str, Any]
     for doc_id, rows in by_doc.items():
         doc = session.get(Document, doc_id)
         file_name = doc.file_name if doc is not None else f"vault document {doc_id[:12]}…"
-        url = f"/vault?doc={doc_id}"
+        # CITE.P1-2: deep-link to the real vault surface — /d/vault on BOTH the SPA and the
+        # HTMX app — keyed by the content-addressed document id (highlighted client-side).
+        url = f"/d/vault?doc={doc_id}"
         resolutions = resolve_csv_anchors(
             session, doc_id, [(t.source_row, t.row_hash, t.occurrence) for t in rows]
         )
@@ -200,6 +202,44 @@ def bank_documents(session: Session, txns: Sequence[Any]) -> list[dict[str, Any]
                 }
             )
     return entries
+
+
+def bank_anchors(session: Session, txns: Sequence[Any]) -> list[dict[str, Any]]:
+    """CITE.P1-2 (§B4.3): full §B1 anchor structs for the Ask answer layer — one per anchored
+    bank row, each carrying its live resolution state (§B2) and the /d/vault deep-link.
+    Rows without anchors contribute nothing — no fabricated provenance (§B5).
+
+    ponytail: capped at _PER_DOC_ROWS per document so a 500-row statement never floods an
+    answer's citation list; the working panel (bank_documents) stays the exhaustive surface.
+    """
+    anchored = [t for t in txns if t.source_doc_id and t.row_hash]
+    by_doc: dict[str, list[Any]] = {}
+    for t in anchored:
+        by_doc.setdefault(t.source_doc_id, []).append(t)
+
+    out: list[dict[str, Any]] = []
+    for doc_id, rows in by_doc.items():
+        doc = session.get(Document, doc_id)
+        file_name = doc.file_name if doc is not None else f"vault document {doc_id[:12]}…"
+        shown = rows[:_PER_DOC_ROWS]
+        resolutions = resolve_csv_anchors(
+            session, doc_id, [(t.source_row, t.row_hash, t.occurrence) for t in shown]
+        )
+        for t, res in zip(shown, resolutions, strict=True):
+            out.append(
+                {
+                    "doc_sha256": doc_id,
+                    "file_name": file_name,
+                    "locator": {"kind": "csv_row", "source_row": t.source_row},
+                    "row_hash": t.row_hash,
+                    "occurrence": t.occurrence or 1,
+                    "excerpt": _excerpt(file_name, t),
+                    "resolution": res.status,
+                    "note": res.note,
+                    "url": f"/d/vault?doc={doc_id}",
+                }
+            )
+    return out
 
 
 def any_broken(documents: Sequence[dict[str, Any]]) -> bool:
