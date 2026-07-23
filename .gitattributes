@@ -1,0 +1,4 @@
+# Shell scripts and the render start script MUST stay LF — a CRLF shebang breaks in a Linux
+# container ("/bin/sh^M: bad interpreter"). Keep container-bound files line-ending-stable.
+*.sh text eol=lf
+infra/render/start.sh text eol=lf

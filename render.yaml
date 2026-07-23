@@ -1,0 +1,45 @@
+# Render Blueprint — one-click demo/test deploy of Maisha-Mahsa.
+#
+# A SINGLE container runs Mahsa (Rust), the Maisha FastAPI/HTMX app, and a dev auth stand-in
+# (one-click /dev-login). No paid private services, no persistent disk — SQLite is ephemeral and
+# the demo tenant is re-seeded on every boot, so anything you enter resets on restart. That is
+# the trade for a $0, zero-owner-step test link. For real, persistent, multi-tenant production
+# use infra/docker-compose.prod.yml + a real Better Auth server (see docs/DEPLOYMENT.md).
+#
+# Deploy: push this repo, then in Render → New → Blueprint → pick this repo. See docs/DEPLOY_RENDER.md.
+
+services:
+  - name: maisha-mahsa
+    type: web
+    runtime: docker
+    plan: free                       # free has no disk → ephemeral SQLite (see note above)
+    region: singapore                # closest Render region to India; change if unavailable
+    dockerfilePath: ./infra/render/Dockerfile
+    dockerContext: .                 # repo root — the image needs both dif/ and api/
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      # Non-production: auto-creates the SQLite schema on boot and unlocks the dev auth gate.
+      - key: MAISHA_ENVIRONMENT
+        value: development
+      - key: MAISHA_DATABASE_URL
+        value: sqlite:////data/maisha.db
+      # Mahsa + the JWKS stand-in run in this same container on loopback (see infra/render/start.sh).
+      - key: MAISHA_MAHSA_URL
+        value: http://127.0.0.1:8088
+      - key: MAISHA_BETTER_AUTH_URL
+        value: http://127.0.0.1:8790
+      # Dev auth stand-in: one-click sign-in at /dev-login (OWNER of the seeded demo org).
+      - key: MAISHA_DEV_AUTH
+        value: "1"
+      - key: MAISHA_SIGNIN_URL
+        value: /dev-login
+      # Must match the org the minted demo token carries, so seeded org-scoped rows render.
+      - key: MAISHA_SEED_ORG_ID
+        value: demo-org
+      # Signs the demo token + derives its Ed25519 key — Render generates a stable random value.
+      - key: MAISHA_SESSION_SECRET
+        generateValue: true
+      # Demo filer GSTIN for GSTR-1/e-invoice exports (well-formed placeholder).
+      - key: MAISHA_COMPANY_GSTIN
+        value: "29ABCDE1234F1Z5"

@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     # Where an unauthenticated browser is sent to sign in: the SPA's Better Auth sign-in route.
     # Override (MAISHA_SIGNIN_URL) when the frontend is served from a different origin.
     signin_url: str = "/sign-in"
+    # TEST/DEMO ONLY: mount the dev auth stand-in (app.dev.auth_standin — one-click /dev-login
+    # that mints an OWNER token for the seeded demo org). Hard-gated: ignored in production
+    # (see app.main.create_app). Never enable on a real tenant deployment.
+    dev_auth: bool = False
 
     # WS10.2 — CERT-In posture: severity events (unhandled 5xx, and anything else that calls
     # app.core.alerting.emit) POST a JSON alert here (e.g. a Slack/Discord/ops webhook or an

@@ -103,8 +103,18 @@ def _wants_html(request: Request) -> bool:
 
 
 def _is_public(path: str) -> bool:
-    """Routes reachable without authenticating: liveness, the sign-in redirect, static assets."""
-    return path == "/health" or path.startswith("/login") or path.startswith("/static")
+    """Routes reachable without authenticating: liveness, the sign-in redirect, static assets.
+
+    ``/dev-login`` / ``/dev-logout`` are listed too so the demo sign-in is reachable — but those
+    routes only EXIST when the dev-auth gate is on (create_app), so in production they resolve to
+    a plain 404, never a token."""
+    return (
+        path == "/health"
+        or path.startswith("/login")
+        or path.startswith("/static")
+        or path.startswith("/dev-login")
+        or path.startswith("/dev-logout")
+    )
 
 
 def create_app() -> FastAPI:
@@ -294,6 +304,15 @@ def create_app() -> FastAPI:
     app.include_router(legal_api_router)
     app.include_router(memory_api_router)
     app.include_router(playbook_api_router)
+
+    # TEST/DEMO ONLY (P2-6 exception, hard-gated): the dev auth stand-in. Mounted only with
+    # MAISHA_DEV_AUTH=1 AND a non-production environment — so a demo box has a working /dev-login,
+    # while production authentication stays Better Auth JWTs (verified, never minted) untouched.
+    if settings.dev_auth and settings.environment != "production":
+        from app.dev.auth_standin import dev_auth_router
+
+        app.include_router(dev_auth_router)
+        _log.warning("DEV AUTH STAND-IN ENABLED (/dev-login) — never do this in production")
 
     registry = build_registry()
 
