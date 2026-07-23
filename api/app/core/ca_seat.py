@@ -124,9 +124,7 @@ def invite_ca(
     if dupe is not None:
         raise ValueError("already a member of (or already invited to) this org")
 
-    membership = Membership(
-        org_id=principal.org_id, user_id=user.id, role="ca", status="pending"
-    )
+    membership = Membership(org_id=principal.org_id, user_id=user.id, role="ca", status="pending")
     session.add(membership)
     session.flush()
     _seal(
@@ -163,9 +161,7 @@ def list_pending(session: Session, *, org_id: str) -> list[dict[str, Any]]:
     ]
 
 
-def accept_ca(
-    session: Session, *, principal: Principal, timestamp: str
-) -> tuple[Membership, bool]:
+def accept_ca(session: Session, *, principal: Principal, timestamp: str) -> tuple[Membership, bool]:
     """The invited CA accepts their pending seat → ACTIVE + sealed ``ca_joined`` event.
 
     Identity comes ONLY from the caller's verified token (§0.8): the pending membership is

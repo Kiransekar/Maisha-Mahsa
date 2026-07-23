@@ -15,16 +15,25 @@ _AS_OF = date(2026, 6, 30)
 
 def _seed_treasury(session: Session) -> None:
     acct = BankAccount(
-        bank_name="HDFC", account_number="1", ifsc="HDFC0000001",
-        opening_balance=Paise.from_rupees(1200000), current_balance=Paise.from_rupees(1200000),
+        bank_name="HDFC",
+        account_number="1",
+        ifsc="HDFC0000001",
+        opening_balance=Paise.from_rupees(1200000),
+        current_balance=Paise.from_rupees(1200000),
     )
     session.add(acct)
     session.flush()
     # ₹9,00,000 spent and ₹3,00,000 received in the quarter -> ₹2,00,000/mo net burn -> 6.0 mo
-    session.add(BankTransaction(account_id=acct.id, txn_date="2026-05-15",
-                                debit=Paise.from_rupees(900000), credit=0))
-    session.add(BankTransaction(account_id=acct.id, txn_date="2026-05-16",
-                                debit=0, credit=Paise.from_rupees(300000)))
+    session.add(
+        BankTransaction(
+            account_id=acct.id, txn_date="2026-05-15", debit=Paise.from_rupees(900000), credit=0
+        )
+    )
+    session.add(
+        BankTransaction(
+            account_id=acct.id, txn_date="2026-05-16", debit=0, credit=Paise.from_rupees(300000)
+        )
+    )
     session.flush()
 
 

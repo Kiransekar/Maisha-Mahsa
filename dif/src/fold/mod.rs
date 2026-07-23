@@ -120,7 +120,10 @@ mod tests {
     fn partial_snapshot_reports_only_the_missing_signal() {
         let mut s = Snapshot::default();
         // Supply all but one payroll signal.
-        for k in payroll::EXPECTED_SIGNALS.iter().filter(|k| **k != "lwf_state") {
+        for k in payroll::EXPECTED_SIGNALS
+            .iter()
+            .filter(|k| **k != "lwf_state")
+        {
             s.metrics.insert((*k).into(), 1.0);
         }
         let f = fold(&s, Some(Domain::Payroll));

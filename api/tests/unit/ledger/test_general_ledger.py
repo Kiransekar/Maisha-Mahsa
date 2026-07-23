@@ -17,7 +17,9 @@ def _books(session):  # type: ignore[no-untyped-def]
 
     def je(desc, dr, cr, amt):  # type: ignore[no-untyped-def]
         svc.post_journal_entry(
-            session, entry_date="2026-05-01", description=desc,
+            session,
+            entry_date="2026-05-01",
+            description=desc,
             lines=[
                 {"account_id": ids[dr], "debit": Paise.from_rupees(amt), "credit": 0},
                 {"account_id": ids[cr], "debit": 0, "credit": Paise.from_rupees(amt)},

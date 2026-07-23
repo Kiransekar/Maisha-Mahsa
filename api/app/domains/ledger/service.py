@@ -198,24 +198,23 @@ class LedgerService(BaseDomainService):
         its non-cash counterpart: income/expense → operating, asset → investing, equity/
         liability → financing. Requires cash/bank accounts to be flagged (``is_cash``)."""
         accounts = {a.id: a for a in session.scalars(select(ChartOfAccounts)).all()}
-        cash_ids = {
-            aid for aid, a in accounts.items() if a.is_cash_account or a.is_bank_account
-        }
+        cash_ids = {aid for aid, a in accounts.items() if a.is_cash_account or a.is_bank_account}
         flows = {"operating": 0, "investing": 0, "financing": 0, "net_change": 0}
         if not cash_ids:
             return flows
         _bucket = {
-            "income": "operating", "expense": "operating",
-            "asset": "investing", "liability": "financing", "equity": "financing",
+            "income": "operating",
+            "expense": "operating",
+            "asset": "investing",
+            "liability": "financing",
+            "equity": "financing",
         }
         for entry in session.scalars(select(JournalEntry)).all():
             lines = session.scalars(
                 select(JournalLine).where(JournalLine.journal_entry_id == entry.id)
             ).all()
             cash_delta = sum(
-                int(line.debit) - int(line.credit)
-                for line in lines
-                if line.account_id in cash_ids
+                int(line.debit) - int(line.credit) for line in lines if line.account_id in cash_ids
             )
             non_cash = [line for line in lines if line.account_id not in cash_ids]
             if cash_delta == 0 or not non_cash:

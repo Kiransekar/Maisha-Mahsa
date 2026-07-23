@@ -144,9 +144,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="evals.harness", description="Maisha golden-eval gate")
     parser.add_argument("--all", action="store_true", help="run every domain's cases")
     parser.add_argument("--domain", help="run only this domain's cases")
-    parser.add_argument(
-        "--report", choices=["text", "json"], default="text", help="output format"
-    )
+    parser.add_argument("--report", choices=["text", "json"], default="text", help="output format")
     parser.add_argument(
         "--provider",
         choices=["stub", "ollama", "claude"],

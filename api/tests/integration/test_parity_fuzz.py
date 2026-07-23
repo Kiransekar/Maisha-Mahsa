@@ -94,7 +94,9 @@ def g_tds(rng):
 
 
 def g_annual_income_tax(rng):
-    t = _m(rng, 3_000_000)
+    # Up to ₹3 crore so all three surcharge bands (>₹50L/1cr/2cr) and their marginal-relief
+    # crossovers are fuzzed, not just the sub-₹50L slabs.
+    t = _m(rng, 30_000_000)
     return {"annual_taxable": t}, int(pay.annual_income_tax(t))
 
 
@@ -171,7 +173,13 @@ def g_company_tax_115baa(rng):
 
 def g_late_fee_3b(rng):
     days, is_nil = rng.randint(0, 400), rng.choice([True, False])
-    return {"days_late": days, "is_nil": is_nil}, int(gst_calc.late_fee_3b(days, is_nil=is_nil))
+    # aato: None (unknown) or around the ₹1.5cr/₹5cr Notf 19/2021 class boundaries (paise).
+    aato = rng.choice([None, _m(rng, 60_000_000)])
+    claimed = int(gst_calc.late_fee_3b(days, is_nil=is_nil, aato=aato))
+    inputs = {"days_late": days, "is_nil": is_nil}
+    if aato is not None:
+        inputs["aato"] = aato
+    return inputs, claimed
 
 
 def g_interest_3b(rng):

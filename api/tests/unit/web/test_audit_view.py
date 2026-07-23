@@ -12,10 +12,17 @@ from app.llm.schema import ActionClaim
 def test_trace_recent_newest_first(session: Session) -> None:
     for i in range(3):
         trace_store.append(
-            session, timestamp=f"t{i}", domain="gst", audit_hash=None,
-            model_label="ollama:qwen3:14b", input_sha256="a" * 64,
+            session,
+            timestamp=f"t{i}",
+            domain="gst",
+            audit_hash=None,
+            model_label="ollama:qwen3:14b",
+            input_sha256="a" * 64,
             claim=ActionClaim(domain="gst", claims={"x": str(i)}),
-            attempts=1, verified=True, requires_approval=False, latency_ms=12,
+            attempts=1,
+            verified=True,
+            requires_approval=False,
+            latency_ms=12,
         )
     rows = trace_store.recent(session, limit=2)
     assert len(rows) == 2
@@ -25,11 +32,20 @@ def test_trace_recent_newest_first(session: Session) -> None:
 def test_chain_loads_and_verifies(session: Session) -> None:
     assert verify_chain(load_chain := audit_store.load_chain(session)) is True  # empty = valid
     assert load_chain == []
-    audit_store.append(session, {
-        "timestamp": "t", "action": "fold", "domain": "gst", "user_id": "founder",
-        "query": None, "intent_global": None, "intent_domain": None,
-        "validation_status": "green", "rules_version": "rv",
-    })
+    audit_store.append(
+        session,
+        {
+            "timestamp": "t",
+            "action": "fold",
+            "domain": "gst",
+            "user_id": "founder",
+            "query": None,
+            "intent_global": None,
+            "intent_domain": None,
+            "validation_status": "green",
+            "rules_version": "rv",
+        },
+    )
     chain = audit_store.load_chain(session)
     assert len(chain) == 1
     assert verify_chain(chain) is True

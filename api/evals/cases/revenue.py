@@ -26,8 +26,14 @@ def _seed_missing_irn(session: Session) -> None:
         invoice_number="INV-9",
         customer_id=cust.id,
         invoice_date="2026-05-10",
-        lines=[{"description": "Service", "quantity": 1, "rate": Paise.from_rupees(100000),
-                "hsn_code": "9983"}],
+        lines=[
+            {
+                "description": "Service",
+                "quantity": 1,
+                "rate": Paise.from_rupees(100000),
+                "hsn_code": "9983",
+            }
+        ],
         gst_rate=18,
     )
 

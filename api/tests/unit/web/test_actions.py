@@ -31,8 +31,12 @@ def test_expense_amount_parsed_to_paise(session) -> None:  # type: ignore[no-unt
 
     find_action("expense", "submit-claim").handler(  # type: ignore[union-attr]
         session,
-        {"claim_date": "2026-06-10", "expense_date": "2026-06-09", "category": "travel",
-         "amount": "5000"},
+        {
+            "claim_date": "2026-06-10",
+            "expense_date": "2026-06-09",
+            "category": "travel",
+            "amount": "5000",
+        },
     )
     session.flush()
     snap = ExpenseService().build_snapshot(session)

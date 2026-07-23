@@ -56,9 +56,7 @@ def reconcile_card(
         "unmatched_statement": [
             s.get("id", i) for i, s in enumerate(statement_lines) if i not in matched_stmt
         ],
-        "unmatched_claims": [
-            c.get("id", i) for i, c in enumerate(claims) if i not in used_claims
-        ],
+        "unmatched_claims": [c.get("id", i) for i, c in enumerate(claims) if i not in used_claims],
         "match_rate": round(len(matched) / len(statement_lines), 4) if statement_lines else 1.0,
     }
 

@@ -31,14 +31,14 @@ def test_plans_partition_the_registry_exactly():
 
 # (feature, entitled-on-basics?, entitled-on-startup?, entitled-on-growth?)
 _MATRIX = [
-    ("cash_position", True, True, True),      # Basics feature
-    ("gstr3b", True, True, True),             # Basics
-    ("cap_table", False, True, True),         # Startup-only
-    ("itr", False, True, True),               # Startup-only (also statutory)
-    ("transfer_pricing", False, False, True), # Growth-only
-    ("rights_buyback", False, False, True),   # Growth-only
-    ("secretarial", False, False, True),      # Growth-only
-    ("platform.dashboard", True, True, True), # platform baseline, every plan
+    ("cash_position", True, True, True),  # Basics feature
+    ("gstr3b", True, True, True),  # Basics
+    ("cap_table", False, True, True),  # Startup-only
+    ("itr", False, True, True),  # Startup-only (also statutory)
+    ("transfer_pricing", False, False, True),  # Growth-only
+    ("rights_buyback", False, False, True),  # Growth-only
+    ("secretarial", False, False, True),  # Growth-only
+    ("platform.dashboard", True, True, True),  # platform baseline, every plan
 ]
 
 
@@ -74,9 +74,9 @@ def test_statutory_filing_allowed_on_basics_with_grace_and_upsell(caplog):
     with caplog.at_level(logging.INFO, logger="maisha.entitlements"):
         d = ent.guard("basics", "itr")
 
-    assert d.allowed is True        # ...but the filing is allowed (grace)
+    assert d.allowed is True  # ...but the filing is allowed (grace)
     assert d.grace is True
-    assert d.upsell == "startup"    # upsell recorded for after the flow
+    assert d.upsell == "startup"  # upsell recorded for after the flow
     assert "statutory" in d.reason.lower()
     # the grace event is logged (keys only, no PII)
     assert any("statutory_grace" in r.getMessage() for r in caplog.records)
@@ -87,7 +87,7 @@ def test_non_statutory_locked_feature_is_denied_but_visible_with_reason():
     d = ent.guard("basics", "transfer_pricing")
     assert d.allowed is False
     assert d.grace is False
-    assert d.visible is True        # NEVER hidden
+    assert d.visible is True  # NEVER hidden
     assert d.upsell == "growth"
     assert "growth" in d.reason.lower()
 
@@ -107,8 +107,8 @@ def test_quantity_gate_soft_warn_grace_block_progression():
     assert ent.quantity_gate("headcount", 11, "basics").state is ent.GateState.GRACE
     blocked = ent.quantity_gate("headcount", 40, "basics")
     assert blocked.state is ent.GateState.BLOCK
-    assert blocked.visible is True          # ceiling shown, not hidden
-    assert blocked.upsell == "startup"      # Startup clears 40 headcount
+    assert blocked.visible is True  # ceiling shown, not hidden
+    assert blocked.upsell == "startup"  # Startup clears 40 headcount
 
 
 # --- §0.8: plan comes from session context, never a request body -------------

@@ -10,9 +10,7 @@ def test_revenue_recognition_forecast_straight_line():
     contracts = [
         {"total_paise": Paise.from_rupees(120000), "start": "2026-01", "term_months": 12},
     ]
-    out = forecast_calc.revenue_recognition_forecast(
-        contracts, horizon_months=12, start="2026-01"
-    )
+    out = forecast_calc.revenue_recognition_forecast(contracts, horizon_months=12, start="2026-01")
     assert len(out["monthly"]) == 12
     assert out["monthly"][0] == Paise.from_rupees(10000)  # 120000 / 12
     assert out["total_recognized"] == Paise.from_rupees(120000)
@@ -52,8 +50,9 @@ def test_card_reconciliation_matches_by_amount_and_date():
         {"id": "c2", "date": "2026-05-30", "amount_paise": Paise.from_rupees(9999)},
     ]
     res = expense_calc.reconcile_card(statement, claims, date_tolerance_days=3)
-    assert res["matched"] == [{"statement_id": "s1", "claim_id": "c1",
-                               "amount_paise": Paise.from_rupees(2000)}]
+    assert res["matched"] == [
+        {"statement_id": "s1", "claim_id": "c1", "amount_paise": Paise.from_rupees(2000)}
+    ]
     assert res["unmatched_statement"] == ["s2"]
     assert res["unmatched_claims"] == ["c2"]
     assert res["match_rate"] == 0.5

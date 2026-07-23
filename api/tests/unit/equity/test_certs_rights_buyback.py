@@ -32,7 +32,8 @@ def test_buyback_within_limits_permitted():
         paid_up_capital=Paise.from_rupees(10_000_000),
         free_reserves=Paise.from_rupees(30_000_000),
         buyback_amount=Paise.from_rupees(5_000_000),  # < 25% of 4cr = 1cr
-        shares_bought_back=100, total_shares=1000,  # 10% < 25%
+        shares_bought_back=100,
+        total_shares=1000,  # 10% < 25%
         post_buyback_debt=Paise.from_rupees(1_000_000),
         post_buyback_equity=Paise.from_rupees(2_000_000),  # 0.5:1 < 2:1
     )
@@ -44,7 +45,8 @@ def test_buyback_breaches_flagged():
         paid_up_capital=Paise.from_rupees(1_000_000),
         free_reserves=Paise.from_rupees(1_000_000),
         buyback_amount=Paise.from_rupees(1_500_000),  # > 25% of 20L = 5L
-        shares_bought_back=400, total_shares=1000,  # 40% > 25%
+        shares_bought_back=400,
+        total_shares=1000,  # 40% > 25%
         post_buyback_debt=Paise.from_rupees(5_000_000),
         post_buyback_equity=Paise.from_rupees(1_000_000),  # 5:1 > 2:1
     )

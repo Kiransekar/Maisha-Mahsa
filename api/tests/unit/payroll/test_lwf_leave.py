@@ -51,12 +51,22 @@ def test_leave_balance():
 
 def test_compute_components_lop_reduces_net():
     full = compute_components(
-        basic=Paise.from_rupees(20000), hra=0, lta=0, special_allowance=0,
-        state="MH", month=7,
+        basic=Paise.from_rupees(20000),
+        hra=0,
+        lta=0,
+        special_allowance=0,
+        state="MH",
+        month=7,
     )
     lop = compute_components(
-        basic=Paise.from_rupees(20000), hra=0, lta=0, special_allowance=0,
-        state="MH", month=7, lop_days=3, days_in_month=30,
+        basic=Paise.from_rupees(20000),
+        hra=0,
+        lta=0,
+        special_allowance=0,
+        state="MH",
+        month=7,
+        lop_days=3,
+        days_in_month=30,
     )
     assert lop["loss_of_pay"] == Paise.from_rupees(2000)  # 3/30 of 20000
     assert lop["net_salary"] == full["net_salary"] - Paise.from_rupees(2000)
@@ -70,8 +80,11 @@ def _seed_employee(session, state="MH"):
     session.flush()
     svc = PayrollService()
     svc.set_salary_structure(
-        session, emp.id, effective_from="2026-04-01",
-        basic=Paise.from_rupees(50000), hra=Paise.from_rupees(20000),
+        session,
+        emp.id,
+        effective_from="2026-04-01",
+        basic=Paise.from_rupees(50000),
+        hra=Paise.from_rupees(20000),
         special_allowance=Paise.from_rupees(30000),
     )
     return svc, emp
@@ -91,8 +104,6 @@ def test_run_payroll_with_loss_of_pay(session):
     svc, emp = _seed_employee(session, state="MH")
     full = svc.run_payroll(session, "2026-07", run_date="2026-07-31")
     # 3 unpaid days in a 31-day month -> gross 100000 * 3/31 deducted
-    lop = svc.run_payroll(
-        session, "2026-07", run_date="2026-07-31", lop_days={emp.id: 3}
-    )
+    lop = svc.run_payroll(session, "2026-07", run_date="2026-07-31", lop_days={emp.id: 3})
     expected_lop = int(s.loss_of_pay(Paise.from_rupees(100000), 3, 31))
     assert lop["total_net"] == full["total_net"] - expected_lop

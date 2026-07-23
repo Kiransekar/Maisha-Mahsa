@@ -191,9 +191,7 @@ def test_confirm_refuses_wrong_phrase_and_tampered_token(session, mahsa_server) 
 # ── the whole loop: confirm → approvals queue → decision releases → artifacts ────────────
 
 
-def test_confirmed_run_lands_in_approvals_and_decision_releases_it(
-    session, mahsa_server
-) -> None:
+def test_confirmed_run_lands_in_approvals_and_decision_releases_it(session, mahsa_server) -> None:
     emp = _seed_employee(session)
     client = _client(session, mahsa_server)
     p = client.post("/api/payroll/runs/preview", json={"month_year": MONTH}).json()
@@ -236,9 +234,9 @@ def test_confirmed_run_lands_in_approvals_and_decision_releases_it(
     assert queue["mahsa_up"] is True
     payroll_items = [i for i in queue["items"] if i["domain"] == "payroll"]
     assert payroll_items, f"payroll missing from approvals queue: {queue['items']}"
-    assert any(
-        c["rule_id"] == "PAYROLL-005" for c in payroll_items[0]["citations"]
-    ), payroll_items[0]["citations"]
+    assert any(c["rule_id"] == "PAYROLL-005" for c in payroll_items[0]["citations"]), payroll_items[
+        0
+    ]["citations"]
 
     # The decision — recorded through the EXISTING decide route — releases the run.
     decided = client.post(
@@ -289,8 +287,6 @@ def test_artifact_routes_are_export_gated_and_typed(session, mahsa_server) -> No
 
     # An Approver reads books but holds no `export` — a payslip is salary data leaving the app.
     approver = _client(session, mahsa_server, role=Role.APPROVER)
-    denied = approver.get(
-        f"/api/payroll/employees/{emp.id}/payslip.pdf", params={"period": MONTH}
-    )
+    denied = approver.get(f"/api/payroll/employees/{emp.id}/payslip.pdf", params={"period": MONTH})
     assert denied.status_code == 403
     assert denied.json()["detail"] == "missing capability: export"

@@ -45,22 +45,33 @@ from app.core.money import Paise
 INCLUDED_KEYS = ("basic", "da", "retaining_allowance")
 
 # s.2(y) exclusion clauses (a)-(i) — the exact span the FIRST PROVISO aggregates for the add-back.
-EXCLUDED_ADDBACK_KEYS = frozenset({
-    "bonus", "statutory_bonus",                    # (a)
-    "house_accommodation", "amenity_value",        # (b)
-    "employer_pf", "employer_pension",             # (c)
-    "conveyance", "travelling_concession", "lta",  # (d)
-    "special_expenses_reimbursement",              # (e)
-    "hra",                                         # (f)
-    "award_settlement_remuneration",               # (g)
-    "overtime",                                    # (h)
-    "commission",                                  # (i)
-})
+EXCLUDED_ADDBACK_KEYS = frozenset(
+    {
+        "bonus",
+        "statutory_bonus",  # (a)
+        "house_accommodation",
+        "amenity_value",  # (b)
+        "employer_pf",
+        "employer_pension",  # (c)
+        "conveyance",
+        "travelling_concession",
+        "lta",  # (d)
+        "special_expenses_reimbursement",  # (e)
+        "hra",  # (f)
+        "award_settlement_remuneration",  # (g)
+        "overtime",  # (h)
+        "commission",  # (i)
+    }
+)
 # Clauses (j)-(k): excluded from wages but OUTSIDE the proviso's (a)-(i) add-back span.
-EXCLUDED_TERMINAL_KEYS = frozenset({
-    "gratuity",                                    # (j)
-    "retrenchment_compensation", "retirement_benefit", "ex_gratia",  # (k)
-})
+EXCLUDED_TERMINAL_KEYS = frozenset(
+    {
+        "gratuity",  # (j)
+        "retrenchment_compensation",
+        "retirement_benefit",
+        "ex_gratia",  # (k)
+    }
+)
 
 # The excluded-allowances share above which the excess is added back (s.2(y) first proviso).
 EXCLUDED_CAP_FRACTION = Decimal("0.5")

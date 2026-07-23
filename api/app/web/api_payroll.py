@@ -483,13 +483,9 @@ async def run_confirm(
     "/employees/{employee_id}/payslip.pdf",
     dependencies=[Depends(require(Capability.EXPORT))],
 )
-def payslip_pdf(
-    employee_id: int, period: str, db: Session = Depends(get_session)
-) -> Response:
+def payslip_pdf(employee_id: int, period: str, db: Session = Depends(get_session)) -> Response:
     try:
-        content = _service.payslip(
-            db, employee_id, period=period, company=get_settings().app_name
-        )
+        content = _service.payslip(db, employee_id, period=period, company=get_settings().app_name)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return Response(
@@ -515,9 +511,7 @@ def form16_pdf(employee_id: int, fy: str, db: Session = Depends(get_session)) ->
     return Response(
         content=content,
         media_type="application/pdf",
-        headers={
-            "Content-Disposition": f'attachment; filename="form16-{employee_id}-{fy}.pdf"'
-        },
+        headers={"Content-Disposition": f'attachment; filename="form16-{employee_id}-{fy}.pdf"'},
     )
 
 

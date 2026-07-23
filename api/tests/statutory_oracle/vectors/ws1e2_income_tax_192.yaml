@@ -18,9 +18,14 @@
 #    shall not exceed the tax payable per s.115BAC(1A) rates.
 #  * CESS — Finance Act 2025 s.2(11): "Health and Education Cess on income-tax, calculated at
 #    the rate of four per cent. of such income-tax and surcharge".
-#  * SURCHARGE nil band — Finance Act 2025 s.2(9) proviso for persons taxed under s.115BAC(1A):
-#    surcharge applies where "such income exceeds ... fifty lakh rupees". All vectors here are
-#    AT or BELOW ₹50,00,000 total income, where no surcharge arises.
+#  * SURCHARGE — Finance Act 2025 s.2(9) provisos for persons whose income is chargeable under
+#    s.115BAC(1A) (chapeau covers deduction "under the head 'Salaries' under section 192";
+#    re-read verbatim 2026-07-23 for the D5 fix): 10% where total income "exceeding fifty lakh
+#    rupees but not exceeding one crore rupees"; 15% "exceeding one crore rupees but not
+#    exceeding two crore rupees"; 25% "exceeding two crore rupees" — the new-regime proviso
+#    contains NO 37% band (25% is its top rate). MARGINAL RELIEF (next proviso, same source):
+#    tax+surcharge "shall not exceed" tax(+surcharge) on the band's lower threshold "by more
+#    than the amount of income that exceeds" that threshold, at ₹50L / ₹1cr / ₹2cr.
 #  * STANDARD DEDUCTION — Finance (No. 2) Act, 2024 (No. 15 of 2024) s.10, inserting a proviso
 #    into s.16(ia): under new-regime computation the deduction reads "seventy-five thousand
 #    rupees" (https://egazette.gov.in/WriteReadData/2024/256436.pdf, w.e.f. 1-4-2025).
@@ -30,8 +35,12 @@
 #    "100% of the tax or ₹60,000 whichever is less" because the slab tax AT ₹12,00,000 is exactly
 #    ₹60,000 (5%×4L + 10%×4L) and is monotonic below it — so the ₹60,000 cap can never bind
 #    inside the rebate zone. The equivalence is arithmetic, not an extra assumption.
-#  * Individual SURCHARGE BANDS (>₹50L) are NOT implemented in annual_income_tax — no vector
-#    above ₹50,00,000 is drafted; the gap is reported in PROGRESS, not papered over.
+#  * Individual SURCHARGE BANDS >₹50L (WS1.E2 defect D5) — FIXED in the [D1-D2-D4-D5-FIX]
+#    round (2026-07-23): annual_income_tax now applies the three s.2(9) new-regime bands and
+#    their marginal relief, in exact integer arithmetic (hundredths of a paisa). The it192_
+#    surcharge vectors below pin every band edge and both sides of the ₹50L relief-exhaustion
+#    crossover. Scope: salary income only — the 15% surcharge ceiling for dividend/s.111A/112/
+#    112A income (proviso band (iv)) is outside this engine and remains unvectored.
 #  * The engine applies cess to the post-rebate tax and rounds the final figure to the nearest
 #    rupee (s.288B rounding convention carried by the existing suite).
 
@@ -254,14 +263,194 @@
     EXCEED fifty lakh, so no surcharge arises. Slabs s.25; cess s.2(11).
   source: >-
     Taxable ₹50,00,000: 3,00,000 + 30% × 26,00,000 (=7,80,000) = ₹10,80,000; no surcharge at
-    exactly ₹50L; cess ×1.04 = ₹11,23,200 = 112,320,000 paise. This is the highest income this
-    suite pins: the engine implements NO surcharge bands, so incomes above ₹50,00,000 are out
-    of its honest range (gap recorded in PROGRESS [WS1.E2-expand], not vectored).
+    exactly ₹50L (the income does not EXCEED fifty lakh); cess ×1.04 = ₹11,23,200 =
+    112,320,000 paise. Lower edge of the surcharge bands — the D5 vectors below pin every
+    income class above this.
   ca_initials: PENDING
   ca_date: null
   target: annual_income_tax
   inputs: {annual_taxable: 500000000}
   expected: 112320000
+
+# ---- D5 fix pinned: surcharge bands >₹50L + marginal relief (FA 2025 s.2(9)) -------------------
+- id: it192_surcharge_relief_binds_at_50L_plus_1
+  statute: Income-tax Act 1961
+  section: "115BAC(1A); FA 2025 s.2(9) surcharge + marginal relief"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    FA 2025 s.2(9), proviso for s.115BAC(1A) persons: 10% surcharge where total income
+    "exceeding fifty lakh rupees but not exceeding one crore rupees"; marginal-relief proviso:
+    where total income exceeds "(i) fifty lakh rupees but does not exceed one crore rupees,
+    the total amount payable as 'advance tax' on such income and surcharge thereon shall not
+    exceed the total amount payable ... on a total income of fifty lakh rupees by more than
+    the amount of income that exceeds fifty lakh rupees".
+  source: >-
+    Taxable ₹50,00,001 (500,000,100 paise): slab tax = 108,000,030 paise; +10% surcharge =
+    118,800,033 paise; relief cap = tax@50L (108,000,000) + excess ₹1 (100 paise) =
+    108,000,100 paise -> relief binds. Cess ×1.04 exactly = 112,320,104 paise ->
+    ₹11,23,201.04 -> half-up ₹11,23,201 = 112,320,100 paise. One rupee of income above ₹50L
+    costs ₹1.04 of tax, rounded — pinning that the band edge does NOT cliff.
+  ca_initials: PENDING
+  ca_date: null
+  target: annual_income_tax
+  inputs: {annual_taxable: 500000100}
+  expected: 112320100
+
+- id: it192_surcharge_relief_exhaustion_5161194
+  statute: Income-tax Act 1961
+  section: "115BAC(1A); FA 2025 s.2(9) marginal relief"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    FA 2025 s.2(9) 10% band + marginal-relief proviso (i) (verbatim on
+    it192_surcharge_relief_binds_at_50L_plus_1). The relief exhausts where
+    1.1 × slab(X) = slab(₹50L) + (X − ₹50L): 0.67X = 34,58,000 -> X = ₹51,61,194.03.
+  source: >-
+    CROSSOVER PAIR, low side — taxable ₹51,61,194 (516,119,400 paise): slab = 112,835,820
+    paise; ×110% = 12,411,940,200 hundredths; relief cap = 10,800,000,000 + 1,611,940,000 =
+    12,411,940,000 hundredths -> relief still binds (by exactly 2 paise). Cess:
+    12,411,940,000 × 104 / 10,000 = 129,084,176 paise (+5,000 half-up term does not lift it)
+    -> ₹12,90,841.76 -> ₹12,90,842 = 129,084,200 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: annual_income_tax
+  inputs: {annual_taxable: 516119400}
+  expected: 129084200
+
+- id: it192_surcharge_relief_exhausted_5161195
+  statute: Income-tax Act 1961
+  section: "115BAC(1A); FA 2025 s.2(9) 10% band"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    FA 2025 s.2(9) 10% band + marginal-relief proviso (i) — one rupee past the exhaustion
+    point the straight 10% surcharge is the smaller leg.
+  source: >-
+    CROSSOVER PAIR, high side — taxable ₹51,61,195 (516,119,500 paise): slab = 112,835,850
+    paise; ×110% = 12,411,943,500 hundredths; relief cap = 12,411,950,000 hundredths ->
+    surcharge leg binds. Cess: 12,411,943,500 × 104 = 1,290,842,124,000; +5,000, /10,000 ->
+    129,084,212 paise -> ₹12,90,842.12 -> ₹12,90,842 = 129,084,200 paise. The two crossover
+    legs land on the SAME rupee (they differ by ~4 paise pre-rounding) — the pair proves the
+    relief hand-off is seamless, with no discontinuity at the exhaustion boundary.
+  ca_initials: PENDING
+  ca_date: null
+  target: annual_income_tax
+  inputs: {annual_taxable: 516119500}
+  expected: 129084200
+
+- id: it192_surcharge_10pct_binds_at_52L
+  statute: Income-tax Act 1961
+  section: "115BAC(1A); FA 2025 s.2(9) 10% band"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    FA 2025 s.2(9): "at the rate of ten per cent. ... exceeding fifty lakh rupees but not
+    exceeding one crore rupees"; cess FA 2025 s.2(11).
+  source: >-
+    Taxable ₹52,00,000: slab = ₹11,40,000; +10% = ₹12,54,000 (relief cap ₹12,80,000 no longer
+    binds); ×1.04 = ₹13,04,160 exactly = 130,416,000 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: annual_income_tax
+  inputs: {annual_taxable: 520000000}
+  expected: 130416000
+
+- id: it192_surcharge_10pct_top_at_1cr_exact
+  statute: Income-tax Act 1961
+  section: "115BAC(1A); FA 2025 s.2(9) 10% band upper edge"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    FA 2025 s.2(9): 10% "not exceeding one crore rupees" — at exactly ₹1cr the 15% band has
+    not begun.
+  source: >-
+    Taxable ₹1,00,00,000: slab = ₹25,80,000; +10% = ₹28,38,000; ×1.04 = ₹29,51,520 exactly =
+    295,152,000 paise. Band-edge triple with the two vectors below.
+  ca_initials: PENDING
+  ca_date: null
+  target: annual_income_tax
+  inputs: {annual_taxable: 1000000000}
+  expected: 295152000
+
+- id: it192_surcharge_15pct_relief_at_1cr_plus_1
+  statute: Income-tax Act 1961
+  section: "115BAC(1A); FA 2025 s.2(9) 15% band + marginal relief"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    FA 2025 s.2(9): 15% "exceeding one crore rupees but not exceeding two crore rupees";
+    marginal-relief proviso (ii): tax+surcharge shall not exceed "the total amount payable as
+    'advance tax' and surcharge on a total income of one crore rupees by more than the amount
+    of income that exceeds one crore rupees" — the ₹1cr reference amount INCLUDES its 10%
+    surcharge.
+  source: >-
+    Taxable ₹1,00,00,001 (1,000,000,100 paise): slab = 258,000,030 paise; ×115% =
+    29,670,003,450 hundredths; relief cap = (258,000,000 × 110) + 10,000 = 28,380,010,000
+    hundredths -> relief binds. Cess ×104/10,000 = 295,152,104 paise -> ₹29,51,521.04 ->
+    ₹29,51,521 = 295,152,100 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: annual_income_tax
+  inputs: {annual_taxable: 1000000100}
+  expected: 295152100
+
+- id: it192_surcharge_15pct_top_at_2cr_exact
+  statute: Income-tax Act 1961
+  section: "115BAC(1A); FA 2025 s.2(9) 15% band upper edge"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    FA 2025 s.2(9): 15% "not exceeding two crore rupees" — at exactly ₹2cr the 25% band has
+    not begun.
+  source: >-
+    Taxable ₹2,00,00,000: slab = ₹55,80,000; +15% = ₹64,17,000; ×1.04 = ₹66,73,680 exactly =
+    667,368,000 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: annual_income_tax
+  inputs: {annual_taxable: 2000000000}
+  expected: 667368000
+
+- id: it192_surcharge_25pct_relief_at_2cr_plus_1
+  statute: Income-tax Act 1961
+  section: "115BAC(1A); FA 2025 s.2(9) 25% band + marginal relief"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    FA 2025 s.2(9): 25% where total income (excluding dividend/s.111A/112/112A income)
+    "exceeding two crore rupees" — the NEW-REGIME proviso's top band; there is no 37% band for
+    s.115BAC(1A) persons. Marginal-relief proviso (iii): shall not exceed tax+surcharge at
+    ₹2cr plus the excess.
+  source: >-
+    Taxable ₹2,00,00,001 (2,000,000,100 paise): slab = 558,000,030 paise; ×125% =
+    69,750,003,750 hundredths; relief cap = (558,000,000 × 115) + 10,000 = 64,170,010,000
+    hundredths -> relief binds. Cess ×104/10,000 = 667,368,104 paise -> ₹66,73,681.04 ->
+    ₹66,73,681 = 667,368,100 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: annual_income_tax
+  inputs: {annual_taxable: 2000000100}
+  expected: 667368100
+
+- id: it192_surcharge_25pct_binds_at_3cr
+  statute: Income-tax Act 1961
+  section: "115BAC(1A); FA 2025 s.2(9) 25% band"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    FA 2025 s.2(9): "at the rate of twenty-five per cent. ... exceeding two crore rupees"
+    (new-regime top band); cess s.2(11).
+  source: >-
+    Taxable ₹3,00,00,000: slab = ₹85,80,000; +25% = ₹1,07,25,000 (relief cap ₹1,64,17,000 far
+    above); ×1.04 = ₹1,11,54,000 exactly = 1,115,400,000 paise. Interior point of the top
+    band — pins that 25% (not the old-regime 37%) is the highest surcharge a s.115BAC(1A)
+    person can bear.
+  ca_initials: PENDING
+  ca_date: null
+  target: annual_income_tax
+  inputs: {annual_taxable: 3000000000}
+  expected: 1115400000
 
 # ---- monthly_tds: standard deduction + /12 projection ------------------------------------------
 - id: it192_monthly_tds_nil_at_1275000_gross

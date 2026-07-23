@@ -16,6 +16,9 @@ class Gstr3bInput(BaseModel):
     due_date: str  # ISO
     filed_date: str | None = None
     is_nil: bool = False
+    # Preceding-FY aggregate turnover in paise — selects the Notf 19/2021 late-fee cap
+    # (≤₹1.5cr / ≤₹5cr). None = unknown → s.47(1) statutory-maximum cap assumed.
+    aato: int | None = None
     output: TaxHeads
     itc_available: TaxHeads
 

@@ -39,7 +39,11 @@ pub fn gratuity_hybrid(
     fixed_term: bool,
 ) -> Paise {
     let total = completed_years(doj, exit_date);
-    let floor = if fixed_term { GRATUITY_MIN_YEARS_FIXED_TERM } else { GRATUITY_MIN_YEARS };
+    let floor = if fixed_term {
+        GRATUITY_MIN_YEARS_FIXED_TERM
+    } else {
+        GRATUITY_MIN_YEARS
+    };
     if total < floor {
         return Paise(0);
     }
@@ -64,14 +68,22 @@ pub fn gratuity_required(last_basic_monthly: i64, completed_years: i64) -> Paise
     Paise(round_rupee(paise).min(GRATUITY_CEILING))
 }
 
-/// Monthly statutory minimum bonus (8.33%); nil above the ₹21,000 eligibility ceiling, on Basic
-/// capped at ₹7,000.
+/// Monthly statutory minimum bonus. CoW 2019 s.26(1) verbatim: "eight and one-third per cent.
+/// of the wages earned by the employee or one hundred rupees, whichever is higher" — the rate
+/// is EXACTLY 1/12 (never the 0.0833 approximation: WS1.E2 defect D1) and the ₹100 floor is
+/// ANNUAL (defect D2). On a constant capped monthly wage the annual minimum at 1/12 equals one
+/// month's capped wage, so annual = max(cap, ₹100) and the monthly accrual slice is that /12,
+/// half-up to the rupee. Nil above the ₹21,000 eligibility ceiling; Basic capped at ₹7,000.
+/// Mirror of app/domains/payroll/statutory.py::bonus_provision_monthly.
 pub fn bonus_provision_monthly(basic_monthly: i64) -> Paise {
     if basic_monthly > 2_100_000 {
         return Paise(0);
     }
     let cap = basic_monthly.min(700_000);
-    Paise(((cap * 833 + 500_000) / 1_000_000) * 100)
+    // s.26(1) annual ₹100 floor (10,000 paise); then the monthly slice:
+    // exact rupees = annual / 1200; half-up = floor(x + 1/2) = (annual + 600) / 1200.
+    let annual = cap.max(10_000);
+    Paise(((annual + 600) / 1200) * 100)
 }
 
 #[cfg(test)]
@@ -97,7 +109,7 @@ mod tests {
 
     #[test]
     fn bonus_provision() {
-        // ₹6,000 -> 8.33% = ₹499.80 -> ₹500; ₹10,000 capped @₹7,000 = ₹583.10 -> ₹583;
+        // ₹6,000 -> 1/12 = ₹500.00 exact; ₹10,000 capped @₹7,000 -> 700000/12 = ₹583.33 -> ₹583;
         // ₹25,000 above eligibility -> nil (mirrors test_bonus_provision).
         assert_eq!(bonus_provision_monthly(600_000), Paise(50_000));
         assert_eq!(bonus_provision_monthly(1_000_000), Paise(58_300));
@@ -105,18 +117,45 @@ mod tests {
     }
 
     #[test]
+    fn bonus_exact_one_twelfth_not_0833() {
+        // D1 fix pinned: Basic ₹6,006 -> 600600/12 = ₹500.50 -> half-up ₹501 (the old 0.0833
+        // approximation gave ₹500.30 -> ₹500, a ₹1 statutory error).
+        assert_eq!(bonus_provision_monthly(600_600), Paise(50_100));
+    }
+
+    #[test]
+    fn bonus_annual_100_floor() {
+        // D2 fix pinned: the s.26(1) ₹100 ANNUAL floor binds when the capped monthly wage is
+        // under ₹100. Basic ₹60/month: rate leg ₹5/month; floor 10,000/12 = ₹8.33 -> ₹8.
+        assert_eq!(bonus_provision_monthly(6_000), Paise(800));
+        // At exactly ₹100/month the two legs are equal (10,000/12 -> ₹8) — floor never lifts
+        // the figure at/above this boundary.
+        assert_eq!(bonus_provision_monthly(10_000), Paise(800));
+    }
+
+    #[test]
     fn hybrid_vectors() {
         // Oracle vector: 7 completed years (>= 5, eligible), split old/new base -> ₹1,50,000.
         assert_eq!(
             gratuity_hybrid(
-                (2020, 11, 21), (2027, 11, 21), (2025, 11, 21), 2_600_000, 5_200_000, false
+                (2020, 11, 21),
+                (2027, 11, 21),
+                (2025, 11, 21),
+                2_600_000,
+                5_200_000,
+                false
             ),
             Paise(15_000_000)
         );
         // Under one completed year -> ineligible on every reading -> nil.
         assert_eq!(
             gratuity_hybrid(
-                (2025, 6, 1), (2025, 11, 1), (2025, 11, 21), 2_600_000, 5_200_000, false
+                (2025, 6, 1),
+                (2025, 11, 1),
+                (2025, 11, 21),
+                2_600_000,
+                5_200_000,
+                false
             ),
             Paise(0)
         );
@@ -127,13 +166,25 @@ mod tests {
         // CoSS 2020 s.53(1): "continuous service for not less than five years". PAIRED:
         // exactly 5 completed years -> payable (15/26 × ₹26,000 × 5 = ₹75,000)…
         assert_eq!(
-            gratuity_hybrid((2026, 1, 1), (2031, 1, 1), (2025, 11, 21), 9_900_000, 2_600_000, false),
+            gratuity_hybrid(
+                (2026, 1, 1),
+                (2031, 1, 1),
+                (2025, 11, 21),
+                9_900_000,
+                2_600_000,
+                false
+            ),
             Paise(7_500_000)
         );
         // …one day short of the 5th anniversary (4 completed years) -> nil for a non-FTE.
         assert_eq!(
             gratuity_hybrid(
-                (2026, 1, 1), (2030, 12, 31), (2025, 11, 21), 9_900_000, 2_600_000, false
+                (2026, 1, 1),
+                (2030, 12, 31),
+                (2025, 11, 21),
+                9_900_000,
+                2_600_000,
+                false
             ),
             Paise(0)
         );
@@ -144,21 +195,49 @@ mod tests {
         // FTE exception (s.53(1) second proviso + MoLE FAQ Sl.14): PAIRED at the 1-year floor.
         // Exactly 1 completed year, fixed_term -> (15/26) × ₹26,000 × 1 = ₹15,000…
         assert_eq!(
-            gratuity_hybrid((2026, 1, 1), (2027, 1, 1), (2025, 11, 21), 9_900_000, 2_600_000, true),
+            gratuity_hybrid(
+                (2026, 1, 1),
+                (2027, 1, 1),
+                (2025, 11, 21),
+                9_900_000,
+                2_600_000,
+                true
+            ),
             Paise(1_500_000)
         );
         // …11 months (0 completed years), fixed_term -> nil (FAQ Sl.19).
         assert_eq!(
-            gratuity_hybrid((2026, 1, 1), (2026, 12, 1), (2025, 11, 21), 9_900_000, 2_600_000, true),
+            gratuity_hybrid(
+                (2026, 1, 1),
+                (2026, 12, 1),
+                (2025, 11, 21),
+                9_900_000,
+                2_600_000,
+                true
+            ),
             Paise(0)
         );
         // The FTE floor is the EXCEPTION, not the rule: same 2 years non-FTE -> nil, FTE -> ₹30,000.
         assert_eq!(
-            gratuity_hybrid((2026, 1, 1), (2028, 1, 1), (2025, 11, 21), 9_900_000, 2_600_000, false),
+            gratuity_hybrid(
+                (2026, 1, 1),
+                (2028, 1, 1),
+                (2025, 11, 21),
+                9_900_000,
+                2_600_000,
+                false
+            ),
             Paise(0)
         );
         assert_eq!(
-            gratuity_hybrid((2026, 1, 1), (2028, 1, 1), (2025, 11, 21), 9_900_000, 2_600_000, true),
+            gratuity_hybrid(
+                (2026, 1, 1),
+                (2028, 1, 1),
+                (2025, 11, 21),
+                9_900_000,
+                2_600_000,
+                true
+            ),
             Paise(3_000_000)
         );
     }
@@ -167,12 +246,26 @@ mod tests {
     fn hybrid_ceiling_pair() {
         // s.53(3) ceiling ₹20,00,000, PAIRED. 17y × ₹2,00,000 base = ₹19,61,538 -> under cap…
         assert_eq!(
-            gratuity_hybrid((2026, 1, 1), (2043, 1, 1), (2025, 11, 21), 0, 20_000_000, false),
+            gratuity_hybrid(
+                (2026, 1, 1),
+                (2043, 1, 1),
+                (2025, 11, 21),
+                0,
+                20_000_000,
+                false
+            ),
             Paise(196_153_800)
         );
         // …18y raw ₹20,76,923 -> clamps to exactly the cap.
         assert_eq!(
-            gratuity_hybrid((2026, 1, 1), (2044, 1, 1), (2025, 11, 21), 0, 20_000_000, false),
+            gratuity_hybrid(
+                (2026, 1, 1),
+                (2044, 1, 1),
+                (2025, 11, 21),
+                0,
+                20_000_000,
+                false
+            ),
             Paise(200_000_000)
         );
     }

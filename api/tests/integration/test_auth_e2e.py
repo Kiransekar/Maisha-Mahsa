@@ -78,7 +78,11 @@ def auth_server(monkeypatch):
     )
     kid = f"e2e-kid-{uuid.uuid4()}"
     jwk = {
-        "kty": "OKP", "crv": "Ed25519", "x": _b64u(pub_bytes), "kid": kid, "use": "sig",
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "x": _b64u(pub_bytes),
+        "kid": kid,
+        "use": "sig",
         "alg": "EdDSA",
     }
     handler_cls = type(
@@ -176,9 +180,13 @@ def test_wrong_signing_key_is_401(auth_server, client):
     )
     forged = jwt.encode(
         {
-            "sub": "attacker", "email": "e@e.com", "iss": auth_server.base_url,
-            "aud": auth_server.base_url, "exp": int(time.time()) + 900,
-            "activeOrganizationId": "org-7", "role": "owner",
+            "sub": "attacker",
+            "email": "e@e.com",
+            "iss": auth_server.base_url,
+            "aud": auth_server.base_url,
+            "exp": int(time.time()) + 900,
+            "activeOrganizationId": "org-7",
+            "role": "owner",
         },
         attacker_pem,
         algorithm="EdDSA",
@@ -190,9 +198,13 @@ def test_wrong_signing_key_is_401(auth_server, client):
 def test_alg_none_is_401(auth_server, client):
     token = jwt.encode(
         {
-            "sub": "attacker", "email": "e@e.com", "iss": auth_server.base_url,
-            "aud": auth_server.base_url, "exp": int(time.time()) + 900,
-            "activeOrganizationId": "org-7", "role": "owner",
+            "sub": "attacker",
+            "email": "e@e.com",
+            "iss": auth_server.base_url,
+            "aud": auth_server.base_url,
+            "exp": int(time.time()) + 900,
+            "activeOrganizationId": "org-7",
+            "role": "owner",
         },
         key=None,
         algorithm="none",
@@ -202,12 +214,18 @@ def test_alg_none_is_401(auth_server, client):
 
 
 def test_wrong_issuer_and_audience_are_401(auth_server, client):
-    assert client.get(
-        "/me", headers=_bearer(_token(auth_server, iss="https://evil.example.com"))
-    ).status_code == 401
-    assert client.get(
-        "/me", headers=_bearer(_token(auth_server, aud="https://evil.example.com"))
-    ).status_code == 401
+    assert (
+        client.get(
+            "/me", headers=_bearer(_token(auth_server, iss="https://evil.example.com"))
+        ).status_code
+        == 401
+    )
+    assert (
+        client.get(
+            "/me", headers=_bearer(_token(auth_server, aud="https://evil.example.com"))
+        ).status_code
+        == 401
+    )
 
 
 # ---------------------------------------------------------------------------------------
@@ -240,8 +258,11 @@ def test_forged_principal_cannot_be_smuggled_in(auth_server, client):
         "/me",
         headers=_bearer(
             _token(
-                auth_server, sub="user-99", email="ca@example.com",
-                activeOrganizationId="org-42", role="ca",
+                auth_server,
+                sub="user-99",
+                email="ca@example.com",
+                activeOrganizationId="org-42",
+                role="ca",
             )
         ),
     ).json()
@@ -273,12 +294,11 @@ def test_missing_org_yields_403_never_a_default_org(auth_server, client):
 
 
 def test_unmapped_role_is_403_not_downgraded(auth_server, client):
-    assert client.get(
-        "/me", headers=_bearer(_token(auth_server, role="galactic-emperor"))
-    ).status_code == 403
-    assert client.get(
-        "/me", headers=_bearer(_token(auth_server, role=_ABSENT))
-    ).status_code == 403
+    assert (
+        client.get("/me", headers=_bearer(_token(auth_server, role="galactic-emperor"))).status_code
+        == 403
+    )
+    assert client.get("/me", headers=_bearer(_token(auth_server, role=_ABSENT))).status_code == 403
 
 
 # ---------------------------------------------------------------------------------------
@@ -391,13 +411,15 @@ def test_mfa_claim_enforced_for_privileged_roles_when_configured(auth_server, cl
     # Owner without the claim -> denied (was mfa_required(OWNER) in app.core.identity).
     assert client.get("/me", headers=_bearer(_token(auth_server))).status_code == 403
     # Owner with it -> allowed.
-    assert client.get(
-        "/me", headers=_bearer(_token(auth_server, twoFactorEnabled=True))
-    ).status_code == 200
+    assert (
+        client.get("/me", headers=_bearer(_token(auth_server, twoFactorEnabled=True))).status_code
+        == 200
+    )
     # Non-privileged role is not subject to the policy.
-    assert client.get(
-        "/me", headers=_bearer(_token(auth_server, role="ca", sub="ca-1"))
-    ).status_code == 200
+    assert (
+        client.get("/me", headers=_bearer(_token(auth_server, role="ca", sub="ca-1"))).status_code
+        == 200
+    )
 
 
 def test_mfa_not_enforced_when_no_claim_is_configured(auth_server, client):

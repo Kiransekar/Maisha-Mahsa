@@ -39,9 +39,7 @@ def upgrade() -> None:
             if not inspector.has_table(name):
                 Base.metadata.tables[name].create(bind)
         return
-    cols = {
-        c["name"] for c in sa.inspect(bind).get_columns("memberships", schema=TENANT_SCHEMA)
-    }
+    cols = {c["name"] for c in sa.inspect(bind).get_columns("memberships", schema=TENANT_SCHEMA)}
     if "status" not in cols:
         # verbatim mirror of infra/db/multitenant/006_ca_seat.sql
         op.execute(

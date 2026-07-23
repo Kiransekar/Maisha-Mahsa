@@ -41,8 +41,12 @@ CASES = {
     ),
     ("compliance", "add-deadline"): (
         ComplianceCalendar,
-        {"domain": "gst", "form_name": "GSTR-3B (Jun)", "due_date": "2026-08-20",
-         "filing_period": "2026-06"},
+        {
+            "domain": "gst",
+            "form_name": "GSTR-3B (Jun)",
+            "due_date": "2026-08-20",
+            "filing_period": "2026-06",
+        },
     ),
     ("equity", "add-shareholder"): (
         Shareholder,
@@ -50,13 +54,20 @@ CASES = {
     ),
     ("expense", "submit-claim"): (
         ExpenseClaim,
-        {"claim_date": "2026-07-01", "expense_date": "2026-06-28", "category": "travel",
-         "amount": "5000.50"},
+        {
+            "claim_date": "2026-07-01",
+            "expense_date": "2026-06-28",
+            "category": "travel",
+            "amount": "5000.50",
+        },
     ),
     ("vault", "ingest"): (
         Document,
-        {"file_name": "contract.pdf", "content": "master services agreement",
-         "upload_date": "2026-07-01"},
+        {
+            "file_name": "contract.pdf",
+            "content": "master services agreement",
+            "upload_date": "2026-07-01",
+        },
     ),
 }
 
@@ -83,9 +94,7 @@ def test_preview_mutates_nothing_for_every_action(session):
     client = _client(session)
     for (domain, key), (table, values) in CASES.items():
         before = _count(session, table)
-        body = client.post(
-            f"/api/domains/{domain}/actions/{key}/preview", json={"values": values}
-        )
+        body = client.post(f"/api/domains/{domain}/actions/{key}/preview", json={"values": values})
         assert body.status_code == 200, body.text
         data = body.json()
         assert data["committed"] is False
@@ -147,9 +156,7 @@ def test_preview_then_commit_creates_with_badged_after_figures(session):
         # after-figures come from the SAME §0.4 badge machinery as GET /domains/{d}: every
         # state is a known badge value, and unknown facts fall to honest_pending, never ✓.
         assert data["after_figures"], f"{domain}/{key}: no after-figures returned"
-        assert all(
-            f["state"] in ("verified", "honest_pending") for f in data["after_figures"]
-        )
+        assert all(f["state"] in ("verified", "honest_pending") for f in data["after_figures"])
 
 
 def test_money_field_previews_exact_paise_and_is_never_hardcoded_verified(session):

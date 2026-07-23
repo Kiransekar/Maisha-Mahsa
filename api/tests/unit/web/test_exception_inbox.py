@@ -115,14 +115,23 @@ def test_confirm_flag_carried_but_preview_stays_pure() -> None:
 # ── template render ──────────────────────────────────────────────────────────
 def test_inbox_template_renders_five_queues_grouped_money_and_no_fake_check() -> None:
     inbox = build_inbox(_sample_items())
-    html = _env().get_template("exception_inbox.html").render(
-        inbox=inbox,
-        mahsa_up=True,
-        settings=SimpleNamespace(app_name="Maisha-Mahsa"),
-        nav_active="inbox",
+    html = (
+        _env()
+        .get_template("exception_inbox.html")
+        .render(
+            inbox=inbox,
+            mahsa_up=True,
+            settings=SimpleNamespace(app_name="Maisha-Mahsa"),
+            nav_active="inbox",
+        )
     )
-    for label in ("Needs document", "Needs categorization", "Mahsa blocked",
-                  "Awaiting approval", "Feed broken"):
+    for label in (
+        "Needs document",
+        "Needs categorization",
+        "Mahsa blocked",
+        "Awaiting approval",
+        "Feed broken",
+    ):
         assert label in html
     assert "₹5,00,000.00" in html  # Indian lakh/crore grouping via the canonical renderer
     assert "✕" in html  # blocked figure carries the verification-fail glyph
@@ -133,8 +142,10 @@ def test_inbox_template_renders_five_queues_grouped_money_and_no_fake_check() ->
 def test_bulk_preview_partial_shows_dry_run_and_confirm_form() -> None:
     items = _sample_items()
     preview = preview_bulk(items, ["approval:treasury", "approval:gst"], "approve")
-    html = _env().get_template("partials/inbox_bulk_preview.html").render(
-        preview=preview, toast=None, mahsa_up=True
+    html = (
+        _env()
+        .get_template("partials/inbox_bulk_preview.html")
+        .render(preview=preview, toast=None, mahsa_up=True)
     )
     assert "nothing has changed yet" in html.lower()
     assert '<input type="hidden" name="confirm" value="true">' in html  # confirm re-post

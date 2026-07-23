@@ -50,13 +50,14 @@ def test_interest_234b_claim_round_trips():
     interest = tax_calc.interest_234b(
         Paise.from_rupees(500000), Paise.from_rupees(100000), months=5
     )["interest"]
-    claim = interest_234b_claim(
-        Paise.from_rupees(500000), Paise.from_rupees(100000), 5, interest
-    )
+    claim = interest_234b_claim(Paise.from_rupees(500000), Paise.from_rupees(100000), 5, interest)
     assert claim.target == "interest_234b"
     assert claim.claimed_paise == Paise.from_rupees(20000)
-    assert tax_calc.interest_234b(
-        claim.inputs["assessed_tax"],
-        claim.inputs["advance_paid"],
-        months=claim.inputs["months"],
-    )["interest"] == claim.claimed_paise
+    assert (
+        tax_calc.interest_234b(
+            claim.inputs["assessed_tax"],
+            claim.inputs["advance_paid"],
+            months=claim.inputs["months"],
+        )["interest"]
+        == claim.claimed_paise
+    )

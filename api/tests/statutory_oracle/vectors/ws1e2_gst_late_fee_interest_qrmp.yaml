@@ -32,11 +32,15 @@
 #    supplies"; s.10(2A) persons "three per cent." — each CGST side, mirrored in SGST
 #    (https://cbic-gst.gov.in/pdf/24092021-CGST-Rules-2017-Part-A-Rules.pdf).
 #
-# ENGINE-SCOPE NOTES (reported in PROGRESS [WS1.E2-expand], not papered over):
-#  * TURNOVER-LINKED CAPS: late_fee_3b has no turnover input — its ₹10,000 combined cap is the
-#    s.47 statutory maximum (the > ₹5 crore AATO band). For AATO ≤ ₹5 crore, Notification
-#    19/2021 caps the fee LOWER (₹2,000 / ₹5,000 combined) — the engine OVERSTATES the fee for
-#    those taxpayers once the lower cap would bind (> 40 / > 100 days late). Real gap, reported.
+# ENGINE-SCOPE NOTES:
+#  * TURNOVER-LINKED CAPS (WS1.E2 defect D4) — FIXED in the [D1-D2-D4-D5-FIX] round
+#    (2026-07-23): late_fee_3b now takes an optional ``aato`` input (aggregate turnover of the
+#    PRECEDING financial year, paise) and applies the Notification 19/2021 caps — ₹1,000 CGST
+#    (₹2,000 combined) for AATO ≤ ₹1.5 crore, ₹2,500 CGST (₹5,000 combined) for ₹1.5–5 crore.
+#    UNKNOWN AATO (input absent) fails toward the s.47(1) statutory maximum (₹10,000 combined)
+#    — the fee is never silently understated, and the claim/figure note states the assumption.
+#    Notification re-fetched from gstcouncil.gov.in and re-read verbatim 2026-07-23 for the
+#    fix; the aato-input vectors below pin every class boundary.
 #  * DAY-COUNT: s.50 and rule 88B prescribe no annual divisor; the engine uses /365. Interest
 #    vectors are provenance=interpretation with the divisor alternatives recorded.
 
@@ -113,8 +117,9 @@
     CGST Act s.47(1) ("maximum amount of five thousand rupees", CGST side).
   source: >-
     200 days × ₹50 = ₹10,000 = the combined ₹5,000+₹5,000 statutory maximum exactly (1,000,000
-    paise). Applies to the > ₹5 crore AATO class; for smaller taxpayers Notification 19/2021
-    caps lower — NOT modelled by the engine (gap recorded in PROGRESS).
+    paise). No aato input -> UNKNOWN AATO deliberately falls back to this statutory maximum
+    (never a silent undercharge); the Notification 19/2021 lower caps for known AATO ≤ ₹5
+    crore are pinned by the gst_late_fee_aato_* vectors below.
   ca_initials: PENDING
   ca_date: null
   target: late_fee_3b
@@ -183,6 +188,153 @@
   ca_date: null
   target: late_fee_3b
   inputs: {days_late: 26, is_nil: true}
+  expected: 50000
+
+# ---- D4 fix pinned: Notf 19/2021 turnover-linked caps (aato input, paise) ----------------------
+- id: gst_late_fee_aato_1_5cr_39_days_below_cap
+  statute: CGST Act 2017
+  section: "47(1); Notf 19/2021 Sl.2"
+  provenance: primary
+  citation_url: "https://gstcouncil.gov.in/sites/default/files/2024-05/notfctn-19-central-tax-english-2021.pdf"
+  citation_locator: >-
+    Notification 19/2021-Central Tax (re-read verbatim 2026-07-23), Table for June 2021
+    onwards, Sl.2: "Registered persons having an aggregate turnover of up to rupees 1.5 crores
+    in the preceding financial year, other than those covered under S. No. 1 — One thousand
+    rupees" (CGST side; ₹2,000 combined with the SGST mirror). Per-day ₹25+₹25: Notf 76/2018.
+  source: >-
+    AATO exactly ₹1.5 crore (1,500,000,000 paise — "up to" is INCLUSIVE), 39 days × ₹50/day =
+    ₹1,950 = 195,000 paise, one day short of the ₹2,000 combined class cap. Cap-boundary
+    triple with the two vectors below.
+  ca_initials: PENDING
+  ca_date: null
+  target: late_fee_3b
+  inputs: {days_late: 39, aato: 1500000000}
+  expected: 195000
+
+- id: gst_late_fee_aato_1_5cr_40_days_cap_reached_exactly
+  statute: CGST Act 2017
+  section: "47(1); Notf 19/2021 Sl.2"
+  provenance: primary
+  citation_url: "https://gstcouncil.gov.in/sites/default/files/2024-05/notfctn-19-central-tax-english-2021.pdf"
+  citation_locator: >-
+    Notification 19/2021-Central Tax, Table Sl.2 (₹1,000 CGST cap, AATO up to ₹1.5 crore).
+  source: >-
+    AATO ₹1.5 crore, 40 days × ₹50 = ₹2,000 = the ₹1,000+₹1,000 combined class cap exactly
+    (200,000 paise).
+  ca_initials: PENDING
+  ca_date: null
+  target: late_fee_3b
+  inputs: {days_late: 40, aato: 1500000000}
+  expected: 200000
+
+- id: gst_late_fee_aato_1_5cr_41_days_cap_binds
+  statute: CGST Act 2017
+  section: "47(1); Notf 19/2021 Sl.2"
+  provenance: primary
+  citation_url: "https://gstcouncil.gov.in/sites/default/files/2024-05/notfctn-19-central-tax-english-2021.pdf"
+  citation_locator: >-
+    Notification 19/2021-Central Tax, Table Sl.2 (₹1,000 CGST cap, AATO up to ₹1.5 crore).
+  source: >-
+    AATO ₹1.5 crore, 41 days would accrue ₹2,050; the class cap clips it at ₹2,000 combined =
+    200,000 paise. (Before the D4 fix the engine had no turnover input and charged toward the
+    ₹10,000 statutory maximum — overstating the fee for this taxpayer beyond 40 days.)
+  ca_initials: PENDING
+  ca_date: null
+  target: late_fee_3b
+  inputs: {days_late: 41, aato: 1500000000}
+  expected: 200000
+
+- id: gst_late_fee_aato_class_boundary_one_paisa_above_1_5cr
+  statute: CGST Act 2017
+  section: "47(1); Notf 19/2021 Sl.3"
+  provenance: primary
+  citation_url: "https://gstcouncil.gov.in/sites/default/files/2024-05/notfctn-19-central-tax-english-2021.pdf"
+  citation_locator: >-
+    Notification 19/2021-Central Tax, Table Sl.3: "Taxpayers having an aggregate turnover of
+    more than rupees 1.5 crores and up to rupees 5 crores in the preceding financial year,
+    other than those covered under S. No. 1 — Two thousand and five hundred rupees" (CGST
+    side; ₹5,000 combined with the SGST mirror).
+  source: >-
+    AATO one paisa above ₹1.5 crore (1,500,000,001 paise) is "more than rupees 1.5 crores" ->
+    Sl.3 class. 41 days × ₹50 = ₹2,050 = 205,000 paise — above the Sl.2 cap that bound one
+    paisa below, and far under this class's ₹5,000 cap. PAIRED with the 41-day Sl.2 vector:
+    the same lateness flips caps exactly at the turnover boundary.
+  ca_initials: PENDING
+  ca_date: null
+  target: late_fee_3b
+  inputs: {days_late: 41, aato: 1500000001}
+  expected: 205000
+
+- id: gst_late_fee_aato_5cr_100_days_cap_reached_exactly
+  statute: CGST Act 2017
+  section: "47(1); Notf 19/2021 Sl.3"
+  provenance: primary
+  citation_url: "https://gstcouncil.gov.in/sites/default/files/2024-05/notfctn-19-central-tax-english-2021.pdf"
+  citation_locator: >-
+    Notification 19/2021-Central Tax, Table Sl.3 (₹2,500 CGST cap, AATO more than ₹1.5 crore
+    and up to ₹5 crores — "up to" INCLUSIVE at exactly ₹5 crore).
+  source: >-
+    AATO exactly ₹5 crore (5,000,000,000 paise), 100 days × ₹50 = ₹5,000 = the ₹2,500+₹2,500
+    combined class cap exactly (500,000 paise); 99 days gives ₹4,950 (495,000 paise) below it.
+  ca_initials: PENDING
+  ca_date: null
+  target: late_fee_3b
+  inputs: {days_late: 100, aato: 5000000000}
+  expected: 500000
+
+- id: gst_late_fee_aato_5cr_201_days_class_cap_binds
+  statute: CGST Act 2017
+  section: "47(1); Notf 19/2021 Sl.3"
+  provenance: primary
+  citation_url: "https://gstcouncil.gov.in/sites/default/files/2024-05/notfctn-19-central-tax-english-2021.pdf"
+  citation_locator: >-
+    Notification 19/2021-Central Tax, Table Sl.3 (₹2,500 CGST cap for the ₹1.5–5 crore class).
+  source: >-
+    AATO ₹5 crore, 201 days: the s.47(1) statutory maximum path would give ₹10,000, but the
+    class cap clips at ₹5,000 combined = 500,000 paise. Direct counterpart of
+    gst_late_fee_201_days_cap_binds (unknown AATO), proving the D4 overstatement is gone when
+    the turnover is known.
+  ca_initials: PENDING
+  ca_date: null
+  target: late_fee_3b
+  inputs: {days_late: 201, aato: 5000000000}
+  expected: 500000
+
+- id: gst_late_fee_aato_one_paisa_above_5cr_statutory_max
+  statute: CGST Act 2017
+  section: "47(1); Notf 19/2021 scope"
+  provenance: primary
+  citation_url: "https://gstcouncil.gov.in/sites/default/files/2024-05/notfctn-19-central-tax-english-2021.pdf"
+  citation_locator: >-
+    Notification 19/2021-Central Tax Table (classes end at "up to rupees 5 crores") read with
+    CGST Act s.47(1) ("maximum amount of five thousand rupees", CGST side): above ₹5 crore no
+    waiver-cap applies and the statutory maximum stands.
+  source: >-
+    AATO one paisa above ₹5 crore (5,000,000,001 paise), 201 days -> outside both notification
+    classes -> the s.47(1) combined maximum ₹10,000 = 1,000,000 paise. Boundary pair with the
+    at-₹5-crore vector.
+  ca_initials: PENDING
+  ca_date: null
+  target: late_fee_3b
+  inputs: {days_late: 201, aato: 5000000001}
+  expected: 1000000
+
+- id: gst_late_fee_aato_nil_cap_turnover_independent
+  statute: CGST Act 2017
+  section: "47(1); Notf 19/2021 Sl.1"
+  provenance: primary
+  citation_url: "https://gstcouncil.gov.in/sites/default/files/2024-05/notfctn-19-central-tax-english-2021.pdf"
+  citation_locator: >-
+    Notification 19/2021-Central Tax, Table Sl.1 (nil-return ₹250 CGST cap); Sl.2 and Sl.3
+    both read "other than those covered under S. No. 1" — the nil class wins regardless of
+    turnover.
+  source: >-
+    Nil return with AATO ₹1.5 crore, 26 days: the ₹250+₹250 nil cap (not the ₹2,000 turnover
+    cap) clips ₹520 at ₹500 = 50,000 paise — identical to the no-aato nil vector above.
+  ca_initials: PENDING
+  ca_date: null
+  target: late_fee_3b
+  inputs: {days_late: 26, is_nil: true, aato: 1500000000}
   expected: 50000
 
 # ---- s.50 interest (18% notified; /365 divisor is the recorded interpretation) -----------------

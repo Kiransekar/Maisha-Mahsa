@@ -131,8 +131,7 @@ def _figure(
 ) -> AuditFigure:
     if not isinstance(value_paise, int) or isinstance(value_paise, bool):
         raise TypeError(
-            f"{label!r}: value_paise must be an exact int (paise), got "
-            f"{type(value_paise).__name__}"
+            f"{label!r}: value_paise must be an exact int (paise), got {type(value_paise).__name__}"
         )
     fig: AuditFigure = {
         "label": label,
@@ -228,8 +227,10 @@ def _statutory_registers_section(entity_data: dict[str, Any]) -> list[AuditFigur
         ref = "tax.file_tds_return"
         figures.append(
             _figure(
-                f"{head} — Tax Deducted", r["total_deducted"],
-                "tax.tds_return.total_deducted", ref,
+                f"{head} — Tax Deducted",
+                r["total_deducted"],
+                "tax.tds_return.total_deducted",
+                ref,
             )
         )
         # Genuinely the late_fee_234e computation (tax_calc.late_fee_234e) → its real target.
@@ -253,12 +254,24 @@ def _statutory_registers_section(entity_data: dict[str, Any]) -> list[AuditFigur
     if payroll is not None:
         ref = "payroll.build_snapshot"
         figures += [
-            _figure("Payroll — Monthly Burn (gross + employer PF)", payroll["monthly_burn"],
-                    "payroll.build_snapshot.monthly_burn", ref),
-            _figure("Payroll — LWF Due (all states)", payroll["lwf_due_paise"],
-                    "payroll.build_snapshot.lwf_due", ref),
-            _figure("Payroll — Monthly Bonus Provision", payroll["monthly_bonus_required_paise"],
-                    "payroll.build_snapshot.bonus_required", ref),
+            _figure(
+                "Payroll — Monthly Burn (gross + employer PF)",
+                payroll["monthly_burn"],
+                "payroll.build_snapshot.monthly_burn",
+                ref,
+            ),
+            _figure(
+                "Payroll — LWF Due (all states)",
+                payroll["lwf_due_paise"],
+                "payroll.build_snapshot.lwf_due",
+                ref,
+            ),
+            _figure(
+                "Payroll — Monthly Bonus Provision",
+                payroll["monthly_bonus_required_paise"],
+                "payroll.build_snapshot.bonus_required",
+                ref,
+            ),
         ]
     return figures
 
@@ -290,8 +303,10 @@ def _form_26as_section(entity_data: dict[str, Any]) -> tuple[list[AuditFigure], 
         figures.append(
             _figure(f"TAN {e['tan']} — in 26AS, MISSING in books", e["as_26as"], target, ref)
         )
-    note = "Reconciled: all TAN-wise TDS credits match Form 26AS." if recon["reconciled"] else (
-        "NOT reconciled — mismatched or one-sided TAN entries above need action."
+    note = (
+        "Reconciled: all TAN-wise TDS credits match Form 26AS."
+        if recon["reconciled"]
+        else ("NOT reconciled — mismatched or one-sided TAN entries above need action.")
     )
     return figures, note
 
@@ -308,8 +323,10 @@ def _msme_ageing_section(entity_data: dict[str, Any]) -> tuple[list[AuditFigure]
     ]
     figures.append(
         _figure(
-            "Payables outstanding — Total", aging["total_outstanding"],
-            "payables.ap_aging.total", ref,
+            "Payables outstanding — Total",
+            aging["total_outstanding"],
+            "payables.ap_aging.total",
+            ref,
         )
     )
     days = int(msme["msme_max_days_unpaid"])
@@ -424,8 +441,11 @@ def pack_to_csv_zip(pack: dict[str, Any]) -> bytes:
             ["Organisation", pack["org_id"]],
             ["Rules version", pack["rules_version"]],
             ["Integrity hash (SHA-256)", integrity["hash"]],
-            ["Badge legend", "VERIFIED = Mahsa independently recomputed; PENDING = not yet; "
-                             "BLOCKED = recompute mismatch"],
+            [
+                "Badge legend",
+                "VERIFIED = Mahsa independently recomputed; PENDING = not yet; "
+                "BLOCKED = recompute mismatch",
+            ],
             # WS10.4 — disclaimer line on the export cover (rendered from the byte-exact
             # constant; DISCLAIMERS.md placement policy).
             ["Disclaimer", DISCLAIMER_TEXT],
@@ -437,24 +457,28 @@ def pack_to_csv_zip(pack: dict[str, Any]) -> bytes:
                 ["Particulars", "Amount (INR)", "Amount (paise)", "Badge", "Evidence"]
             ]
             for fig in pack["sections"][name]:
-                rows.append([
-                    fig["label"],
-                    Paise(fig["value_paise"]).format_inr(),
-                    str(fig["value_paise"]),
-                    badge_text(fig["badge"]),
-                    fig["evidence_ref"],
-                ])
+                rows.append(
+                    [
+                        fig["label"],
+                        Paise(fig["value_paise"]).format_inr(),
+                        str(fig["value_paise"]),
+                        badge_text(fig["badge"]),
+                        fig["evidence_ref"],
+                    ]
+                )
                 # CITE.P1-1 (§B4.2): one row per cell-level source anchor — the excerpt plus
                 # its resolution state, verbatim from the sealed pack. MOVED/BROKEN render
                 # exactly as resolved at build time (never silently normalised to RESOLVED).
                 for a in fig.get("anchors", []):
-                    rows.append([
-                        "SOURCE",
-                        a.get("excerpt", ""),
-                        "",
-                        str(a.get("resolution", "")).upper(),
-                        a.get("note") or "",
-                    ])
+                    rows.append(
+                        [
+                            "SOURCE",
+                            a.get("excerpt", ""),
+                            "",
+                            str(a.get("resolution", "")).upper(),
+                            a.get("note") or "",
+                        ]
+                    )
             note = pack["section_notes"].get(name)
             if note:
                 rows.append(["NOTE", note, "", "", ""])

@@ -95,9 +95,7 @@ def reconcile(session: Session, run: ParallelRun, *, tolerance: float = 0.0) -> 
         maisha = _maisha_value(session, o.domain, o.metric, o.observed_on)
         variance = None if maisha is None else round(o.external_value - maisha, 6)
         ok = maisha is not None and abs(variance) <= tolerance  # type: ignore[arg-type]
-        out.append(
-            Recon(o.observed_on, o.domain, o.metric, o.external_value, maisha, variance, ok)
-        )
+        out.append(Recon(o.observed_on, o.domain, o.metric, o.external_value, maisha, variance, ok))
     return out
 
 

@@ -265,9 +265,7 @@ class PayablesService(BaseDomainService):
 
     # ---- Mahsa contract -------------------------------------------------------------
 
-    def recompute_claims(
-        self, session: Session, as_of: date | None = None
-    ) -> list[RecomputeClaim]:
+    def recompute_claims(self, session: Session, as_of: date | None = None) -> list[RecomputeClaim]:
         """Emit Prime-Directive claims (§0.4) for every bill's TDS-on-payment figure — the only
         payables figure ported to Mahsa (``tds_on_payment``; three-way match / aging / MSME are
         not recomputable, so no claim is emitted for them). Inputs mirror create_bill's exact

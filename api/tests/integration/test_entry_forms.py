@@ -49,13 +49,14 @@ def _seed(session: Session) -> None:
     session.add(Company(id=1, name="Maisha Test Pvt Ltd", pan="AAACM1234A", state="Maharashtra"))
     session.add(Customer(id=1, name="Intra Co", state="Maharashtra"))
     session.add(Customer(id=2, name="Inter Co", state="Karnataka"))
-    session.add(
-        Vendor(id=1, name="Sharp Legal LLP", tds_section="194J", payee_type="company")
-    )
+    session.add(Vendor(id=1, name="Sharp Legal LLP", tds_section="194J", payee_type="company"))
     session.add(
         Employee(
-            id=1, employee_code="E001", name="Asha Rao",
-            date_of_joining="2026-01-05", state="Karnataka",
+            id=1,
+            employee_code="E001",
+            name="Asha Rao",
+            date_of_joining="2026-01-05",
+            state="Karnataka",
         )
     )
     session.add(ChartOfAccounts(id=1, code="1000", name="Cash", account_type="asset"))
@@ -94,8 +95,13 @@ CASES = {
     ),
     ("revenue", "create-invoice"): (
         Invoice,
-        {"invoice_number": "INV-001", "customer_id": "1", "invoice_date": "2026-07-01",
-         "gst_rate": "18", "lines": json.dumps(INVOICE_LINES)},
+        {
+            "invoice_number": "INV-001",
+            "customer_id": "1",
+            "invoice_date": "2026-07-01",
+            "gst_rate": "18",
+            "lines": json.dumps(INVOICE_LINES),
+        },
     ),
     ("payables", "create-vendor"): (
         Vendor,
@@ -103,23 +109,34 @@ CASES = {
     ),
     ("payables", "create-bill"): (
         Bill,
-        {"bill_number": "B-1042", "vendor_id": "1", "bill_date": "2026-07-01",
-         "subtotal": "60000", "gst_amount": "10800"},
+        {
+            "bill_number": "B-1042",
+            "vendor_id": "1",
+            "bill_date": "2026-07-01",
+            "subtotal": "60000",
+            "gst_amount": "10800",
+        },
     ),
     ("ledger", "journal-entry"): (
         JournalEntry,
-        {"entry_date": "2026-07-01", "description": "Cash sale",
-         "lines": json.dumps(JOURNAL_LINES)},
+        {
+            "entry_date": "2026-07-01",
+            "description": "Cash sale",
+            "lines": json.dumps(JOURNAL_LINES),
+        },
     ),
     ("payroll", "add-employee"): (
         Employee,
-        {"employee_code": "E002", "name": "Ravi Kumar", "date_of_joining": "2026-07-01",
-         "state": "Karnataka"},
+        {
+            "employee_code": "E002",
+            "name": "Ravi Kumar",
+            "date_of_joining": "2026-07-01",
+            "state": "Karnataka",
+        },
     ),
     ("payroll", "salary-structure"): (
         SalaryStructure,
-        {"employee_id": "1", "effective_from": "2026-07-01", "basic": "50000",
-         "hra": "20000"},
+        {"employee_id": "1", "effective_from": "2026-07-01", "basic": "50000", "hra": "20000"},
     ),
 }
 
@@ -130,9 +147,7 @@ def test_preview_mutates_nothing_for_every_entry_form(session):
     client = _client(session)
     for (domain, key), (table, values) in CASES.items():
         before = _count(session, table)
-        body = client.post(
-            f"/api/domains/{domain}/actions/{key}/preview", json={"values": values}
-        )
+        body = client.post(f"/api/domains/{domain}/actions/{key}/preview", json={"values": values})
         assert body.status_code == 200, f"{domain}/{key}: {body.text}"
         data = body.json()
         assert data["committed"] is False
@@ -187,8 +202,14 @@ def test_bill_below_threshold_deducts_nothing_and_says_why(session):
     client = _client(session)
     data = client.post(
         "/api/domains/payables/actions/create-bill/preview",
-        json={"values": {"bill_number": "B-1", "vendor_id": "1", "bill_date": "2026-07-01",
-                         "subtotal": "40000"}},
+        json={
+            "values": {
+                "bill_number": "B-1",
+                "vendor_id": "1",
+                "bill_date": "2026-07-01",
+                "subtotal": "40000",
+            }
+        },
     ).json()
     figs = {f["key"]: f for f in data["figures"]}
     assert figs["tds_on_payment"]["raw"] == 0
@@ -234,8 +255,13 @@ def test_journal_imbalance_is_a_named_422_and_writes_nothing(session):
     ]
     body = client.post(
         "/api/domains/ledger/actions/journal-entry/preview",
-        json={"values": {"entry_date": "2026-07-01", "description": "Broken",
-                         "lines": json.dumps(bad)}},
+        json={
+            "values": {
+                "entry_date": "2026-07-01",
+                "description": "Broken",
+                "lines": json.dumps(bad),
+            }
+        },
     )
     assert body.status_code == 422
     err = body.json()["detail"]["errors"][0]["error"]
@@ -265,8 +291,10 @@ def test_lines_rows_are_validated_per_column(session):
     """A row missing a required column is named field-precisely: lines[0].rate."""
     _seed(session)
     client = _client(session)
-    values = {**CASES[("revenue", "create-invoice")][1],
-              "lines": json.dumps([{"description": "x", "quantity": "1"}])}
+    values = {
+        **CASES[("revenue", "create-invoice")][1],
+        "lines": json.dumps([{"description": "x", "quantity": "1"}]),
+    }
     body = client.post(
         "/api/domains/revenue/actions/create-invoice/preview", json={"values": values}
     )
@@ -279,15 +307,18 @@ def test_salary_structure_preview_matches_compute_components_and_warns_on_s2y(se
     engine's own output and the s.2(y) warning from check_ctc_compliance is surfaced."""
     _seed(session)
     client = _client(session)
-    values = {"employee_id": "1", "effective_from": "2026-07-01",
-              "basic": "20000", "hra": "30000"}
+    values = {"employee_id": "1", "effective_from": "2026-07-01", "basic": "20000", "hra": "30000"}
     data = client.post(
         "/api/domains/payroll/actions/salary-structure/preview", json={"values": values}
     ).json()
     figs = {f["key"]: f for f in data["figures"]}
     engine = compute_components(
-        basic=20000_00, hra=30000_00, lta=0, special_allowance=0,
-        state="Karnataka", month=7,
+        basic=20000_00,
+        hra=30000_00,
+        lta=0,
+        special_allowance=0,
+        state="Karnataka",
+        month=7,
     )
     assert figs["payroll_gross_paise"]["raw"] == engine["gross_salary"]
     assert figs["pf_employee"]["raw"] == engine["employee_pf"]

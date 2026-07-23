@@ -9,7 +9,7 @@ def test_archives_only_expired_retention() -> None:
     docs = [
         {"id": "a", "retention_until": "2025-12-31"},  # past -> archive
         {"id": "b", "retention_until": "2027-12-31"},  # future -> keep
-        {"id": "c", "retention_until": None},          # permanent -> never archive
+        {"id": "c", "retention_until": None},  # permanent -> never archive
     ]
     assert to_archive(docs, as_of="2026-06-24") == ["a"]
 

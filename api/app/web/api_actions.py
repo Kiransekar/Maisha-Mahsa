@@ -114,11 +114,7 @@ def normalize_values(
             except json.JSONDecodeError:
                 err(f.name, f"{f.label} must be a JSON array of rows")
                 continue
-            if (
-                not isinstance(rows, list)
-                or not rows
-                or not all(isinstance(r, dict) for r in rows)
-            ):
+            if not isinstance(rows, list) or not rows or not all(isinstance(r, dict) for r in rows):
                 err(f.name, f"{f.label} needs at least one row")
                 continue
             norm_rows: list[dict[str, str]] = []
@@ -225,8 +221,10 @@ async def action_preview(
         db.rollback()
         raise HTTPException(
             status_code=422,
-            detail={"errors": [{"field": "", "error": str(exc) or "Invalid input"}],
-                    "note": "Nothing was changed."},
+            detail={
+                "errors": [{"field": "", "error": str(exc) or "Invalid input"}],
+                "note": "Nothing was changed.",
+            },
         ) from exc
     db.rollback()  # a preview NEVER mutates — row-count asserted in tests
     # P0-3: a handler may return (message, engine-computed badged figures) — the figures come
@@ -276,8 +274,10 @@ async def action_commit(
         db.rollback()
         raise HTTPException(
             status_code=422,
-            detail={"errors": [{"field": "", "error": str(exc) or "Invalid input"}],
-                    "note": "Nothing was changed."},
+            detail={
+                "errors": [{"field": "", "error": str(exc) or "Invalid input"}],
+                "note": "Nothing was changed.",
+            },
         ) from exc
     message = result[0] if isinstance(result, tuple) else result
     return {

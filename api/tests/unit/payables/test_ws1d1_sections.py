@@ -101,7 +101,10 @@ def test_higher_rate_non_filer_without_floor_raises():
 def test_higher_rate_takes_highest_of_base_and_supplied_floors():
     # base 10, no-PAN floor 20, non-filer floor 15 -> 20 wins
     r = p.apply_higher_rate(
-        Decimal("10"), pan_available=False, is_non_filer=True,
-        no_pan_rate=Decimal("20"), non_filer_rate=Decimal("15"),
+        Decimal("10"),
+        pan_available=False,
+        is_non_filer=True,
+        no_pan_rate=Decimal("20"),
+        non_filer_rate=Decimal("15"),
     )
     assert r == Decimal("20")

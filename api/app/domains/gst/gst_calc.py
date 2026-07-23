@@ -100,8 +100,16 @@ def itc_setoff(output: dict[str, int], credit: dict[str, int]) -> dict[str, dict
 
 _LATE_FEE_PER_DAY = 5000  # ₹50/day (CGST ₹25 + SGST ₹25), paise
 _LATE_FEE_PER_DAY_NIL = 2000  # ₹20/day for nil returns
-_LATE_FEE_CAP = 1_000_000  # ₹10,000 cap
-_LATE_FEE_CAP_NIL = 50_000  # ₹500 cap for nil returns
+_LATE_FEE_CAP = 1_000_000  # ₹10,000 combined s.47(1) statutory maximum (₹5,000 CGST + SGST)
+_LATE_FEE_CAP_NIL = 50_000  # ₹500 combined cap for nil returns (Notf 19/2021 Sl.1)
+# Notf 19/2021-Central Tax (01-06-2021, read verbatim 2026-07-23), Table for June 2021 onwards:
+# Sl.2 — AATO "up to rupees 1.5 crores in the preceding financial year" → ₹1,000 CGST cap;
+# Sl.3 — "more than rupees 1.5 crores and up to rupees 5 crores" → ₹2,500 CGST cap.
+# Combined (CGST + mirrored SGST): ₹2,000 / ₹5,000. Above ₹5cr the s.47(1) maximum stands.
+_LATE_FEE_CAP_AATO_1_5CR = 200_000  # ₹2,000 combined, AATO ≤ ₹1.5 crore
+_LATE_FEE_CAP_AATO_5CR = 500_000  # ₹5,000 combined, ₹1.5 crore < AATO ≤ ₹5 crore
+_AATO_1_5CR = 1_500_000_000  # ₹1.5 crore in paise
+_AATO_5CR = 5_000_000_000  # ₹5 crore in paise
 _INTEREST_RATE = Decimal("0.18")  # 18% p.a., s.50
 
 
@@ -138,11 +146,25 @@ def rcm_liability(supplies: list[dict]) -> dict[str, Any]:
     }
 
 
-def late_fee_3b(days_late: int, *, is_nil: bool = False) -> int:
+def late_fee_3b(days_late: int, *, is_nil: bool = False, aato: int | None = None) -> int:
+    """GSTR-3B late fee, combined CGST+SGST paise. ``aato`` = aggregate turnover in the
+    PRECEDING financial year, in paise (Notf 19/2021 turnover-linked caps: ≤₹1.5cr → ₹2,000
+    combined; ≤₹5cr → ₹5,000 combined). ``aato=None`` (unknown) fails toward the s.47(1)
+    statutory maximum (₹10,000 combined) — the fee is never silently understated; callers
+    surfacing the figure state the unknown-AATO assumption."""
     if days_late <= 0:
         return 0
     per_day = _LATE_FEE_PER_DAY_NIL if is_nil else _LATE_FEE_PER_DAY
-    cap = _LATE_FEE_CAP_NIL if is_nil else _LATE_FEE_CAP
+    if is_nil:
+        cap = _LATE_FEE_CAP_NIL  # Notf 19/2021 Sl.1 — nil class regardless of turnover
+    elif aato is None:
+        cap = _LATE_FEE_CAP  # unknown AATO → statutory maximum, never undercharge
+    elif int(aato) <= _AATO_1_5CR:
+        cap = _LATE_FEE_CAP_AATO_1_5CR
+    elif int(aato) <= _AATO_5CR:
+        cap = _LATE_FEE_CAP_AATO_5CR
+    else:
+        cap = _LATE_FEE_CAP
     return min(per_day * int(days_late), cap)
 
 
@@ -159,12 +181,15 @@ def compute_gstr3b(
     *,
     days_late: int = 0,
     is_nil: bool = False,
+    aato: int | None = None,
 ) -> dict[str, Any]:
-    """Compute the GSTR-3B cash liability after ITC set-off, plus late fee and interest."""
+    """Compute the GSTR-3B cash liability after ITC set-off, plus late fee and interest.
+    ``aato`` (preceding-FY aggregate turnover, paise) selects the Notf 19/2021 late-fee cap;
+    None assumes the s.47(1) statutory maximum (see ``late_fee_3b``)."""
     setoff = itc_setoff(output, itc_available)
     cash = setoff["cash"]
     cash_total = sum(cash.values())
-    fee = late_fee_3b(days_late, is_nil=is_nil)
+    fee = late_fee_3b(days_late, is_nil=is_nil, aato=aato)
     interest = interest_3b(cash_total, days_late)
     return {
         "cash": cash,

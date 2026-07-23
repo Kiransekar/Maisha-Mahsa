@@ -52,17 +52,37 @@ def test_intra_state_with_injected_threshold():
 # ---- JSON artifact shape + honesty label ----
 def test_build_eway_json_shape_and_label():
     cons = {
-        "from_state": "MH", "to_state": "GJ", "value": Paise.from_rupees(60_000),
-        "doc_no": "INV-1", "doc_date": "2026-07-20", "from_gstin": "27aapfu0939f1zv",
-        "to_gstin": "24aapfu0939f1zv", "hsn": "1006", "cgst": 0, "sgst": 0,
-        "igst": Paise.from_rupees(3_000), "distance_km": 400, "vehicle_no": "MH12AB1234",
+        "from_state": "MH",
+        "to_state": "GJ",
+        "value": Paise.from_rupees(60_000),
+        "doc_no": "INV-1",
+        "doc_date": "2026-07-20",
+        "from_gstin": "27aapfu0939f1zv",
+        "to_gstin": "24aapfu0939f1zv",
+        "hsn": "1006",
+        "cgst": 0,
+        "sgst": 0,
+        "igst": Paise.from_rupees(3_000),
+        "distance_km": 400,
+        "vehicle_no": "MH12AB1234",
     }
     art = eway.build_eway_json(cons)
 
     required_fields = {
-        "supplyType", "docType", "docNo", "docDate", "fromGstin", "toGstin",
-        "fromStateCode", "toStateCode", "totalValue", "itemList", "transMode",
-        "transDistance", "vehicleNo", "label",
+        "supplyType",
+        "docType",
+        "docNo",
+        "docDate",
+        "fromGstin",
+        "toGstin",
+        "fromStateCode",
+        "toStateCode",
+        "totalValue",
+        "itemList",
+        "transMode",
+        "transDistance",
+        "vehicleNo",
+        "label",
     }
     assert required_fields <= art.keys()
 

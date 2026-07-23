@@ -30,10 +30,20 @@ def test_document_sensitivity_mapping():
 
 def test_accessible_documents_filters_by_role(session):
     svc = VaultService()
-    svc.ingest(session, file_name="invoice-1.pdf", content="inv", upload_date="2026-05-01",
-               doc_type="invoice")
-    svc.ingest(session, file_name="board-min.pdf", content="board", upload_date="2026-05-01",
-               doc_type="board_resolution")
+    svc.ingest(
+        session,
+        file_name="invoice-1.pdf",
+        content="inv",
+        upload_date="2026-05-01",
+        doc_type="invoice",
+    )
+    svc.ingest(
+        session,
+        file_name="board-min.pdf",
+        content="board",
+        upload_date="2026-05-01",
+        doc_type="board_resolution",
+    )
     viewer_docs = svc.accessible_documents(session, "viewer")
     owner_docs = svc.accessible_documents(session, "owner")
     assert {d["file_name"] for d in viewer_docs} == {"invoice-1.pdf"}  # not the restricted one

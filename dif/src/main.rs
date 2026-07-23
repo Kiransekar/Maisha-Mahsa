@@ -18,8 +18,9 @@ async fn main() {
             });
             let text = std::fs::read_to_string(&path)
                 .unwrap_or_else(|e| panic!("cannot read MAHSA_RULES={path}: {e}"));
-            let manifest = std::fs::read_to_string(&manifest_path)
-                .unwrap_or_else(|e| panic!("cannot read MAHSA_RULES_MANIFEST={manifest_path}: {e}"));
+            let manifest = std::fs::read_to_string(&manifest_path).unwrap_or_else(|e| {
+                panic!("cannot read MAHSA_RULES_MANIFEST={manifest_path}: {e}")
+            });
             RuleSet::load_verified(&text, &manifest)
                 .unwrap_or_else(|e| panic!("rule pack failed manifest verification: {e}"))
         }

@@ -32,19 +32,23 @@ def test_audit_support_package_readiness():
 
 def test_dpiit_eligibility():
     ok = c.dpiit_eligibility(
-        incorporation_date="2022-06-01", as_of="2026-06-26",
+        incorporation_date="2022-06-01",
+        as_of="2026-06-26",
         annual_turnover_paise=Paise.from_rupees(50_000_000),
     )
     assert ok["eligible"] is True and ok["reasons"] == []
     # too old + reconstituted -> ineligible
     bad = c.dpiit_eligibility(
-        incorporation_date="2010-01-01", as_of="2026-06-26",
-        annual_turnover_paise=Paise.from_rupees(50_000_000), is_reconstituted=True,
+        incorporation_date="2010-01-01",
+        as_of="2026-06-26",
+        annual_turnover_paise=Paise.from_rupees(50_000_000),
+        is_reconstituted=True,
     )
     assert bad["eligible"] is False and len(bad["reasons"]) == 2
     # turnover >= 100 crore -> ineligible
     big = c.dpiit_eligibility(
-        incorporation_date="2023-01-01", as_of="2026-06-26",
+        incorporation_date="2023-01-01",
+        as_of="2026-06-26",
         annual_turnover_paise=Paise.from_rupees(100_00_00_000),
     )
     assert big["eligible"] is False

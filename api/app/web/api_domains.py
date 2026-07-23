@@ -395,7 +395,9 @@ async def threads_json(
     return {
         "threads": [_thread_json(db, t) for t in ca_threads.list_threads(db)],
         "can_respond": can_respond,
-        "respond_denied_reason": None if can_respond else (
+        "respond_denied_reason": None
+        if can_respond
+        else (
             "missing capability: write — responding attaches books-side evidence; "
             "an Accountant or the Owner answers this query"
         ),
@@ -466,7 +468,10 @@ async def thread_resolve(
     """Close a responded query."""
     try:
         thread = ca_threads.resolve_thread(
-            db, thread_id=thread_id, timestamp=_now_iso(), note=body.note,
+            db,
+            thread_id=thread_id,
+            timestamp=_now_iso(),
+            note=body.note,
             user_id=principal.user_id,
         )
     except LookupError as exc:
@@ -585,8 +590,11 @@ def _audit_pack_entity_data(db: Session, *, org_id: str, rules_version: str) -> 
 
     accounts = db.scalars(select(ChartOfAccounts).order_by(ChartOfAccounts.code)).all()
     gl = [
-        {"code": a.code, "name": a.name,
-         "closing_balance": ledger.general_ledger(db, a.id)["closing_balance"]}
+        {
+            "code": a.code,
+            "name": a.name,
+            "closing_balance": ledger.general_ledger(db, a.id)["closing_balance"],
+        }
         for a in accounts
     ]
     payroll_metrics = payroll.build_snapshot(db, as_of)
@@ -620,15 +628,24 @@ def _audit_pack_entity_data(db: Session, *, org_id: str, rules_version: str) -> 
         "general_ledger": gl,
         "statutory_registers": {
             "tds_returns": [
-                {"return_type": r.return_type, "quarter": r.quarter, "status": r.status,
-                 "total_deducted": int(r.total_deducted),
-                 "late_filing_fee": int(r.late_filing_fee)}
+                {
+                    "return_type": r.return_type,
+                    "quarter": r.quarter,
+                    "status": r.status,
+                    "total_deducted": int(r.total_deducted),
+                    "late_filing_fee": int(r.late_filing_fee),
+                }
                 for r in db.scalars(select(TdsReturn).order_by(TdsReturn.quarter)).all()
             ],
             "gst_returns": [
-                {"return_type": r.return_type, "filing_period": r.filing_period,
-                 "status": r.status, "tax_payable": int(r.tax_payable),
-                 "late_fee": int(r.late_fee), "interest": int(r.interest)}
+                {
+                    "return_type": r.return_type,
+                    "filing_period": r.filing_period,
+                    "status": r.status,
+                    "tax_payable": int(r.tax_payable),
+                    "late_fee": int(r.late_fee),
+                    "interest": int(r.interest),
+                }
                 for r in db.scalars(select(GstReturn).order_by(GstReturn.filing_period)).all()
             ],
             "payroll": {
@@ -659,7 +676,7 @@ async def _build_pack(db: Session, mahsa: MahsaClient, principal: Principal) -> 
         raise HTTPException(
             status_code=503,
             detail="Mahsa is unreachable, so the audit pack cannot bind a rules version. "
-                   "No pack was generated and nothing was fabricated.",
+            "No pack was generated and nothing was fabricated.",
         ) from None
     entity_data = _audit_pack_entity_data(
         db, org_id=principal.org_id, rules_version=health["rules_version"]

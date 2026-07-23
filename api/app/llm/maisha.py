@@ -81,8 +81,9 @@ class MaishaGenerator:
             else:
                 mem = mguard.text
                 if mguard.findings:
-                    _log.info("redacted PII in memory block for domain %r: %s", domain,
-                              mguard.findings)
+                    _log.info(
+                        "redacted PII in memory block for domain %r: %s", domain, mguard.findings
+                    )
 
         facts = tools.enrich(snapshot)
         user = prompt.build_user_prompt(

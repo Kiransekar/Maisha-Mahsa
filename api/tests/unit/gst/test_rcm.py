@@ -14,8 +14,10 @@ def test_rcm_tax_and_itc() -> None:
 
 
 def test_rcm_multiple_supplies() -> None:
-    res = rcm_liability([
-        {"taxable": Paise.from_rupees(100000), "rate": 18},
-        {"taxable": Paise.from_rupees(50000), "rate": 5},
-    ])
+    res = rcm_liability(
+        [
+            {"taxable": Paise.from_rupees(100000), "rate": 18},
+            {"taxable": Paise.from_rupees(50000), "rate": 5},
+        ]
+    )
     assert res["rcm_tax_payable"] == Paise.from_rupees(18000) + Paise.from_rupees(2500)

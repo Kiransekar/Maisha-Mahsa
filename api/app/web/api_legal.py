@@ -140,12 +140,8 @@ async def doc_serve(doc_type: str) -> dict[str, Any]:
     now = datetime.now(UTC)
     version = legal.current_version(doc, now)
     if version is None:
-        raise HTTPException(
-            status_code=404, detail=f"no {doc.value} is published yet"
-        )
-    entry = next(
-        e for e in legal.PUBLISHED if e.doc_type == doc and e.version == version
-    )
+        raise HTTPException(status_code=404, detail=f"no {doc.value} is published yet")
+    entry = next(e for e in legal.PUBLISHED if e.doc_type == doc and e.version == version)
     path = _REPO_ROOT / entry.doc_path
     if not path.is_file():
         # A published version whose file is missing is a deploy defect — fail loud, never

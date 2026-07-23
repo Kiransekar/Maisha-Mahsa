@@ -23,7 +23,7 @@ SYSTEM_PROMPT = (
     "copied verbatim (as a decimal string; money is integer paise) from the FACTS block, "
     "which was computed by deterministic, audited engines. Cite statutory rules only from the "
     "RULES block, using their exact statute and section. If the FACTS block does not contain "
-    "what the question needs, set \"abstained\": true and return an empty \"claims\" object. "
+    'what the question needs, set "abstained": true and return an empty "claims" object. '
     "Respond ONLY with a JSON object matching the provided schema."
 )
 
@@ -50,9 +50,7 @@ DOMAIN_RULES: dict[str, list[RuleHint]] = {
         RuleHint("EXPENSE-001", "Internal expense policy", "EXP-1", "over_policy_claims > 0"),
     ],
     "compliance": [
-        RuleHint(
-            "COMPLIANCE-002", "Various (see compliance calendar)", "—", "overdue_filings > 0"
-        ),
+        RuleHint("COMPLIANCE-002", "Various (see compliance calendar)", "—", "overdue_filings > 0"),
     ],
     "tax": [
         RuleHint("TAX-001", "Income Tax Act 1961", "Sec 211 / 234C", "advance_tax_q1_ratio < 0.15"),
@@ -105,6 +103,6 @@ def build_user_prompt(
         f"FACTS (the only numbers you may state):\n{_facts_block(facts)}\n\n"
         f"RULES (the only citations you may use):\n{_rules_block(rules)}\n\n"
         "Draft the answer. Set the domain field to the DOMAIN above. Put each number you "
-        "report into \"claims\" keyed by metric name, copied verbatim from FACTS. Add a short "
-        "\"narrative\". Add \"rule_assertions\" only for rules whose condition the FACTS meet."
+        'report into "claims" keyed by metric name, copied verbatim from FACTS. Add a short '
+        '"narrative". Add "rule_assertions" only for rules whose condition the FACTS meet.'
     )

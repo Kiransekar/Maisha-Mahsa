@@ -271,9 +271,7 @@ def test_non_lossless_amount_refuses_commit(session: Session) -> None:
     session.commit()
     client = _client(session)
 
-    report = client.post(
-        "/api/ledger/tally/parse", files=_file("non_lossless_amount.xml")
-    ).json()
+    report = client.post("/api/ledger/tally/parse", files=_file("non_lossless_amount.xml")).json()
     assert any("refusing to round" in e for e in report["errors"])
 
     before = _counts(session)

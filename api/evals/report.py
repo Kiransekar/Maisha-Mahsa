@@ -53,9 +53,7 @@ def render_text(results: list[CaseResult]) -> str:
             lines.append(f"        {smark} {s.name}: {s.detail}")
     summary = _summary(results)
     lines.append("")
-    lines.append(
-        f"{summary['passed']}/{summary['cases']} cases passed ({summary['pass_rate']}%)."
-    )
+    lines.append(f"{summary['passed']}/{summary['cases']} cases passed ({summary['pass_rate']}%).")
     if summary["inconsistent"]:
         lines.append(f"pass^k drift in: {', '.join(summary['inconsistent'])}")
     return "\n".join(lines)

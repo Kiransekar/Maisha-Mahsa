@@ -145,13 +145,19 @@ mod tests {
     #[test]
     fn wage_base_compliant_no_addback() {
         // Basic ₹30k, HRA ₹20k; excluded ₹20k = 40% <= 50% -> base ₹30k
-        assert_eq!(statutory_wage_base(3_000_000, 2_000_000, 0, 0), Paise(3_000_000));
+        assert_eq!(
+            statutory_wage_base(3_000_000, 2_000_000, 0, 0),
+            Paise(3_000_000)
+        );
     }
 
     #[test]
     fn wage_base_addback_when_basic_underweighted() {
         // Basic ₹20k, (a)-(i) excluded ₹40k > ₹30k cap -> add back ₹10k -> ₹30k
-        assert_eq!(statutory_wage_base(2_000_000, 4_000_000, 0, 0), Paise(3_000_000));
+        assert_eq!(
+            statutory_wage_base(2_000_000, 4_000_000, 0, 0),
+            Paise(3_000_000)
+        );
     }
 
     #[test]
@@ -159,12 +165,18 @@ mod tests {
         // Defect #5: Basic ₹20k, HRA ₹25k, gratuity ₹15k. All remuneration ₹60k, cap ₹30k;
         // the (a)-(i) aggregate is ₹25k <= ₹30k -> NO add-back -> base ₹20k. Under the old
         // one-bucket reading gratuity drove a false ₹10k add-back (-> ₹30k).
-        assert_eq!(statutory_wage_base(2_000_000, 2_500_000, 1_500_000, 0), Paise(2_000_000));
+        assert_eq!(
+            statutory_wage_base(2_000_000, 2_500_000, 1_500_000, 0),
+            Paise(2_000_000)
+        );
     }
 
     #[test]
     fn wage_base_in_kind_capped_15pct() {
         // Basic ₹30k, in-kind ₹10k; countable = min(₹10k, 15% of ₹30k = ₹4,500) -> ₹34,500
-        assert_eq!(statutory_wage_base(3_000_000, 0, 0, 1_000_000), Paise(3_450_000));
+        assert_eq!(
+            statutory_wage_base(3_000_000, 0, 0, 1_000_000),
+            Paise(3_450_000)
+        );
     }
 }

@@ -122,7 +122,10 @@ impl Manifest {
 
 fn sha256_hex(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
-    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
+    Sha256::digest(bytes)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 impl RuleSet {
@@ -264,7 +267,7 @@ rules:
         assert_eq!(rs.channel, "archived");
         let pf = rs.rules.iter().find(|r| r.id == "PAYROLL-001").unwrap();
         assert_eq!(pf.statute, "EPF & MP Act 1952"); // the archived pack's pre-sweep citation
-        // The engine computes with the old pack: PAYROLL-001 triggers on overdue PF.
+                                                     // The engine computes with the old pack: PAYROLL-001 triggers on overdue PF.
         let mut snap = Snapshot::default();
         snap.metrics.insert("pf_days_overdue".to_string(), 3.0);
         let intent = IntentVec::zeros();

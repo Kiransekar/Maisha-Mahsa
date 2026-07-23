@@ -19,8 +19,14 @@ def test_eps_and_diff_split_at_ceiling() -> None:
 
 def test_member_line_has_11_delimited_fields() -> None:
     m = EcrMember(
-        uan="100100100100", member_name="Asha", gross_wages=100000, epf_wages=15000,
-        eps_wages=15000, edli_wages=15000, epf_contri_remitted=1800, eps_contri_remitted=1250,
+        uan="100100100100",
+        member_name="Asha",
+        gross_wages=100000,
+        epf_wages=15000,
+        eps_wages=15000,
+        edli_wages=15000,
+        epf_contri_remitted=1800,
+        eps_contri_remitted=1250,
         epf_eps_diff_remitted=550,
     )
     line = m.to_line()
@@ -42,13 +48,21 @@ def test_build_ecr_one_line_per_member() -> None:
 
 def test_service_ecr_text(session) -> None:  # type: ignore[no-untyped-def]
     svc = PayrollService()
-    emp = Employee(employee_code="E1", name="Asha", date_of_joining="2021-04-01",
-                   state="MH", uan="100100100100")
+    emp = Employee(
+        employee_code="E1",
+        name="Asha",
+        date_of_joining="2021-04-01",
+        state="MH",
+        uan="100100100100",
+    )
     session.add(emp)
     session.flush()
     svc.set_salary_structure(
-        session, emp.id, effective_from="2026-04-01",
-        basic=Paise.from_rupees(50000), hra=Paise.from_rupees(20000),
+        session,
+        emp.id,
+        effective_from="2026-04-01",
+        basic=Paise.from_rupees(50000),
+        hra=Paise.from_rupees(20000),
         special_allowance=Paise.from_rupees(30000),
     )
     text = svc.ecr_text(session, period="2026-06")

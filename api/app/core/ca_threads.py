@@ -132,8 +132,13 @@ def raise_thread(
     session.add(thread)
     session.flush()
     _seal_event(
-        session, thread, timestamp=timestamp, event="raise", user_id=user_id,
-        note=question, doc_id=None,
+        session,
+        thread,
+        timestamp=timestamp,
+        event="raise",
+        user_id=user_id,
+        note=question,
+        doc_id=None,
     )
     return thread
 
@@ -165,8 +170,13 @@ def respond_thread(
         raise LookupError(f"unknown vault document {doc_id!r}")
     thread.state = "responded"
     _seal_event(
-        session, thread, timestamp=timestamp, event="respond", user_id=user_id,
-        note=note, doc_id=doc_id,
+        session,
+        thread,
+        timestamp=timestamp,
+        event="respond",
+        user_id=user_id,
+        note=note,
+        doc_id=doc_id,
     )
     return thread
 
@@ -188,8 +198,13 @@ def resolve_thread(
         )
     thread.state = "resolved"
     _seal_event(
-        session, thread, timestamp=timestamp, event="resolve", user_id=user_id,
-        note=note, doc_id=None,
+        session,
+        thread,
+        timestamp=timestamp,
+        event="resolve",
+        user_id=user_id,
+        note=note,
+        doc_id=None,
     )
     return thread
 
@@ -250,9 +265,7 @@ def sample_selection(
     vouchers: list[dict[str, Any]] = []
     for e in chosen:
         keys = {str(e.id)} | ({e.reference} if e.reference else set())
-        docs = session.scalars(
-            select(Document).where(Document.entity_id.in_(sorted(keys)))
-        ).all()
+        docs = session.scalars(select(Document).where(Document.entity_id.in_(sorted(keys)))).all()
         vouchers.append(
             {
                 "voucher_id": e.id,
@@ -263,8 +276,7 @@ def sample_selection(
                 "total_debit_paise": e.total_debit,
                 "total_credit_paise": e.total_credit,
                 "documents": [
-                    {"doc_id": d.id, "file_name": d.file_name, "doc_type": d.doc_type}
-                    for d in docs
+                    {"doc_id": d.id, "file_name": d.file_name, "doc_type": d.doc_type} for d in docs
                 ],
             }
         )

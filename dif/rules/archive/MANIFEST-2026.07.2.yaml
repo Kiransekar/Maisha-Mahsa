@@ -8,8 +8,8 @@
 # see docs/RULE_PACK_SLA.md; the repo holds no signing keys (JWT Ed25519 keys belong to the
 # auth provider, audit anchoring is hash-chained, so there is no in-repo signing precedent).
 pack: in-core
-version: "2026.07.3"
-rules_sha256: "6380fd94b45dd2cf0912c0d513e6dcefb9242fec030f088ec6622121f26a1500"
+version: "2026.07.2"
+rules_sha256: "1dc854a60ee9701bcffae4f7e69a93de8dec6f6d4a3bb2d933ba7e9c8fa858e1"
 # Staged-rollout flag: "stable" = current pack for all tenants (the default). To stage a new
 # pack, deploy a second Mahsa with MAHSA_RULES/MAHSA_RULES_MANIFEST pointing at the next pack
 # (channel: next) and route chosen tenants to it; to roll back, point at archive/ — see

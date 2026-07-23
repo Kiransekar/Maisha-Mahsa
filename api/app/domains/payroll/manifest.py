@@ -18,7 +18,7 @@ MANIFEST = DomainManifest(
         Feature("tds", "TDS s.192 new-regime slabs + rebate + marginal relief", D),
         Feature("payroll_run", "Monthly payroll run + entries + net pay", D),
         Feature("gratuity", "Gratuity provision (15/26 × basic × years)", D),
-        Feature("bonus", "Statutory bonus provision (8.33%)", D),
+        Feature("bonus", "Statutory bonus provision (8-1/3% or Rs.100/year floor)", D),
         Feature("lwf", "Labour Welfare Fund (state calendars)", D),
         Feature("ecr", "EPFO ECR text-file generation", D),
         Feature("payslip", "Payslip PDF generation", D),

@@ -83,9 +83,7 @@ class _RecordingClient:
     def __init__(self) -> None:
         self.user: str | None = None
 
-    async def complete(
-        self, *, system: str, user: str, schema: dict[str, Any]
-    ) -> dict[str, Any]:
+    async def complete(self, *, system: str, user: str, schema: dict[str, Any]) -> dict[str, Any]:
         self.user = user
         return {"domain": "treasury", "narrative": "ok", "claims": {}}
 

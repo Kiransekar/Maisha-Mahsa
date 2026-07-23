@@ -63,6 +63,7 @@ router = APIRouter(
     prefix="/api/gst", tags=["gst-spa"], dependencies=[Depends(require(Capability.READ))]
 )
 
+
 def _today() -> date:
     return datetime.now(UTC).date()
 
@@ -310,9 +311,7 @@ def ims_action(
 def gstr1_json_download(period: str, db: Session = Depends(get_session)) -> Response:
     """The SAME artifact the HTMX ``/d/gst/gstr1.json`` route builds — one builder, two doors."""
     lines = RevenueService().gstr1_lines(db, period)
-    payload = gst_calc.gstr1_json(
-        lines, gstin=get_settings().company_gstin, filing_period=period
-    )
+    payload = gst_calc.gstr1_json(lines, gstin=get_settings().company_gstin, filing_period=period)
     return Response(
         content=json.dumps(payload, indent=2),
         media_type="application/json",
@@ -326,9 +325,7 @@ def einvoice_download(invoice: str, db: Session = Depends(get_session)) -> Respo
     the WS9.3 draft-IRN honesty label (``IrnStatus`` + QR ``Caption`` = ``DRAFT_IRN_LABEL``) —
     a locally computed IRN is never IRP-registered."""
     try:
-        payload = RevenueService().einvoice(
-            db, invoice, seller_gstin=get_settings().company_gstin
-        )
+        payload = RevenueService().einvoice(db, invoice, seller_gstin=get_settings().company_gstin)
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return Response(

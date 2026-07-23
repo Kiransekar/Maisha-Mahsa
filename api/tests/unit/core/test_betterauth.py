@@ -92,7 +92,11 @@ def jwks_server():
     )
     kid = f"test-kid-{uuid.uuid4()}"  # unique per instance — see the docstring
     jwk = {
-        "kty": "OKP", "crv": "Ed25519", "x": _b64u(pub_bytes), "kid": kid, "use": "sig",
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "x": _b64u(pub_bytes),
+        "kid": kid,
+        "use": "sig",
         "alg": "EdDSA",
     }
     handler_cls = type(
@@ -284,9 +288,12 @@ def test_get_principal_fails_closed_without_a_verified_principal():
     """The dependency never invents an identity: no verified Principal on request.state -> 401."""
     from fastapi import HTTPException
 
-    for state in (SimpleNamespace(), SimpleNamespace(principal=None),
-                  SimpleNamespace(principal={"user_id": "attacker", "role": "owner"}),
-                  SimpleNamespace(principal="owner")):
+    for state in (
+        SimpleNamespace(),
+        SimpleNamespace(principal=None),
+        SimpleNamespace(principal={"user_id": "attacker", "role": "owner"}),
+        SimpleNamespace(principal="owner"),
+    ):
         with pytest.raises(HTTPException) as excinfo:
             betterauth.get_principal(SimpleNamespace(state=state))  # type: ignore[arg-type]
         assert excinfo.value.status_code == 401
@@ -393,7 +400,7 @@ def test_org_guc_is_parameterised_and_carries_the_verified_org():
         assert bind_org_guc(conn, "postgresql") is True
     finally:
         reset_current_org(token)
-    (sql, params), = conn.log
+    ((sql, params),) = conn.log
     assert params == ("org-7",)
     assert "%s" in sql and "org-7" not in sql  # §0.8: parameterised, never interpolated
 

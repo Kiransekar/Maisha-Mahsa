@@ -349,8 +349,11 @@ async fn fold_recompute_mismatch_blocks() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(v["validation"]["status"], "red");
     assert_eq!(v["shape"]["requires_approval"], true);
-    assert!(v["validation"]["triggered"].as_array().unwrap()
-        .iter().any(|t| t["id"] == "MAHSA-PARITY-001"));
+    assert!(v["validation"]["triggered"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|t| t["id"] == "MAHSA-PARITY-001"));
     let checks = v["recompute"].as_array().unwrap();
     assert_eq!(checks[0]["matches"], false);
     assert_eq!(checks[0]["recomputed_paise"], 600000);
@@ -368,8 +371,11 @@ async fn fold_recompute_correct_claim_does_not_block() {
     .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(v["recompute"][0]["matches"], true);
-    assert!(!v["validation"]["triggered"].as_array().unwrap()
-        .iter().any(|t| t["id"] == "MAHSA-PARITY-001"));
+    assert!(!v["validation"]["triggered"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|t| t["id"] == "MAHSA-PARITY-001"));
 }
 
 #[tokio::test]
@@ -384,6 +390,9 @@ async fn fold_unrecomputable_claim_is_honest_pending_not_blocked() {
     .await;
     assert_eq!(status, StatusCode::OK);
     assert!(v["recompute"][0]["recomputed_paise"].is_null());
-    assert!(!v["validation"]["triggered"].as_array().unwrap()
-        .iter().any(|t| t["id"] == "MAHSA-PARITY-001"));
+    assert!(!v["validation"]["triggered"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|t| t["id"] == "MAHSA-PARITY-001"));
 }

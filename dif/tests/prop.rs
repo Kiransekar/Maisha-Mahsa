@@ -37,12 +37,16 @@ fn arb_snapshot() -> impl Strategy<Value = Snapshot> {
     (
         // Include negative and near-i64::MAX amounts to exercise the saturating money paths
         // (net_burn / Paise Add/Sub) against overflow, not just a comfortable non-negative band.
-        prop_oneof![-1_000_000i64..2_000_000_000i64, Just(i64::MAX), Just(i64::MIN)], // cash paise
+        prop_oneof![
+            -1_000_000i64..2_000_000_000i64,
+            Just(i64::MAX),
+            Just(i64::MIN)
+        ], // cash paise
         prop_oneof![-1_000_000i64..200_000_000i64, Just(i64::MAX)], // burn paise
         prop_oneof![-1_000_000i64..200_000_000i64, Just(i64::MAX)], // revenue paise
-        0u32..10u32,            // accounts
-        0.0f64..1.0f64,         // concentration
-        0u32..6u32,             // overdue filings
+        0u32..10u32,                                                // accounts
+        0.0f64..1.0f64,                                             // concentration
+        0u32..6u32,                                                 // overdue filings
     )
         .prop_map(|(cash, burn, rev, accts, conc, overdue)| Snapshot {
             cash: Paise(cash),

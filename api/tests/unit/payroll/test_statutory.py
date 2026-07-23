@@ -94,17 +94,17 @@ def test_gratuity_hybrid_eligibility_pairs():
 
     kw = dict(boundary=d(2025, 11, 21), old_base=0, new_base=Paise.from_rupees(26000))
     # exactly 5 completed years -> payable ₹75,000; one day short (4 years) -> nil (non-FTE)
-    assert s.gratuity_hybrid(
-        doj=d(2026, 1, 1), exit_date=d(2031, 1, 1), **kw
-    ) == Paise.from_rupees(75000)
+    assert s.gratuity_hybrid(doj=d(2026, 1, 1), exit_date=d(2031, 1, 1), **kw) == Paise.from_rupees(
+        75000
+    )
     assert s.gratuity_hybrid(doj=d(2026, 1, 1), exit_date=d(2030, 12, 31), **kw) == 0
     # FTE: exactly 1 year -> ₹15,000; 11 months -> nil; 2y non-FTE nil vs 2y FTE ₹30,000
     assert s.gratuity_hybrid(
         doj=d(2026, 1, 1), exit_date=d(2027, 1, 1), fixed_term=True, **kw
     ) == Paise.from_rupees(15000)
-    assert s.gratuity_hybrid(
-        doj=d(2026, 1, 1), exit_date=d(2026, 12, 1), fixed_term=True, **kw
-    ) == 0
+    assert (
+        s.gratuity_hybrid(doj=d(2026, 1, 1), exit_date=d(2026, 12, 1), fixed_term=True, **kw) == 0
+    )
     assert s.gratuity_hybrid(doj=d(2026, 1, 1), exit_date=d(2028, 1, 1), **kw) == 0
     assert s.gratuity_hybrid(
         doj=d(2026, 1, 1), exit_date=d(2028, 1, 1), fixed_term=True, **kw
@@ -112,9 +112,35 @@ def test_gratuity_hybrid_eligibility_pairs():
 
 
 def test_bonus_provision():
-    # basic ₹6,000 -> 8.33% = ₹499.80 -> ₹500
+    # basic ₹6,000 -> 1/12 = ₹500.00 exact
     assert s.bonus_provision_monthly(Paise.from_rupees(6000)) == Paise.from_rupees(500)
-    # basic ₹10,000 -> capped at ₹7,000 -> 8.33% = ₹583.10 -> ₹583
+    # basic ₹10,000 -> capped at ₹7,000 -> 700000/12 = ₹583.33 -> ₹583
     assert s.bonus_provision_monthly(Paise.from_rupees(10000)) == Paise.from_rupees(583)
     # basic ₹25,000 -> above eligibility -> nil
     assert s.bonus_provision_monthly(Paise.from_rupees(25000)) == 0
+
+
+def test_bonus_rate_is_exactly_one_twelfth():
+    # D1 fix pinned: CoW 2019 s.26(1) "eight and one-third per cent." = 1/12 exactly.
+    # Basic ₹6,006 -> 600600/12 = ₹500.50 -> half-up ₹501 (the old 0.0833 gave ₹500).
+    assert s.bonus_provision_monthly(Paise.from_rupees(6006)) == Paise.from_rupees(501)
+
+
+def test_bonus_annual_100_floor():
+    # D2 fix pinned: s.26(1) "or one hundred rupees, whichever is higher" — ANNUAL floor.
+    # Basic ₹60/month: rate leg ₹5/month; floor slice 10000/12 = ₹8.33 -> ₹8.
+    assert s.bonus_provision_monthly(Paise.from_rupees(60)) == Paise.from_rupees(8)
+    # At exactly ₹100/month the legs coincide (both 10000/12 -> ₹8); above, the rate leg rules.
+    assert s.bonus_provision_monthly(Paise.from_rupees(100)) == Paise.from_rupees(8)
+
+
+def test_surcharge_bands_and_marginal_relief():
+    # FA 2025 s.2(9) new-regime bands: 10% >50L, 15% >1cr, 25% >2cr, with marginal relief.
+    assert s.annual_income_tax(Paise.from_rupees(5000000)) == Paise.from_rupees(1123200)
+    assert s.annual_income_tax(500_000_100) == Paise.from_rupees(1123201)  # ₹50L + ₹1: relief
+    assert s.annual_income_tax(Paise.from_rupees(5200000)) == Paise.from_rupees(1304160)
+    assert s.annual_income_tax(Paise.from_rupees(10000000)) == Paise.from_rupees(2951520)
+    assert s.annual_income_tax(1_000_000_100) == Paise.from_rupees(2951521)  # ₹1cr + ₹1: relief
+    assert s.annual_income_tax(Paise.from_rupees(20000000)) == Paise.from_rupees(6673680)
+    assert s.annual_income_tax(2_000_000_100) == Paise.from_rupees(6673681)  # ₹2cr + ₹1: relief
+    assert s.annual_income_tax(Paise.from_rupees(30000000)) == Paise.from_rupees(11154000)

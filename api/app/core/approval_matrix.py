@@ -146,7 +146,5 @@ def decide_approval(
     return ApprovalDecision(
         required_role_ok=False,
         needs_approval=True,
-        reason=(
-            f"exceeds role limit ({amount} > {limit} paise, {source} matrix) — escalate"
-        ),
+        reason=(f"exceeds role limit ({amount} > {limit} paise, {source} matrix) — escalate"),
     ).as_dict()

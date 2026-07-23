@@ -195,7 +195,9 @@ def test_gstr3b_preview_confirm_roundtrip(client, auth_server, session) -> None:
     assert _fig(p, "total_payable")["state"] == "honest_pending"
     assert p["verdict_hash"], "verified figures must be sealed into a verdict"
     # The working panel is a real panel (T7), with statute citations, not a tooltip.
-    assert _fig(p, "late_fee_3b")["working"]["citations"] == [{"text": "CGST Act s.47"}]
+    assert _fig(p, "late_fee_3b")["working"]["citations"] == [
+        {"text": "CGST Act s.47; Notf 19/2021-Central Tax"}
+    ]
 
     # Preview wrote NO filing row (INVARIANT 9: preview is not a mutation of the books)…
     assert session.scalars(select(GstReturn)).all() == []

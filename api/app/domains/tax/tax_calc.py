@@ -188,8 +188,8 @@ def itr_computation(
             )
         form = "ITR-6"
         # 22% × 1.10 surcharge × 1.04 cess = 25.168% effective; MAT excluded on this path.
-        effective = _COMPANY_115BAA_BASE * (Decimal(1) + _COMPANY_115BAA_SURCHARGE) * (
-            Decimal(1) + _CESS
+        effective = (
+            _COMPANY_115BAA_BASE * (Decimal(1) + _COMPANY_115BAA_SURCHARGE) * (Decimal(1) + _CESS)
         )
         normal_tax = _round_rupee(Decimal(total_income) * effective)
         mat = 0

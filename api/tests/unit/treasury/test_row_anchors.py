@@ -56,9 +56,7 @@ def _account(session, balance_paise: int = 0) -> BankAccount:
 
 
 def _txns(session) -> list[BankTransaction]:
-    return list(
-        session.scalars(select(BankTransaction).order_by(BankTransaction.id)).all()
-    )
+    return list(session.scalars(select(BankTransaction).order_by(BankTransaction.id)).all())
 
 
 def test_import_mints_anchors_with_raw_line_numbers_and_content_hashes(session):
@@ -77,9 +75,7 @@ def test_import_mints_anchors_with_raw_line_numbers_and_content_hashes(session):
     assert [t.source_row for t in txns] == [2, 4]  # raw line numbers, blank line counted
     assert [t.source_doc_id for t in txns] == [doc_sha, doc_sha]
     assert [t.occurrence for t in txns] == [1, 1]
-    assert txns[0].row_hash == _row_hash(
-        ["2026-05-05", "Opening", "REF1", "0", "100000", "100000"]
-    )
+    assert txns[0].row_hash == _row_hash(["2026-05-05", "Opening", "REF1", "0", "100000", "100000"])
     assert txns[1].row_hash == _row_hash(
         ["2026-05-10", "AWS invoice", "REF2", "20000", "0", "80000"]
     )

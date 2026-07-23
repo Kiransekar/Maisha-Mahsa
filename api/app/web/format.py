@@ -64,8 +64,4 @@ class FactRow:
 
 def fact_rows(facts: dict[str, Any]) -> list[FactRow]:
     """Display rows for a flattened fact map, sorted by label, excluding the ``as_of`` stamp."""
-    return [
-        FactRow(humanize(k), fmt_value(k, v))
-        for k, v in sorted(facts.items())
-        if k != "as_of"
-    ]
+    return [FactRow(humanize(k), fmt_value(k, v)) for k, v in sorted(facts.items()) if k != "as_of"]

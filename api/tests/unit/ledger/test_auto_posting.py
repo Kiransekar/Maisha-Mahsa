@@ -11,10 +11,14 @@ from app.domains.ledger.service import LedgerService
 
 # ── pure builders ───────────────────────────────────────────────────────────────────
 
+
 def test_payroll_journal_is_balanced() -> None:
     lines = ledger_calc.payroll_journal(
-        salary_expense_account=1, bank_account=2, statutory_payable_account=3,
-        gross=Paise.from_rupees(150000), net=Paise.from_rupees(120000),
+        salary_expense_account=1,
+        bank_account=2,
+        statutory_payable_account=3,
+        gross=Paise.from_rupees(150000),
+        net=Paise.from_rupees(120000),
         statutory=Paise.from_rupees(30000),
     )
     assert ledger_calc.is_balanced(lines)
@@ -23,16 +27,22 @@ def test_payroll_journal_is_balanced() -> None:
 def test_payroll_journal_rejects_imbalance() -> None:
     with pytest.raises(ValueError):
         ledger_calc.payroll_journal(
-            salary_expense_account=1, bank_account=2, statutory_payable_account=3,
-            gross=Paise.from_rupees(150000), net=Paise.from_rupees(120000),
+            salary_expense_account=1,
+            bank_account=2,
+            statutory_payable_account=3,
+            gross=Paise.from_rupees(150000),
+            net=Paise.from_rupees(120000),
             statutory=Paise.from_rupees(10000),  # net + statutory != gross
         )
 
 
 def test_sales_and_gst_journals_balanced() -> None:
     s = ledger_calc.sales_journal(
-        receivable_account=1, sales_account=2, gst_output_account=3,
-        taxable=Paise.from_rupees(100000), tax=Paise.from_rupees(18000),
+        receivable_account=1,
+        sales_account=2,
+        gst_output_account=3,
+        taxable=Paise.from_rupees(100000),
+        tax=Paise.from_rupees(18000),
     )
     g = ledger_calc.gst_payment_journal(
         gst_payable_account=3, bank_account=2, amount=Paise.from_rupees(18000)
@@ -41,6 +51,7 @@ def test_sales_and_gst_journals_balanced() -> None:
 
 
 # ── service auto_post ─────────────────────────────────────────────────────────────────
+
 
 def test_auto_post_payroll_tags_source_and_balances(session) -> None:  # type: ignore[no-untyped-def]
     svc = LedgerService()
@@ -51,12 +62,16 @@ def test_auto_post_payroll_tags_source_and_balances(session) -> None:  # type: i
     )
 
     lines = ledger_calc.payroll_journal(
-        salary_expense_account=salary, bank_account=bank, statutory_payable_account=payable,
-        gross=Paise.from_rupees(150000), net=Paise.from_rupees(120000),
+        salary_expense_account=salary,
+        bank_account=bank,
+        statutory_payable_account=payable,
+        gross=Paise.from_rupees(150000),
+        net=Paise.from_rupees(120000),
         statutory=Paise.from_rupees(30000),
     )
-    res = svc.auto_post(session, source="payroll", entry_date="2026-06-30",
-                        description="June payroll", lines=lines)
+    res = svc.auto_post(
+        session, source="payroll", entry_date="2026-06-30", description="June payroll", lines=lines
+    )
 
     entry = session.get(JournalEntry, res["journal_entry_id"])
     assert entry.source == "payroll" and entry.is_auto_generated == 1

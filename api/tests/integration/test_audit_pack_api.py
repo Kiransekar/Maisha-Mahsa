@@ -65,8 +65,13 @@ def test_ca_gets_full_pack_with_honest_badges(session, mahsa_server):
     assert resp.status_code == 200
     pack = resp.json()
     assert set(pack["sections"]) == {
-        "trial_balance", "profit_and_loss", "balance_sheet", "general_ledger",
-        "statutory_registers", "form_26as_reconciliation", "msme_ageing",
+        "trial_balance",
+        "profit_and_loss",
+        "balance_sheet",
+        "general_ledger",
+        "statutory_registers",
+        "form_26as_reconciliation",
+        "msme_ageing",
     }
     assert pack["org_id"] == "org-7"  # bound to the session principal, not a request value
     assert pack["rules_version"]  # from the live engine's /health

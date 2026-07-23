@@ -373,12 +373,17 @@ def _gstr3b_figures(body: Gstr3bInput) -> tuple[list[RecomputeClaim], Any]:
     days_late = _gstr3b_days_late(body)
     output = body.output.model_dump()
     itc = body.itc_available.model_dump()
-    comp = gst_calc.compute_gstr3b(output, itc, days_late=days_late, is_nil=body.is_nil)
+    comp = gst_calc.compute_gstr3b(
+        output, itc, days_late=days_late, is_nil=body.is_nil, aato=body.aato
+    )
+    late_fee_inputs: dict[str, Any] = {"days_late": days_late, "is_nil": body.is_nil}
+    if body.aato is not None:
+        late_fee_inputs["aato"] = int(body.aato)
     claims = [
         itc_setoff_claim(output, itc, comp["cash"], comp["remaining_credit"]),
         RecomputeClaim(
             target="late_fee_3b",
-            inputs={"days_late": days_late, "is_nil": body.is_nil},
+            inputs=late_fee_inputs,
             claimed_paise=int(comp["late_fee"]),
             label="gst.gstr3b.late_fee",
         ),
@@ -411,9 +416,20 @@ def _gstr3b_figures(body: Gstr3bInput) -> tuple[list[RecomputeClaim], Any]:
                 value_paise=int(comp["late_fee"]),
                 chk=checks.get("late_fee_3b"),
                 mahsa_up=mahsa_up,
-                formula="per-day late fee × days late, statutory cap applied",
-                citation="CGST Act s.47",
-                inputs=[{"label": "days late", "value": str(days_late)}],
+                formula=(
+                    "per-day late fee × days late, Notf 19/2021 turnover-linked cap applied"
+                    if body.aato is not None
+                    else "per-day late fee × days late, s.47(1) statutory-maximum cap applied "
+                    "(AATO not provided — Notf 19/2021 lower caps for AATO ≤ ₹5 crore not "
+                    "assumed; supply aato to apply them)"
+                ),
+                citation="CGST Act s.47; Notf 19/2021-Central Tax",
+                inputs=[{"label": "days late", "value": str(days_late)}]
+                + (
+                    [{"label": "AATO (paise, preceding FY)", "value": str(body.aato)}]
+                    if body.aato is not None
+                    else []
+                ),
             ),
             _figure(
                 target="interest_3b",
@@ -527,6 +543,7 @@ async def gstr3b_confirm(
         itc_available=body.inputs.itc_available.model_dump(),
         filed_date=body.inputs.filed_date,
         is_nil=body.inputs.is_nil,
+        aato=body.inputs.aato,
     )
     entry = _seal(
         db,

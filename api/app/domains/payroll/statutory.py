@@ -32,7 +32,12 @@ ESI_EMPLOYER_RATE = Decimal("0.0325")
 
 BONUS_ELIGIBILITY_BASIC = Paise.from_rupees(21000)  # Basic+DA monthly
 BONUS_WAGE_CAP = Paise.from_rupees(7000)  # calculation ceiling
-BONUS_MIN_RATE = Decimal("0.0833")  # 8.33%
+# CoW 2019 s.26(1) verbatim: minimum bonus "at the rate of eight and one-third per cent. of the
+# wages earned by the employee or one hundred rupees, whichever is higher". 8-1/3% is EXACTLY
+# 1/12 — kept as an integer fraction, never a decimal approximation (the old 0.0833 was a
+# WS1.E2 D1 defect: Basic ₹6,006 gave ₹500 instead of the statutory ₹501).
+BONUS_MIN_RATE_NUM, BONUS_MIN_RATE_DEN = 1, 12
+BONUS_ANNUAL_FLOOR = Paise.from_rupees(100)  # s.26(1) "one hundred rupees" (annual)
 
 GRATUITY_NUM, GRATUITY_DEN = 15, 26  # 15 days' wages per completed year
 # CoSS 2020 s.53(1): "Gratuity shall be payable to an employee on the termination of his
@@ -53,7 +58,8 @@ GRATUITY_CEILING = Paise.from_rupees(2000000)
 # New-regime annual slabs: (lower_paise, upper_paise_or_None, rate)
 STD_DEDUCTION_ANNUAL = Paise.from_rupees(75000)
 REBATE_LIMIT = Paise.from_rupees(1200000)  # s.87A: taxable <= 12L => nil tax
-CESS_RATE = Decimal("0.04")
+# Health & Education Cess: 4% of income-tax and surcharge (FA 2025 s.2(11)) — applied as the
+# exact ×104/100 integer step inside annual_income_tax, no Decimal rate constant needed.
 _TDS_SLABS: list[tuple[int, int | None, Decimal]] = [
     (Paise.from_rupees(0), Paise.from_rupees(400000), Decimal("0.00")),
     (Paise.from_rupees(400000), Paise.from_rupees(800000), Decimal("0.05")),
@@ -62,6 +68,20 @@ _TDS_SLABS: list[tuple[int, int | None, Decimal]] = [
     (Paise.from_rupees(1600000), Paise.from_rupees(2000000), Decimal("0.20")),
     (Paise.from_rupees(2000000), Paise.from_rupees(2400000), Decimal("0.25")),
     (Paise.from_rupees(2400000), None, Decimal("0.30")),
+]
+
+# Individual surcharge, new regime (FA 2025 s.2(9), provisos for income chargeable under
+# s.115BAC(1A), read verbatim 2026-07-23): 10% where total income exceeds ₹50L but does not
+# exceed ₹1cr; 15% above ₹1cr up to ₹2cr; 25% above ₹2cr. The new-regime proviso has NO 37%
+# band — 25% is its highest rate. Marginal relief (next proviso, same source): tax+surcharge
+# shall not exceed tax(+surcharge) on the band's lower threshold plus the income in excess of
+# that threshold. This engine projects salary income only; the 15% surcharge ceiling for
+# dividend/s.111A/112/112A income (bands (iv)/proviso) is out of scope.
+# (lower_threshold_paise, surcharge_rate_percent) — a band applies when taxable > lower.
+_SURCHARGE_BANDS: list[tuple[int, int]] = [
+    (Paise.from_rupees(5000000), 10),
+    (Paise.from_rupees(10000000), 15),
+    (Paise.from_rupees(20000000), 25),
 ]
 
 # Professional Tax comes from the WS2 state packs (app/states/<code>.yaml — cited, sha256-
@@ -217,19 +237,40 @@ def _slab_tax(taxable_annual: int) -> int:
     return int(tax)
 
 
+def _tax_with_surcharge_hundredths(taxable: int) -> int:
+    """Slab tax + surcharge in HUNDREDTHS of a paisa — exact integers throughout (surcharge
+    percentages make the exact value a multiple of 1/100 paisa). Applies the FA 2025 s.2(9)
+    new-regime bands and their marginal relief: tax+surcharge on ``taxable`` may not exceed
+    tax+surcharge on the band's lower threshold plus the income above that threshold."""
+    base_h = _slab_tax(taxable) * 100
+    band = None
+    for lower, rate in _SURCHARGE_BANDS:
+        if taxable > lower:
+            band = (lower, rate)
+    if band is None:
+        return base_h
+    lower, rate = band
+    with_surcharge = _slab_tax(taxable) * (100 + rate)
+    relief_cap = _tax_with_surcharge_hundredths(lower) + (taxable - lower) * 100
+    return min(with_surcharge, relief_cap)
+
+
 def annual_income_tax(annual_taxable: int) -> Paise:
-    """Annual income tax incl. 4% cess, after s.87A rebate and marginal relief (new regime)."""
+    """Annual income tax incl. surcharge (>₹50L bands, FA 2025 s.2(9)) and 4% cess, after the
+    s.87A rebate and its marginal relief (new regime). Exact integer arithmetic end to end."""
     taxable = int(annual_taxable)
     if taxable <= 0:
         return Paise(0)
-    base = _slab_tax(taxable)
     if taxable <= int(REBATE_LIMIT):
-        base = 0
+        tax_h = 0
     else:
-        # marginal relief: tax cannot exceed income above the rebate limit.
-        excess = taxable - int(REBATE_LIMIT)
-        base = min(base, excess)
-    with_cess = int((Decimal(base) * (Decimal(1) + CESS_RATE)).to_integral_value(ROUND_HALF_UP))
+        tax_h = _tax_with_surcharge_hundredths(taxable)
+        # s.87A marginal relief: tax cannot exceed income above the rebate limit (can only
+        # bind just above ₹12L, far below the surcharge bands).
+        tax_h = min(tax_h, (taxable - int(REBATE_LIMIT)) * 100)
+    # 4% cess on tax+surcharge (FA 2025 s.2(11)), half-up to the paisa, then to the rupee —
+    # (tax_h × 104) / 10000 paise exactly; identical to the pre-surcharge two-step rounding.
+    with_cess = (tax_h * 104 + 5000) // 10000
     return Paise(_round_rupee(with_cess))
 
 
@@ -306,9 +347,18 @@ def gratuity_hybrid(
 
 
 def bonus_provision_monthly(basic_monthly: int) -> Paise:
-    """Monthly statutory minimum bonus provision (8.33%). Nil if Basic exceeds the
-    ₹21,000 eligibility ceiling; calculated on Basic capped at ₹7,000."""
+    """Monthly statutory minimum bonus provision (CoW 2019 s.26(1): 8-1/3% = exactly 1/12, or
+    ₹100/year, whichever is higher). Nil if Basic exceeds the ₹21,000 eligibility ceiling;
+    calculated on Basic capped at ₹7,000.
+
+    The s.26(1) floor is an ANNUAL ₹100. On a constant capped monthly wage the annual minimum
+    at 1/12 equals exactly ONE month's capped wage, so the annual minimum = max(cap, ₹100) and
+    this monthly accrual slice = max(cap, ₹100) / 12 — exact integer paise, half-up to the
+    whole rupee (module convention). Pure integer arithmetic: no float, no Decimal rate.
+    """
     if int(basic_monthly) > int(BONUS_ELIGIBILITY_BASIC):
         return Paise(0)
     cap = min(int(basic_monthly), int(BONUS_WAGE_CAP))
-    return Paise(_round_rupee(Decimal(cap) * BONUS_MIN_RATE))
+    annual = max(cap * BONUS_MIN_RATE_NUM, int(BONUS_ANNUAL_FLOOR))
+    # exact rupees = annual / (12 × 100); half-up: floor(x + 1/2) = (annual + 600) // 1200
+    return Paise(((annual + 600) // 1200) * 100)

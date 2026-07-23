@@ -48,21 +48,29 @@ _log = logging.getLogger("maisha.entitlements")
 # --- feature registry --------------------------------------------------------
 
 _MANIFESTS = (
-    _treasury, _revenue, _payables, _payroll, _gst, _tax,
-    _ledger, _forecast, _equity, _compliance, _expense, _vault,
+    _treasury,
+    _revenue,
+    _payables,
+    _payroll,
+    _gst,
+    _tax,
+    _ledger,
+    _forecast,
+    _equity,
+    _compliance,
+    _expense,
+    _vault,
 )
 
 #: Every entitlement-controlled DOMAIN feature key (the 116 that the plan map splits).
-DOMAIN_FEATURES: frozenset[str] = frozenset(
-    f.key for m in _MANIFESTS for f in m.features
-)
+DOMAIN_FEATURES: frozenset[str] = frozenset(f.key for m in _MANIFESTS for f in m.features)
 
 #: Platform baseline — always entitled on every plan, so it is NOT part of the
 #: 71/34/11 split. These are the things every tenant needs regardless of tier.
 PLATFORM_KEYS: frozenset[str] = frozenset(
     {
-        "platform.dashboard",   # the Today/home surface
-        "platform.audit_log",   # hash-chained audit trail (non-disablable)
+        "platform.dashboard",  # the Today/home surface
+        "platform.audit_log",  # hash-chained audit trail (non-disablable)
         "platform.notifications",
         "platform.support",
     }
@@ -105,13 +113,25 @@ _PLAN_FEATURES: dict[str, frozenset[str]] = {
 STATUTORY_GRACE_FEATURES: frozenset[str] = frozenset(
     {
         # GST returns
-        "gstr1", "gstr3b", "gstr9", "e_invoice",
+        "gstr1",
+        "gstr3b",
+        "gstr9",
+        "e_invoice",
         # income-tax / TDS filings
-        "advance_tax", "tds_returns", "itr", "form_26as",
+        "advance_tax",
+        "tds_returns",
+        "itr",
+        "form_26as",
         # payroll statutory contributions & filings
-        "pf", "esi", "pt", "lwf", "ecr", "form16",
+        "pf",
+        "esi",
+        "pt",
+        "lwf",
+        "ecr",
+        "form16",
         # MCA / compliance filings
-        "mca_filings", "mark_filed",
+        "mca_filings",
+        "mark_filed",
     }
 )
 
@@ -203,25 +223,36 @@ def guard(plan: str, feature: str) -> GuardDecision:
     """
     if is_entitled(plan, feature):
         return GuardDecision(
-            feature=feature, plan=plan, allowed=True, grace=False,
-            visible=True, reason="entitled", upsell=None,
+            feature=feature,
+            plan=plan,
+            allowed=True,
+            grace=False,
+            visible=True,
+            reason="entitled",
+            upsell=None,
         )
 
     need = min_plan_for(feature)
 
     if feature in STATUTORY_GRACE_FEATURES:
         # §0.8: keys only, no PII in the log line.
-        _log.info(
-            "entitlement.statutory_grace feature=%s plan=%s upsell=%s", feature, plan, need
-        )
+        _log.info("entitlement.statutory_grace feature=%s plan=%s upsell=%s", feature, plan, need)
         return GuardDecision(
-            feature=feature, plan=plan, allowed=True, grace=True, visible=True,
+            feature=feature,
+            plan=plan,
+            allowed=True,
+            grace=True,
+            visible=True,
             reason="statutory-grace: a legal filing is never blocked mid-flow; upsell after",
             upsell=need,
         )
 
     return GuardDecision(
-        feature=feature, plan=plan, allowed=False, grace=False, visible=True,
+        feature=feature,
+        plan=plan,
+        allowed=False,
+        grace=False,
+        visible=True,
         reason=f"locked: available on the {need.title()} plan",
         upsell=need,
     )
@@ -233,8 +264,8 @@ def guard(plan: str, feature: str) -> GuardDecision:
 class GateState(enum.StrEnum):
     OK = "ok"
     SOFT_WARN = "soft_warn"  # approaching the limit
-    GRACE = "grace"          # over the limit, temporarily allowed
-    BLOCK = "block"          # over the grace band → upgrade required
+    GRACE = "grace"  # over the limit, temporarily allowed
+    BLOCK = "block"  # over the grace band → upgrade required
 
 
 #: Per-plan quantity ceilings. PRODUCT-CONFIRMABLE defaults; headcount tiers 10/50/200
@@ -279,7 +310,11 @@ def quantity_gate(
     limit = QUANTITY_LIMITS[kind][plan]
     # upgrade target: the lowest higher plan whose limit clears `current`, if any.
     upsell = next(
-        (p for p in PLAN_ORDER[PLAN_ORDER.index(plan) + 1:] if QUANTITY_LIMITS[kind][p] >= current),
+        (
+            p
+            for p in PLAN_ORDER[PLAN_ORDER.index(plan) + 1 :]
+            if QUANTITY_LIMITS[kind][p] >= current
+        ),
         None,
     )
 
@@ -293,8 +328,13 @@ def quantity_gate(
         state, reason = GateState.BLOCK, f"{kind} limit exceeded ({current}/{limit}); upgrade"
 
     return GateDecision(
-        kind=kind, plan=plan, current=current, limit=limit, state=state,
-        visible=True, reason=reason,
+        kind=kind,
+        plan=plan,
+        current=current,
+        limit=limit,
+        state=state,
+        visible=True,
+        reason=reason,
         upsell=upsell if state in (GateState.GRACE, GateState.BLOCK) else None,
     )
 
@@ -331,8 +371,12 @@ def seat_addition_gate(existing_roles: Iterable[str], new_role: str, plan: str) 
     if normalized in SEAT_EXEMPT_ROLES:
         base = seat_gate(existing_roles, plan)  # validates plan; current excludes exempt seats
         return GateDecision(
-            kind="seats", plan=plan, current=base.current, limit=base.limit,
-            state=GateState.OK, visible=True,
+            kind="seats",
+            plan=plan,
+            current=base.current,
+            limit=base.limit,
+            state=GateState.OK,
+            visible=True,
             reason=f"{normalized} seat is free + unlimited (§WS8.3); not counted",
             upsell=None,
         )

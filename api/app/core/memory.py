@@ -320,9 +320,37 @@ def profile_text(db: Session, principal: Principal) -> str:
 #: Query words that carry no recall signal. Small and fixed — recall is precision-oriented
 #: (survey §5.3.3: lexical for exact statutory terms), not a search engine.
 _STOPWORDS = frozenset(
-    ["the", "a", "an", "is", "are", "was", "were", "our", "we", "you", "what", "whats", "of",
-     "on", "in", "for", "to", "do", "did", "and", "or", "it", "this", "that", "how", "much",
-     "many", "with", "about"]
+    [
+        "the",
+        "a",
+        "an",
+        "is",
+        "are",
+        "was",
+        "were",
+        "our",
+        "we",
+        "you",
+        "what",
+        "whats",
+        "of",
+        "on",
+        "in",
+        "for",
+        "to",
+        "do",
+        "did",
+        "and",
+        "or",
+        "it",
+        "this",
+        "that",
+        "how",
+        "much",
+        "many",
+        "with",
+        "about",
+    ]
 )
 
 

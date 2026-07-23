@@ -74,7 +74,11 @@ def auth_server(monkeypatch):
     )
     kid = f"ent-kid-{uuid.uuid4()}"
     jwk = {
-        "kty": "OKP", "crv": "Ed25519", "x": _b64u(pub_bytes), "kid": kid, "use": "sig",
+        "kty": "OKP",
+        "crv": "Ed25519",
+        "x": _b64u(pub_bytes),
+        "kid": kid,
+        "use": "sig",
         "alg": "EdDSA",
     }
     handler_cls = type(
@@ -206,9 +210,14 @@ def test_body_claiming_a_higher_plan_is_ignored(auth_server, client):
     resp = client.post(
         "/api/equity/safe/convert",
         headers=_bearer(_token(auth_server, plan="basics")),
-        json={"org_plan": "growth", "investment_amount": 100000000, "valuation_cap": 1000000000,
-              "discount_rate": 0.2, "pre_money_valuation": 2000000000,
-              "pre_round_shares": 1000000},
+        json={
+            "org_plan": "growth",
+            "investment_amount": 100000000,
+            "valuation_cap": 1000000000,
+            "discount_rate": 0.2,
+            "pre_money_valuation": 2000000000,
+            "pre_round_shares": 1000000,
+        },
     )
     assert resp.status_code == 402
     assert resp.json()["detail"]["plan"] == "basics"

@@ -7,21 +7,33 @@ from app.domains.gst.gst_calc import gstr9_annual
 
 # Two months: each ₹1,00,000 taxable @ 18% intra-state (9% CGST + 9% SGST).
 _G1 = [
-    {"taxable": Paise.from_rupees(100000), "igst": 0,
-     "cgst": Paise.from_rupees(9000), "sgst": Paise.from_rupees(9000)},
-    {"taxable": Paise.from_rupees(100000), "igst": 0,
-     "cgst": Paise.from_rupees(9000), "sgst": Paise.from_rupees(9000)},
+    {
+        "taxable": Paise.from_rupees(100000),
+        "igst": 0,
+        "cgst": Paise.from_rupees(9000),
+        "sgst": Paise.from_rupees(9000),
+    },
+    {
+        "taxable": Paise.from_rupees(100000),
+        "igst": 0,
+        "cgst": Paise.from_rupees(9000),
+        "sgst": Paise.from_rupees(9000),
+    },
 ]
 
 
 def _g3b(out_cgst: int) -> list[dict]:
     return [
-        {"output": {"igst": 0, "cgst": out_cgst, "sgst": Paise.from_rupees(9000)},
-         "itc": {"igst": 0, "cgst": Paise.from_rupees(5000), "sgst": Paise.from_rupees(5000)},
-         "tax_paid_cash": Paise.from_rupees(8000)},
-        {"output": {"igst": 0, "cgst": Paise.from_rupees(9000), "sgst": Paise.from_rupees(9000)},
-         "itc": {"igst": 0, "cgst": Paise.from_rupees(5000), "sgst": Paise.from_rupees(5000)},
-         "tax_paid_cash": Paise.from_rupees(8000)},
+        {
+            "output": {"igst": 0, "cgst": out_cgst, "sgst": Paise.from_rupees(9000)},
+            "itc": {"igst": 0, "cgst": Paise.from_rupees(5000), "sgst": Paise.from_rupees(5000)},
+            "tax_paid_cash": Paise.from_rupees(8000),
+        },
+        {
+            "output": {"igst": 0, "cgst": Paise.from_rupees(9000), "sgst": Paise.from_rupees(9000)},
+            "itc": {"igst": 0, "cgst": Paise.from_rupees(5000), "sgst": Paise.from_rupees(5000)},
+            "tax_paid_cash": Paise.from_rupees(8000),
+        },
     ]
 
 

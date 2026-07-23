@@ -17,6 +17,13 @@ const SLABS: [(i64, Option<i64>, i64); 7] = [
 /// s.87A: taxable ≤ ₹12,00,000 → nil tax (mirror of `REBATE_LIMIT`).
 const REBATE_LIMIT: i64 = 120_000_000;
 
+/// Individual surcharge, new regime — FA 2025 s.2(9) provisos for income chargeable under
+/// s.115BAC(1A) (read verbatim): 10% > ₹50L ≤ ₹1cr; 15% > ₹1cr ≤ ₹2cr; 25% > ₹2cr (the
+/// new-regime proviso has NO 37% band). (lower_threshold_paise, rate_percent); a band applies
+/// when taxable > lower. Mirror of `_SURCHARGE_BANDS`.
+const SURCHARGE_BANDS: [(i64, i64); 3] =
+    [(500_000_000, 10), (1_000_000_000, 15), (2_000_000_000, 25)];
+
 /// Slab tax in paise, mirror of Python `_slab_tax`. Rates are percent, so the exact rational
 /// is `Σ (top-lower)·pct / 100`; we sum the integer hundredths and divide ONCE (Python sums
 /// Decimals then `int()`-truncates once — identical for non-negative sums).
@@ -37,20 +44,43 @@ fn slab_tax(taxable: i64) -> i64 {
     hundredths / 100
 }
 
-/// Annual income tax incl. 4% cess, after s.87A rebate and marginal relief. Input & output paise.
+/// Slab tax + surcharge in HUNDREDTHS of a paisa — exact integers (surcharge percentages make
+/// the exact value a multiple of 1/100 paisa). FA 2025 s.2(9) marginal relief: tax+surcharge
+/// may not exceed tax+surcharge on the band's lower threshold plus the income above it.
+/// Mirror of Python `_tax_with_surcharge_hundredths`.
+fn tax_with_surcharge_hundredths(taxable: i64) -> i64 {
+    let base_h = slab_tax(taxable) * 100;
+    let mut band: Option<(i64, i64)> = None;
+    for &(lower, rate) in &SURCHARGE_BANDS {
+        if taxable > lower {
+            band = Some((lower, rate));
+        }
+    }
+    match band {
+        None => base_h,
+        Some((lower, rate)) => {
+            let with_surcharge = slab_tax(taxable) * (100 + rate);
+            let relief_cap = tax_with_surcharge_hundredths(lower) + (taxable - lower) * 100;
+            with_surcharge.min(relief_cap)
+        }
+    }
+}
+
+/// Annual income tax incl. surcharge (> ₹50L bands) and 4% cess, after s.87A rebate and
+/// marginal relief. Input & output paise. Exact integer arithmetic end to end.
 pub fn annual_income_tax(annual_taxable: i64) -> Paise {
     if annual_taxable <= 0 {
         return Paise(0);
     }
-    let mut base = slab_tax(annual_taxable);
-    if annual_taxable <= REBATE_LIMIT {
-        base = 0;
+    let tax_h = if annual_taxable <= REBATE_LIMIT {
+        0
     } else {
-        // marginal relief: tax cannot exceed income above the rebate limit.
-        base = base.min(annual_taxable - REBATE_LIMIT);
-    }
-    // 4% cess, rounded half-up: exact base·1.04 = base·104/100, then round to nearest paise.
-    let with_cess = (base * 104 + 50) / 100;
+        // s.87A marginal relief: tax cannot exceed income above the rebate limit (only binds
+        // just above ₹12L, far below the surcharge bands).
+        tax_with_surcharge_hundredths(annual_taxable).min((annual_taxable - REBATE_LIMIT) * 100)
+    };
+    // 4% cess on tax+surcharge, half-up to the paisa (hundredths → paise), then to the rupee.
+    let with_cess = (tax_h * 104 + 5000) / 10000;
     Paise(crate::recompute::round_rupee(with_cess))
 }
 
@@ -77,8 +107,8 @@ pub fn interest_234b(assessed_tax: i64, advance_paid: i64, months: i64) -> i64 {
     }
     let mut shortfall = (assessed_tax - advance_paid).max(0);
     shortfall = (shortfall / 10_000) * 10_000; // round down to the nearest ₹100 (10,000 paise)
-    // interest = round_rupee(shortfall · 1% · months); shortfall is a whole-₹100 amount so
-    // shortfall/100·months is already whole rupees.
+                                               // interest = round_rupee(shortfall · 1% · months); shortfall is a whole-₹100 amount so
+                                               // shortfall/100·months is already whole rupees.
     crate::recompute::round_rupee(shortfall / 100 * months)
 }
 
@@ -99,8 +129,7 @@ pub fn interest_234c(total_liability: i64, cumulative_paid: &[i64]) -> i64 {
         }
         // interest = round_rupee((total·pct/100 − paid)·1%·months). Numerator N below is
         // (total·pct − paid·100)·months = shortfall_paise·100·months; round half-up to the rupee.
-        let n =
-            (total_liability as i128 * pct as i128 - paid as i128 * 100) * months as i128;
+        let n = (total_liability as i128 * pct as i128 - paid as i128 * 100) * months as i128;
         if n <= 0 {
             continue;
         }
@@ -158,6 +187,26 @@ mod tests {
     fn tds_high_income_with_cess() {
         // taxable ₹17,25,000: slab tax ₹1,45,000 + 4% cess = ₹1,50,800
         assert_eq!(annual_income_tax(172_500_000), Paise(15_080_000));
+    }
+
+    #[test]
+    fn surcharge_bands_and_marginal_relief() {
+        // ₹50,00,000 exactly: no surcharge (income does not EXCEED ₹50L) — ₹11,23,200.
+        assert_eq!(annual_income_tax(500_000_000), Paise(112_320_000));
+        // ₹50,00,001: marginal relief binds — tax = tax@50L + ₹1 excess; ×1.04 → ₹11,23,201.
+        assert_eq!(annual_income_tax(500_000_100), Paise(112_320_100));
+        // ₹52,00,000: 10% surcharge binds (relief cap higher) — 1.1×11,40,000×1.04 = ₹13,04,160.
+        assert_eq!(annual_income_tax(520_000_000), Paise(130_416_000));
+        // ₹1cr exactly: 10% band top — 1.1×25,80,000×1.04 = ₹29,51,520.
+        assert_eq!(annual_income_tax(1_000_000_000), Paise(295_152_000));
+        // ₹1,00,00,001: 15% band, relief vs the ₹1cr point — ₹29,51,521.
+        assert_eq!(annual_income_tax(1_000_000_100), Paise(295_152_100));
+        // ₹2cr exactly: 15% band top — 1.15×55,80,000×1.04 = ₹66,73,680.
+        assert_eq!(annual_income_tax(2_000_000_000), Paise(667_368_000));
+        // ₹2,00,00,001: 25% band, relief vs the ₹2cr point — ₹66,73,681.
+        assert_eq!(annual_income_tax(2_000_000_100), Paise(667_368_100));
+        // ₹3cr: 25% surcharge binds outright — 1.25×85,80,000×1.04 = ₹1,11,54,000.
+        assert_eq!(annual_income_tax(3_000_000_000), Paise(1_115_400_000));
     }
 
     #[test]

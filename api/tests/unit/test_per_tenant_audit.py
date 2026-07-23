@@ -161,8 +161,13 @@ def test_edit_log_payload_is_a_sealable_non_pii_entry():
 def test_edit_log_rejects_bad_operation():
     try:
         edit_log_payload(
-            timestamp="t", domain="ledger", user_id="u", record_type="x",
-            record_id="1", operation="frobnicate", rules_version="rv",
+            timestamp="t",
+            domain="ledger",
+            user_id="u",
+            record_type="x",
+            record_id="1",
+            operation="frobnicate",
+            rules_version="rv",
         )
     except ValueError:
         return

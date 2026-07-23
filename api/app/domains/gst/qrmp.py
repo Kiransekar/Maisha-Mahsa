@@ -123,6 +123,7 @@ def obligation_penalty(
     due_date: date,
     filed_date: date,
     is_nil: bool = False,
+    aato: int | None = None,
 ) -> dict[str, int]:
     """Late fee + interest for a return filed on ``filed_date`` against its ``due_date``.
 
@@ -133,6 +134,6 @@ def obligation_penalty(
     days_late = max(0, (filed_date - due_date).days)
     return {
         "days_late": days_late,
-        "late_fee": late_fee_3b(days_late, is_nil=is_nil),
+        "late_fee": late_fee_3b(days_late, is_nil=is_nil, aato=aato),
         "interest": interest_3b(int(cash_tax), days_late),
     }

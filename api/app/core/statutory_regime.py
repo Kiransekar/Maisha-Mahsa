@@ -33,9 +33,7 @@ def trigger_date(credit_date: date | None, payment_date: date | None) -> date:
     return min(dates)
 
 
-def regime_for(
-    credit_date: date | None = None, payment_date: date | None = None
-) -> str:
+def regime_for(credit_date: date | None = None, payment_date: date | None = None) -> str:
     """Resolve the governing regime for a TDS/TCS event from its credit/payment dates.
     Earlier-of-credit-or-payment < 2026-04-01 → 1961, else 2025."""
     return REGIME_1961 if trigger_date(credit_date, payment_date) < REGIME_BOUNDARY else REGIME_2025

@@ -191,20 +191,14 @@ def _org_ids(session: Session, dialect: str) -> list[str | None]:
 
 def _already_done(session: Session, org_key: str, job: str, period: str) -> bool:
     row = session.scalars(
-        select(JobRun).where(
-            JobRun.org_id == org_key, JobRun.job == job, JobRun.period == period
-        )
+        select(JobRun).where(JobRun.org_id == org_key, JobRun.job == job, JobRun.period == period)
     ).first()
     return row is not None and row.status == "done"
 
 
-def _mark(
-    session: Session, org_key: str, job: str, period: str, status: str, ran_at: str
-) -> None:
+def _mark(session: Session, org_key: str, job: str, period: str, status: str, ran_at: str) -> None:
     row = session.scalars(
-        select(JobRun).where(
-            JobRun.org_id == org_key, JobRun.job == job, JobRun.period == period
-        )
+        select(JobRun).where(JobRun.org_id == org_key, JobRun.job == job, JobRun.period == period)
     ).first()
     if row is None:
         row = JobRun(org_id=org_key, job=job, period=period, status=status, ran_at=ran_at)
@@ -348,8 +342,13 @@ async def run_once(
         try:
             results.extend(
                 await _run_org(
-                    command, session, settings, registry,
-                    org=org, today=today, now_utc=now_utc,
+                    command,
+                    session,
+                    settings,
+                    registry,
+                    org=org,
+                    today=today,
+                    now_utc=now_utc,
                 )
             )
         except Exception as exc:  # noqa: BLE001 — per-tenant isolation at the org level too

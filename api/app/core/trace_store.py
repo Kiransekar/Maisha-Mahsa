@@ -60,6 +60,4 @@ def append(
 
 def recent(session: Session, *, limit: int = 50) -> list[LlmTrace]:
     """Most-recent LLM traces first (for the /audit observability view)."""
-    return list(
-        session.scalars(select(LlmTrace).order_by(LlmTrace.id.desc()).limit(limit)).all()
-    )
+    return list(session.scalars(select(LlmTrace).order_by(LlmTrace.id.desc()).limit(limit)).all())

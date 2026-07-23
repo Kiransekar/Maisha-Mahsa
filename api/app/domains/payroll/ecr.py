@@ -11,9 +11,17 @@ ECR_DELIMITER = "#~#"
 
 # Column order per the EPFO unified-portal ECR file structure.
 COLUMNS = (
-    "uan", "member_name", "gross_wages", "epf_wages", "eps_wages", "edli_wages",
-    "epf_contri_remitted", "eps_contri_remitted", "epf_eps_diff_remitted",
-    "ncp_days", "refund_of_advances",
+    "uan",
+    "member_name",
+    "gross_wages",
+    "epf_wages",
+    "eps_wages",
+    "edli_wages",
+    "epf_contri_remitted",
+    "eps_contri_remitted",
+    "epf_eps_diff_remitted",
+    "ncp_days",
+    "refund_of_advances",
 )
 
 

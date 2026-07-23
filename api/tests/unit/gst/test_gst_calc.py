@@ -81,6 +81,26 @@ def test_late_fee_normal_nil_and_cap():
     assert g.late_fee_3b(0) == 0
 
 
+def test_late_fee_aato_caps_notf_19_2021():
+    # D4 fix pinned: Notf 19/2021 turnover-linked caps (combined CGST+SGST paise).
+    cr_1_5 = 1_500_000_000  # ₹1.5 crore, paise
+    cr_5 = 5_000_000_000  # ₹5 crore, paise
+    # AATO ≤ ₹1.5cr: ₹2,000 combined cap, binding from day 40.
+    assert g.late_fee_3b(39, aato=cr_1_5) == Paise.from_rupees(1950)
+    assert g.late_fee_3b(40, aato=cr_1_5) == Paise.from_rupees(2000)
+    assert g.late_fee_3b(41, aato=cr_1_5) == Paise.from_rupees(2000)
+    # One paisa above ₹1.5cr -> ₹5,000 combined cap, binding from day 100.
+    assert g.late_fee_3b(99, aato=cr_1_5 + 1) == Paise.from_rupees(4950)
+    assert g.late_fee_3b(100, aato=cr_1_5 + 1) == Paise.from_rupees(5000)
+    assert g.late_fee_3b(201, aato=cr_5) == Paise.from_rupees(5000)
+    # Above ₹5cr, and unknown AATO, fall back to the s.47(1) statutory maximum — never a
+    # silent undercharge.
+    assert g.late_fee_3b(201, aato=cr_5 + 1) == Paise.from_rupees(10000)
+    assert g.late_fee_3b(201) == Paise.from_rupees(10000)
+    # The nil-return cap is turnover-independent (Sl.1 carve-out in Sl.2/Sl.3).
+    assert g.late_fee_3b(26, is_nil=True, aato=cr_1_5) == Paise.from_rupees(500)
+
+
 def test_interest_18pct_simple():
     # ₹10,000 × 18% × 30/365 = ₹147.95 -> ₹148
     assert g.interest_3b(Paise.from_rupees(10000), 30) == Paise.from_rupees(148)

@@ -33,9 +33,7 @@ def test_itr6_non_115baa_is_blocked_ca():
 
 
 def test_itr5_firm_form_and_rate():
-    res = t.itr_computation(
-        entity_type="llp", gross_total_income=Paise.from_rupees(1_000_000)
-    )
+    res = t.itr_computation(entity_type="llp", gross_total_income=Paise.from_rupees(1_000_000))
     assert res["form"] == "ITR-5" and res["mat"] == 0
     # 30% + 4% cess on 10L
     assert res["normal_tax"] == Paise.from_rupees(312000)
@@ -43,7 +41,8 @@ def test_itr5_firm_form_and_rate():
 
 def test_itr_refund_when_prepaid_exceeds_tax():
     res = t.itr_computation(
-        entity_type="company", gross_total_income=Paise.from_rupees(1_000_000),
+        entity_type="company",
+        gross_total_income=Paise.from_rupees(1_000_000),
         tds_paid=Paise.from_rupees(900_000),
     )
     assert res["refund_due"] > 0 and res["balance_payable"] == 0

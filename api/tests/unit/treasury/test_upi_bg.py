@@ -9,10 +9,14 @@ from app.domains.treasury.service import bank_guarantee_status, upi_reconcile
 
 
 def test_upi_reconcile_matches_and_flags() -> None:
-    bank = [{"reference": "UPI1", "amount": Paise.from_rupees(500)},
-            {"reference": "UPI2", "amount": Paise.from_rupees(800)}]
-    upi = [{"reference": "UPI1", "amount": Paise.from_rupees(500)},
-           {"reference": "UPI3", "amount": Paise.from_rupees(900)}]  # not in bank
+    bank = [
+        {"reference": "UPI1", "amount": Paise.from_rupees(500)},
+        {"reference": "UPI2", "amount": Paise.from_rupees(800)},
+    ]
+    upi = [
+        {"reference": "UPI1", "amount": Paise.from_rupees(500)},
+        {"reference": "UPI3", "amount": Paise.from_rupees(900)},
+    ]  # not in bank
     res = upi_reconcile(bank, upi)
     assert res["matched"] == ["UPI1"]
     assert res["unmatched_upi"] == ["UPI3"]

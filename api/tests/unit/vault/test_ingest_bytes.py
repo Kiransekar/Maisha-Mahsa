@@ -21,9 +21,7 @@ CONTENT = b"\xef\xbb\xbfdate,narration,debit\r\n2026-05-05,NEFT-000123,120000\r\
 
 def test_id_is_sha256_of_raw_bytes_and_identical_bytes_dedupe(session):
     svc = VaultService()
-    res = svc.ingest_bytes(
-        session, file_name="stmt.csv", content=CONTENT, upload_date="2026-07-01"
-    )
+    res = svc.ingest_bytes(session, file_name="stmt.csv", content=CONTENT, upload_date="2026-07-01")
     assert res["id"] == hashlib.sha256(CONTENT).hexdigest()
     assert res["sha256"] == res["id"]
     assert res["duplicate"] is False
@@ -40,9 +38,7 @@ def test_id_is_sha256_of_raw_bytes_and_identical_bytes_dedupe(session):
 
 def test_get_bytes_returns_verbatim_and_fails_loudly_on_tamper(session):
     svc = VaultService()
-    res = svc.ingest_bytes(
-        session, file_name="stmt.csv", content=CONTENT, upload_date="2026-07-01"
-    )
+    res = svc.ingest_bytes(session, file_name="stmt.csv", content=CONTENT, upload_date="2026-07-01")
     assert svc.get_bytes(session, res["id"]) == CONTENT
 
     session.get(Document, res["id"]).raw_content = CONTENT + b"tampered"
@@ -53,9 +49,7 @@ def test_get_bytes_returns_verbatim_and_fails_loudly_on_tamper(session):
 
 def test_text_ocr_path_untouched_and_has_no_raw_bytes(session):
     svc = VaultService()
-    res = svc.ingest(
-        session, file_name="note.txt", content="hello vault", upload_date="2026-07-01"
-    )
+    res = svc.ingest(session, file_name="note.txt", content="hello vault", upload_date="2026-07-01")
     # text path: id is still the sha over the TEXT (utf-8), exactly as before
     assert res["id"] == hashlib.sha256(b"hello vault").hexdigest()
     assert session.get(Document, res["id"]).raw_content is None
@@ -65,9 +59,7 @@ def test_text_ocr_path_untouched_and_has_no_raw_bytes(session):
 
 def test_browse_integrity_covers_the_raw_bytes(session):
     svc = VaultService()
-    res = svc.ingest_bytes(
-        session, file_name="stmt.csv", content=CONTENT, upload_date="2026-07-01"
-    )
+    res = svc.ingest_bytes(session, file_name="stmt.csv", content=CONTENT, upload_date="2026-07-01")
     [entry] = svc.browse(session, "stmt", role=Role.OWNER)
     assert entry["integrity_ok"] is True
 

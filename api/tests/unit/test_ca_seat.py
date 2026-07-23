@@ -53,8 +53,11 @@ def test_invite_refused_without_manage_users_and_seals_nothing(session: Session)
     for role in (Role.ACCOUNTANT, Role.APPROVER, Role.CA, Role.INVESTOR):
         with pytest.raises(PermissionError, match="manage_users"):
             ca_seat.invite_ca(
-                session, principal=_principal(role=role), email=CA_EMAIL,
-                plan="basics", timestamp=TS,
+                session,
+                principal=_principal(role=role),
+                email=CA_EMAIL,
+                plan="basics",
+                timestamp=TS,
             )
     assert load_chain_for(session, "org-a") == []
     assert session.scalars(select(Membership)).first() is None
@@ -130,7 +133,9 @@ def test_second_org_join_seals_ca_referred_org(session: Session) -> None:
 
     chain_b = load_chain_for(session, "org-b")
     assert [e.action for e in chain_b] == [
-        ca_seat.EVENT_INVITED, ca_seat.EVENT_JOINED, ca_seat.EVENT_REFERRED_ORG,
+        ca_seat.EVENT_INVITED,
+        ca_seat.EVENT_JOINED,
+        ca_seat.EVENT_REFERRED_ORG,
     ]
     assert verify_chain_for(session, "org-b")
     assert '"prior_ca_orgs":1' in (chain_b[-1].query or "")  # canonical_json, no whitespace
@@ -138,5 +143,6 @@ def test_second_org_join_seals_ca_referred_org(session: Session) -> None:
     assert all("org-a" not in (e.query or "") for e in chain_b)
     # org-a's chain is untouched by the org-b join
     assert [e.action for e in load_chain_for(session, "org-a")] == [
-        ca_seat.EVENT_INVITED, ca_seat.EVENT_JOINED,
+        ca_seat.EVENT_INVITED,
+        ca_seat.EVENT_JOINED,
     ]

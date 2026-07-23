@@ -80,6 +80,10 @@ class RoutedGenerator:
         producer = self._producers[self.provider_for(domain)]
         extra: dict[str, str] = {"memory": memory} if memory else {}
         return await producer.produce(
-            snapshot=snapshot, query=query, domain=domain, case_id=case_id, feedback=feedback,
+            snapshot=snapshot,
+            query=query,
+            domain=domain,
+            case_id=case_id,
+            feedback=feedback,
             **extra,
         )

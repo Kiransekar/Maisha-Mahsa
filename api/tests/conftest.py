@@ -115,9 +115,7 @@ def betterauth_owner_env() -> Iterator[SimpleNamespace]:
     from app.core import betterauth
 
     priv = Ed25519PrivateKey.generate()
-    pub = priv.public_key().public_bytes(
-        serialization.Encoding.Raw, serialization.PublicFormat.Raw
-    )
+    pub = priv.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
     priv_pem = priv.private_bytes(
         serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
     )

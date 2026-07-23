@@ -79,9 +79,7 @@ def _parse_or_422(raw: bytes) -> TallyParse:
     try:
         return tally_import.parse_tally_xml(raw)
     except TallyImportError as exc:
-        raise HTTPException(
-            status_code=422, detail=f"{exc}. Nothing was changed."
-        ) from exc
+        raise HTTPException(status_code=422, detail=f"{exc}. Nothing was changed.") from exc
 
 
 def _existing_accounts(db: Session) -> list[ChartOfAccounts]:

@@ -86,7 +86,9 @@ def test_unknown_profile_raises():
 def test_obligation_penalty_delegates_to_ported_funcs():
     cash = Paise.from_rupees(50_000)
     pen = qrmp.obligation_penalty(
-        cash, due_date=date(2026, 7, 22), filed_date=date(2026, 7, 30)  # 8 days late
+        cash,
+        due_date=date(2026, 7, 22),
+        filed_date=date(2026, 7, 30),  # 8 days late
     )
     assert pen["days_late"] == 8
     assert pen["late_fee"] == late_fee_3b(8)

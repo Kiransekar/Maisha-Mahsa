@@ -65,7 +65,10 @@ pub fn tds_on_payment(
     aggregate_ytd: i64,
 ) -> Tds {
     let Some((single, aggregate, per_month)) = section_cfg(section) else {
-        return Tds { applicable: false, tds_paise: Paise(0) };
+        return Tds {
+            applicable: false,
+            tds_paise: Paise(0),
+        };
     };
     // STRICT `>`, not `>=` — mirrors the Python fix of 2026-07-21. Each proviso exempts the payment
     // where the amount "does not exceed" the threshold, so AT the threshold no deduction arises.
@@ -78,7 +81,10 @@ pub fn tds_on_payment(
         amount > single || aggregate_ytd + amount > aggregate
     };
     if !applies {
-        return Tds { applicable: false, tds_paise: Paise(0) };
+        return Tds {
+            applicable: false,
+            tds_paise: Paise(0),
+        };
     }
     let rate = tds_rate(section, payee_type, category);
     // Python does ONE rounding: _round_rupee(Decimal(amount) * rate / 100) rounds the exact paise
@@ -86,7 +92,10 @@ pub fn tds_on_payment(
     // = (amount*rate + 5000)/10000, ×100 for paise. A two-stage round (paise then rupee) diverges
     // on fractional-paise amounts, e.g. 194I @10% on ₹50,004.95 → ₹5,000 not ₹5,001.
     let tds = ((amount * rate + 5000) / 10000) * 100;
-    Tds { applicable: true, tds_paise: Paise(tds) }
+    Tds {
+        applicable: true,
+        tds_paise: Paise(tds),
+    }
 }
 
 #[cfg(test)]
@@ -177,7 +186,10 @@ mod tests {
     #[test]
     fn t_194h_and_194i_rates() {
         // 194H ₹25k -> 2% = ₹500.
-        assert_eq!(tds_on_payment("194H", 2_500_000, "company", None, 0).tds_paise, Paise(50_000));
+        assert_eq!(
+            tds_on_payment("194H", 2_500_000, "company", None, 0).tds_paise,
+            Paise(50_000)
+        );
         let plant = tds_on_payment("194I", 30_000_000, "company", Some("plant"), 0);
         let building = tds_on_payment("194I", 30_000_000, "company", Some("building"), 0);
         assert_eq!(plant.tds_paise, Paise(600_000)); // 2% of ₹3L = ₹6,000

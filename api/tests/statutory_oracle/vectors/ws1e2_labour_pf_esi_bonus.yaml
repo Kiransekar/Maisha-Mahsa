@@ -33,17 +33,18 @@
 #  * Code on Social Security 2020 s.53(2)+Explanation 3 and s.53(3)+s.164(2)(a): already
 #    sourced verbatim in ws1b_wiring_gratuity.yaml (aA2020-36.pdf).
 #
-# ENGINE DEFECTS/GAPS FOUND WHILE DERIVING (reported loudly in PROGRESS [WS1.E2-expand]; the
-# vectors below deliberately sit only where every candidate reading agrees, so no defect is
-# locked in):
-#  * BONUS RATE: the engine uses Decimal("0.0833"); CoW s.26(1) says "eight and one-third per
-#    cent." (= 8.3333...%). On the ₹7,000 cap the divergence is ≤ ₹0.24 pre-rounding, but at
-#    e.g. Basic ₹6,006 the statute yields ₹500.50 -> ₹501 and the engine ₹500.30 -> ₹500 — a
-#    real ₹1-class defect. Vectors below use only inputs where both rates round identically.
-#  * BONUS FLOOR: s.26(1)'s "or one hundred rupees, whichever is higher" floor is NOT
-#    implemented. Below Basic ₹1,200 the engine under-provisions. No vector below ₹6,000.
-#  * BONUS CALC WAGE: s.26(2)'s "or the minimum wage ... whichever is higher" leg of the ₹7,000
-#    calculation ceiling is not modelled (no min-wage input exists).
+# ENGINE DEFECTS/GAPS (status as of the [D1-D2-D4-D5-FIX] round, 2026-07-23):
+#  * BONUS RATE (WS1.E2 defect D1) — FIXED. The engine now computes the s.26(1) rate as the
+#    exact fraction 1/12 ("eight and one-third per cent.") in integer paise; the old
+#    Decimal("0.0833") approximation (Basic ₹6,006 -> engine ₹500 vs statute ₹501) is gone.
+#    Pinned by bonus_exact_one_twelfth_6006 below; the pre-existing bonus vectors (chosen where
+#    both rates rounded identically) are unchanged and still green.
+#  * BONUS FLOOR (WS1.E2 defect D2) — FIXED. s.26(1)'s "or one hundred rupees, whichever is
+#    higher" is implemented as the ANNUAL floor the text states; see the bonus_floor_* vectors
+#    below for the recorded monthly-accrual reading.
+#  * BONUS CALC WAGE (WS1.E2 defect D3) — OPEN, BLOCKED-CA: s.26(2)'s "or the minimum wage ...
+#    whichever is higher" leg of the ₹7,000 calculation ceiling is not modelled (the engine has
+#    no minimum-wage input; needs CA guidance on the applicable scheduled-employment wage).
 #  * ESI CONTINUATION: rule 50 proviso (employee crossing ₹21,000 mid-contribution-period stays
 #    covered until period end) is not modelled — the input is the employee's coverage-relevant
 #    gross, the caller owns period semantics.
@@ -243,9 +244,8 @@
        is exercised here (gap recorded in PROGRESS)."
   source: >-
     Basic ₹7,000 (at the calc ceiling): monthly minimum-bonus provision = 8⅓% × 7,000 =
-    ₹583.33 -> ₹583 = 58,300 paise. (The engine's 0.0833 rate gives ₹583.10 -> the same ₹583 —
-    this input is chosen so both the statutory 8⅓% and the engine rate round identically; the
-    rate defect itself is reported in PROGRESS, not masked.)
+    700,000/12 paise = ₹583.33 -> half-up ₹583 = 58,300 paise. (Engine computes the exact 1/12
+    fraction since the D1 fix.)
   ca_initials: PENDING
   ca_date: null
   target: bonus_provision_monthly
@@ -265,8 +265,8 @@
        bonus_min_at_calc_ceiling_7000; one CA confirmation covers this file's bonus vectors)."
     - "No ceilings until CoW-specific notification — rejected as above."
   source: >-
-    Basic ₹6,000 (below the calc ceiling): 8⅓% × 6,000 = ₹500.00 exactly; the ₹100 s.26(1)
-    floor is far below. 50,000 paise. (Engine's 0.0833 gives ₹499.80 -> the same ₹500.)
+    Basic ₹6,000 (below the calc ceiling): 8⅓% × 6,000 = 600,000/12 = ₹500.00 exactly; the
+    ₹100 s.26(1) floor is far below. 50,000 paise.
   ca_initials: PENDING
   ca_date: null
   target: bonus_provision_monthly
@@ -315,6 +315,82 @@
   target: bonus_provision_monthly
   inputs: {basic_monthly: 2100100}
   expected: 0
+
+# ---- Bonus D1 fix pinned: the rate is EXACTLY 1/12, not 0.0833 ---------------------------------
+- id: bonus_exact_one_twelfth_6006
+  statute: Code on Wages 2019
+  section: "26(1)"
+  provenance: primary
+  citation_url: "https://www.indiacode.nic.in/bitstream/123456789/15793/1/aA2019-29.pdf"
+  citation_locator: >-
+    CoW s.26(1) verbatim (re-read 2026-07-23): "an annual minimum bonus calculated at the rate
+    of eight and one-third per cent. of the wages earned by the employee or one hundred rupees,
+    whichever is higher". Eight and one-third per cent. = 25/3 % = exactly 1/12.
+  source: >-
+    D1 REGRESSION LOCK. Basic ₹6,006 (600,600 paise, below both ceilings — no carry-over
+    reading is exercised): exact 1/12 = 600,600/12 = 50,050 paise = ₹500.50 -> half-up ₹501 =
+    50,100 paise. The repealed 0.0833 approximation gave 600,600 × 0.0833 = 50,029.998 paise =
+    ₹500.30 -> ₹500 — a ₹1 statutory error this vector pins out forever.
+  ca_initials: PENDING
+  ca_date: null
+  target: bonus_provision_monthly
+  inputs: {basic_monthly: 600600}
+  expected: 50100
+
+# ---- Bonus D2 fix pinned: the s.26(1) ₹100 ANNUAL floor ----------------------------------------
+- id: bonus_floor_binds_below_100_rupees
+  statute: Code on Wages 2019
+  section: "26(1)"
+  provenance: interpretation
+  citation_url: "https://www.indiacode.nic.in/bitstream/123456789/15793/1/aA2019-29.pdf"
+  citation_locator: >-
+    CoW s.26(1): "an ANNUAL minimum bonus calculated at the rate of eight and one-third per
+    cent. of the wages earned by the employee or one hundred rupees, whichever is higher".
+  alternatives_considered:
+    - "CHOSEN — the ₹100 floor is ANNUAL (the statute says 'annual minimum bonus ... or one
+       hundred rupees'). At the exact rate 1/12, the annual minimum on a constant capped
+       monthly wage equals ONE month's capped wage, so annual minimum = max(cap, ₹100) and the
+       engine's monthly accrual slice = max(cap, ₹100)/12, half-up to the rupee (the module's
+       uniform payslip rounding). 12 × the rounded ₹8 slice = ₹96 vs the ₹100 annual figure —
+       a rounding artefact of rupee-rounded monthly accrual, only reachable when the monthly
+       wage is under ₹100, below every notified minimum wage; recorded, not hidden."
+    - "₹100 floor applied PER MONTH (max(cap/12, ₹100) monthly, i.e. an annual ₹1,200 floor) —
+       rejected: s.26(1)'s ₹100 qualifies the 'annual minimum bonus', not a monthly figure;
+       a per-month floor would provision 12× the statutory amount."
+    - "Ceiling-rounding the floor slice (₹8.33 -> ₹9) so the 12-month sum ≥ ₹100 — rejected
+       for consistency: every monthly statutory figure in this module rounds half-up; the CA
+       may direct otherwise on sign-off."
+  source: >-
+    Basic ₹60/month (6,000 paise): rate leg 1/12 = 500 paise = ₹5; annual floor comparison
+    max(6,000, 10,000) = 10,000 paise -> monthly slice 10,000/12 = 833.33 paise = ₹8.33 ->
+    half-up ₹8 = 800 paise. Before the D2 fix the engine returned ₹5 — an under-provision.
+  ca_initials: PENDING
+  ca_date: null
+  target: bonus_provision_monthly
+  inputs: {basic_monthly: 6000}
+  expected: 800
+
+- id: bonus_floor_boundary_at_100_rupees
+  statute: Code on Wages 2019
+  section: "26(1)"
+  provenance: interpretation
+  citation_url: "https://www.indiacode.nic.in/bitstream/123456789/15793/1/aA2019-29.pdf"
+  citation_locator: >-
+    CoW s.26(1) ("... or one hundred rupees, whichever is higher") — the two legs meet where
+    8⅓% of annual wages equals ₹100, i.e. monthly capped wage exactly ₹100.
+  alternatives_considered:
+    - "CHOSEN — annual-floor reading as recorded on bonus_floor_binds_below_100_rupees (one CA
+       confirmation covers both floor vectors)."
+    - "Per-month ₹100 floor — rejected there; same here."
+  source: >-
+    Basic exactly ₹100/month (10,000 paise): rate leg = floor leg = 10,000 paise annual ->
+    monthly slice 833.33 paise -> ₹8 = 800 paise. PAIRED with the binding vector: at and above
+    this boundary the floor never lifts the figure.
+  ca_initials: PENDING
+  ca_date: null
+  target: bonus_provision_monthly
+  inputs: {basic_monthly: 10000}
+  expected: 800
 
 # ---- Gratuity accrual (15/26 formula + s.53(3) ceiling) ----------------------------------------
 - id: gratuity_accrual_26000_10y

@@ -9,12 +9,12 @@
 //! Port order (§WS3.1): slab tax → PF/ESI (+ s.2(y) wage base) → TDS (all sections) →
 //! ITC set-off → GST late-fee/interest → gratuity/bonus.
 
-pub mod slab_tax;
-pub mod pf_esi;
-pub mod tds;
-pub mod itc;
-pub mod gst_fees;
 pub mod gratuity_bonus;
+pub mod gst_fees;
+pub mod itc;
+pub mod pf_esi;
+pub mod slab_tax;
+pub mod tds;
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -102,9 +102,11 @@ fn recompute(target: &str, inp: &Value) -> Option<i64> {
         "pf_employer" => pf_esi::pf_employer(gi(inp, "basic_monthly")).0,
         "eps_employer" => pf_esi::eps_employer(gi(inp, "basic_monthly")).0,
         "annual_income_tax" => slab_tax::annual_income_tax(gi(inp, "annual_taxable")).0,
-        "interest_234b" => {
-            slab_tax::interest_234b(gi(inp, "assessed_tax"), gi(inp, "advance_paid"), gi(inp, "months"))
-        }
+        "interest_234b" => slab_tax::interest_234b(
+            gi(inp, "assessed_tax"),
+            gi(inp, "advance_paid"),
+            gi(inp, "months"),
+        ),
         "interest_234c" => {
             let paid: Vec<i64> = inp
                 .get("cumulative_paid")
@@ -116,7 +118,10 @@ fn recompute(target: &str, inp: &Value) -> Option<i64> {
         "company_tax_115baa" => slab_tax::company_tax_115baa(gi(inp, "total_income")),
         "late_fee_234e" => slab_tax::late_fee_234e(gi(inp, "days_late"), gi(inp, "tds_amount")),
         "tds_on_payment" => {
-            let ytd = inp.get("aggregate_ytd").and_then(Value::as_i64).unwrap_or(0);
+            let ytd = inp
+                .get("aggregate_ytd")
+                .and_then(Value::as_i64)
+                .unwrap_or(0);
             tds::tds_on_payment(
                 gs(inp, "section")?,
                 gi(inp, "amount"),
@@ -124,8 +129,8 @@ fn recompute(target: &str, inp: &Value) -> Option<i64> {
                 gs(inp, "category"),
                 ytd,
             )
-                .tds_paise
-                .0
+            .tds_paise
+            .0
         }
         "gratuity_hybrid" => {
             gratuity_bonus::gratuity_hybrid(
@@ -134,17 +139,27 @@ fn recompute(target: &str, inp: &Value) -> Option<i64> {
                 ymd(inp, "boundary")?,
                 gi(inp, "old_base"),
                 gi(inp, "new_base"),
-                inp.get("fixed_term").and_then(Value::as_bool).unwrap_or(false),
+                inp.get("fixed_term")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
             )
             .0
         }
         "gratuity_required" => {
-            gratuity_bonus::gratuity_required(gi(inp, "last_basic_monthly"), gi(inp, "completed_years")).0
+            gratuity_bonus::gratuity_required(
+                gi(inp, "last_basic_monthly"),
+                gi(inp, "completed_years"),
+            )
+            .0
         }
-        "bonus_provision_monthly" => gratuity_bonus::bonus_provision_monthly(gi(inp, "basic_monthly")).0,
-        "late_fee_3b" => {
-            gst_fees::late_fee_3b(gi(inp, "days_late"), inp.get("is_nil").and_then(Value::as_bool).unwrap_or(false))
+        "bonus_provision_monthly" => {
+            gratuity_bonus::bonus_provision_monthly(gi(inp, "basic_monthly")).0
         }
+        "late_fee_3b" => gst_fees::late_fee_3b(
+            gi(inp, "days_late"),
+            inp.get("is_nil").and_then(Value::as_bool).unwrap_or(false),
+            inp.get("aato").and_then(Value::as_i64), // absent = unknown AATO → statutory max
+        ),
         "interest_3b" => gst_fees::interest_3b(gi(inp, "cash_tax"), gi(inp, "days_late")),
         _ => return None,
     })
@@ -153,7 +168,11 @@ fn recompute(target: &str, inp: &Value) -> Option<i64> {
 /// A GST head triplet [igst, cgst, sgst] read from `inp[key] = {igst, cgst, sgst}`.
 fn heads3(inp: &Value, key: &str) -> [i64; 3] {
     let h = inp.get(key);
-    let g = |k: &str| h.and_then(|o| o.get(k)).and_then(Value::as_i64).unwrap_or(0);
+    let g = |k: &str| {
+        h.and_then(|o| o.get(k))
+            .and_then(Value::as_i64)
+            .unwrap_or(0)
+    };
     [g("igst"), g("cgst"), g("sgst")]
 }
 
@@ -185,7 +204,10 @@ pub fn check_claim(claim: &RecomputeClaim) -> RecomputeCheck {
                 if ok {
                     (true, "verified — recomputed to the paisa".to_string())
                 } else {
-                    (false, format!("MISMATCH — claimed {want:?}, Mahsa recomputed {got:?}"))
+                    (
+                        false,
+                        format!("MISMATCH — claimed {want:?}, Mahsa recomputed {got:?}"),
+                    )
                 }
             }
             None => (
@@ -211,7 +233,10 @@ pub fn check_claim(claim: &RecomputeClaim) -> RecomputeCheck {
         }
         Some(r) => (
             false,
-            format!("MISMATCH — Maisha claimed {}, Mahsa recomputed {}", claim.claimed_paise, r),
+            format!(
+                "MISMATCH — Maisha claimed {}, Mahsa recomputed {}",
+                claim.claimed_paise, r
+            ),
         ),
         None => (
             false,
@@ -292,7 +317,10 @@ mod claim_tests {
 
         // A wrong claimed cash figure is a recomputable mismatch -> blocks.
         want.insert("cash_igst".to_string(), 999);
-        let bad = RecomputeClaim { claimed_values: Some(want), ..ok };
+        let bad = RecomputeClaim {
+            claimed_values: Some(want),
+            ..ok
+        };
         let cb = check_claim(&bad);
         assert!(!cb.matches);
         assert!(has_mismatch(std::slice::from_ref(&cb)));
@@ -301,7 +329,11 @@ mod claim_tests {
     #[test]
     fn correct_claim_verifies() {
         // ESI employee on gross ₹20,001 = ₹151 (15100 paise), matching the oracle vector.
-        let c = check_claim(&claim("esi_employee", json!({"gross_monthly": 2000100}), 15100));
+        let c = check_claim(&claim(
+            "esi_employee",
+            json!({"gross_monthly": 2000100}),
+            15100,
+        ));
         assert!(c.matches);
         assert_eq!(c.recomputed_paise, Some(15100));
     }
@@ -310,7 +342,11 @@ mod claim_tests {
     fn wrong_claim_is_a_mismatch() {
         // ₹60,000 (not ₹50,000): at exactly the threshold the correct answer is now 0, which
         // would make a "wrong claim" test accidentally assert against the no-TDS path.
-        let c = check_claim(&claim("tds_on_payment", json!({"section": "194J", "amount": 6000000}), 999999));
+        let c = check_claim(&claim(
+            "tds_on_payment",
+            json!({"section": "194J", "amount": 6000000}),
+            999999,
+        ));
         assert!(!c.matches);
         assert_eq!(c.recomputed_paise, Some(600000)); // 10% of ₹60,000
         assert!(c.note.contains("MISMATCH"));
@@ -326,8 +362,16 @@ mod claim_tests {
 
     #[test]
     fn has_mismatch_only_on_recomputable_wrong() {
-        let ok = check_claim(&claim("statutory_wage_base", json!({"included": 3000000, "excluded_addback": 0}), 3000000));
-        let wrong = check_claim(&claim("statutory_wage_base", json!({"included": 3000000, "excluded_addback": 0}), 1));
+        let ok = check_claim(&claim(
+            "statutory_wage_base",
+            json!({"included": 3000000, "excluded_addback": 0}),
+            3000000,
+        ));
+        let wrong = check_claim(&claim(
+            "statutory_wage_base",
+            json!({"included": 3000000, "excluded_addback": 0}),
+            1,
+        ));
         assert!(!has_mismatch(std::slice::from_ref(&ok)));
         assert!(has_mismatch(&[ok, wrong]));
     }

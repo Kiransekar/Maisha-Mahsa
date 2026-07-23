@@ -149,8 +149,7 @@ def build_awaiting_approval(approvals: list[ApprovalInput]) -> list[InboxItem]:
             InboxItem(
                 id=f"approval:{a.domain}",
                 queue="awaiting_approval",
-                what=f"{a.domain.capitalize()} needs your sign-off — Mahsa flagged it "
-                f"{a.status}",
+                what=f"{a.domain.capitalize()} needs your sign-off — Mahsa flagged it {a.status}",
                 when=None,
                 impact_paise=a.amount_paise,
                 impact_label="At stake" if quantified else "Sign-off pending (₹ not quantified)",
@@ -168,9 +167,7 @@ def build_mahsa_blocked(blocked: list[BlockedFigureInput]) -> list[InboxItem]:
     for b in blocked:
         name = b.label or b.target
         delta = (
-            abs(b.claimed_paise - b.recomputed_paise)
-            if b.recomputed_paise is not None
-            else None
+            abs(b.claimed_paise - b.recomputed_paise) if b.recomputed_paise is not None else None
         )
         items.append(
             InboxItem(

@@ -321,9 +321,7 @@ class TreasuryService(BaseDomainService):
             credits += int(t.credit)
         return Paise(debits), Paise(credits)
 
-    def burn_attribution(
-        self, session: Session, as_of: date, months: int = 3
-    ) -> dict[str, Any]:
+    def burn_attribution(self, session: Session, as_of: date, months: int = 3) -> dict[str, Any]:
         """Trailing-window spend (debits) grouped by transaction category — where the burn
         actually goes. Uncategorised debits roll into 'uncategorised'."""
         start = _months_back(as_of, months)
@@ -350,9 +348,7 @@ class TreasuryService(BaseDomainService):
         """Auto-sweep suggestion: idle cash beyond a ``buffer_months`` runway buffer that could
         be laddered into FDs, computed from current treasury metrics."""
         m = self.metrics(session, as_of)
-        return sweep_suggestion(
-            m["cash_paise"], m["net_burn_paise"], buffer_months=buffer_months
-        )
+        return sweep_suggestion(m["cash_paise"], m["net_burn_paise"], buffer_months=buffer_months)
 
     def metrics(self, session: Session, as_of: date, months: int = 3) -> dict[str, Any]:
         cash = self.cash_position(session)

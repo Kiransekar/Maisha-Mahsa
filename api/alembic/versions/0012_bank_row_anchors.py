@@ -39,9 +39,7 @@ def upgrade() -> None:
         batch.add_column(sa.Column("source_row", sa.Integer(), nullable=True))
         batch.add_column(sa.Column("row_hash", sa.String(), nullable=True))
         batch.add_column(sa.Column("occurrence", sa.Integer(), nullable=True))
-        batch.create_foreign_key(
-            "fk_bank_txn_source_doc", "documents", ["source_doc_id"], ["id"]
-        )
+        batch.create_foreign_key("fk_bank_txn_source_doc", "documents", ["source_doc_id"], ["id"])
         batch.create_unique_constraint(
             "uq_bank_txn_anchor", ["source_doc_id", "row_hash", "occurrence"]
         )

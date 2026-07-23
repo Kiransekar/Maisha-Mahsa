@@ -73,9 +73,11 @@ def _seed_treasury(session: Session) -> None:
 
 def test_preview_is_badged_and_matches_the_generator(session: Session) -> None:
     _seed_treasury(session)
-    body = _client(session).post(
-        "/api/investor/preview", json={"highlights": ["Closed seed round", "  ", ""]}
-    ).json()
+    body = (
+        _client(session)
+        .post("/api/investor/preview", json={"highlights": ["Closed seed round", "  ", ""]})
+        .json()
+    )
 
     # verbatim over the generator — same session, same day, same composition
     upd = investor_update(session, datetime.now(UTC).date(), highlights=["Closed seed round"])

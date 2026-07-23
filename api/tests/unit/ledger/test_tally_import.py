@@ -174,8 +174,11 @@ def test_roundtrip_daybook_trial_balance_ties_to_the_paisa(session) -> None:  # 
             entry_date=v.date or "",
             description=v.narration,
             lines=[
-                {"account_id": ids[ln.ledger.casefold()], "debit": ln.debit_paise,
-                 "credit": ln.credit_paise}
+                {
+                    "account_id": ids[ln.ledger.casefold()],
+                    "debit": ln.debit_paise,
+                    "credit": ln.credit_paise,
+                }
                 for ln in v.lines
             ],
             source="tally",

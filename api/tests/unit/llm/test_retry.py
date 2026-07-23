@@ -50,7 +50,12 @@ class _SequenceProducer:
         self.feedbacks: list[str | None] = []
 
     async def produce(
-        self, *, snapshot: dict[str, Any], query: str, domain: str, case_id: str = "",
+        self,
+        *,
+        snapshot: dict[str, Any],
+        query: str,
+        domain: str,
+        case_id: str = "",
         feedback: str | None = None,
     ) -> ActionClaim:
         self.feedbacks.append(feedback)
@@ -71,10 +76,19 @@ def test_unbacked_numbers_flags_invented_value() -> None:
 
 
 def test_fallback_claim_is_fully_backed_and_cites_triggered() -> None:
-    fold = _fold(triggered=[TriggeredRule(
-        id="GST-001", domain="gst", severity="block", description="late",
-        statute="CGST Act 2017", section="Sec 47 / Rule 61", action="file",
-    )])
+    fold = _fold(
+        triggered=[
+            TriggeredRule(
+                id="GST-001",
+                domain="gst",
+                severity="block",
+                description="late",
+                statute="CGST Act 2017",
+                section="Sec 47 / Rule 61",
+                action="file",
+            )
+        ]
+    )
     facts = enrich(_SNAPSHOT)
     fb = fallback_claim("treasury", facts, fold)
     assert unbacked_numbers(fb, allowed_values(facts)) == []  # every number is backed
@@ -88,8 +102,12 @@ def test_fallback_claim_is_fully_backed_and_cites_triggered() -> None:
 async def test_clean_first_draft_verifies_in_one_attempt() -> None:
     good = ActionClaim(domain="treasury", claims={"cash": "120000000", "runway_months": "6.0"})
     res = await generate_verified(
-        _SequenceProducer([good]), snapshot=_SNAPSHOT, query="?", domain="treasury",
-        fold=_fold(), max_retries=2,
+        _SequenceProducer([good]),
+        snapshot=_SNAPSHOT,
+        query="?",
+        domain="treasury",
+        fold=_fold(),
+        max_retries=2,
     )
     assert isinstance(res, DraftResult)
     assert res.verified is True and res.attempts == 1 and res.requires_approval is False
@@ -101,7 +119,12 @@ async def test_bad_then_good_retries_with_feedback() -> None:
     good = ActionClaim(domain="treasury", claims={"cash": "120000000"})
     prod = _SequenceProducer([bad, good])
     res = await generate_verified(
-        prod, snapshot=_SNAPSHOT, query="?", domain="treasury", fold=_fold(), max_retries=2,
+        prod,
+        snapshot=_SNAPSHOT,
+        query="?",
+        domain="treasury",
+        fold=_fold(),
+        max_retries=2,
     )
     assert res.verified is True and res.attempts == 2
     assert prod.feedbacks[0] is None and prod.feedbacks[1] is not None  # correction fed back
@@ -112,8 +135,12 @@ async def test_bad_then_good_retries_with_feedback() -> None:
 async def test_exhaustion_falls_back_and_requires_approval() -> None:
     bad = ActionClaim(domain="treasury", claims={"cash": "999"})
     res = await generate_verified(
-        _SequenceProducer([bad]), snapshot=_SNAPSHOT, query="?", domain="treasury",
-        fold=_fold(), max_retries=2,
+        _SequenceProducer([bad]),
+        snapshot=_SNAPSHOT,
+        query="?",
+        domain="treasury",
+        fold=_fold(),
+        max_retries=2,
     )
     assert res.verified is False
     assert res.requires_approval is True
@@ -125,8 +152,12 @@ async def test_exhaustion_falls_back_and_requires_approval() -> None:
 async def test_red_books_propagate_requires_approval_even_when_verified() -> None:
     good = ActionClaim(domain="treasury", claims={"cash": "120000000"})
     res = await generate_verified(
-        _SequenceProducer([good]), snapshot=_SNAPSHOT, query="?", domain="treasury",
-        fold=_fold(requires_approval=True), max_retries=2,
+        _SequenceProducer([good]),
+        snapshot=_SNAPSHOT,
+        query="?",
+        domain="treasury",
+        fold=_fold(requires_approval=True),
+        max_retries=2,
     )
     assert res.verified is True
     assert res.requires_approval is True  # the books need sign-off regardless of a clean draft

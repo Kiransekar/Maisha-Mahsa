@@ -58,9 +58,12 @@ class GstService(BaseDomainService):
         itc_available: dict[str, int],
         filed_date: str | None = None,
         is_nil: bool = False,
+        aato: int | None = None,
     ) -> dict[str, Any]:
         days_late = max(0, _days_between(filed_date, due_date)) if filed_date else 0
-        comp = gst_calc.compute_gstr3b(output, itc_available, days_late=days_late, is_nil=is_nil)
+        comp = gst_calc.compute_gstr3b(
+            output, itc_available, days_late=days_late, is_nil=is_nil, aato=aato
+        )
         ret = GstReturn(
             return_type="GSTR-3B",
             filing_period=filing_period,
@@ -110,9 +113,7 @@ class GstService(BaseDomainService):
 
     # ---- Mahsa contract -------------------------------------------------------------
 
-    def recompute_claims(
-        self, session: Session, as_of: date | None = None
-    ) -> list[RecomputeClaim]:
+    def recompute_claims(self, session: Session, as_of: date | None = None) -> list[RecomputeClaim]:
         """Prime-Directive claims (§0.4) for filed GSTR-3B interest — the GST figure Mahsa can
         independently reconstruct (``interest_3b`` in ``dif/src/recompute/gst_fees.rs``). Inputs
         (cash_tax = persisted ``tax_payable``, days_late from filed/due dates) are exactly what
@@ -126,9 +127,7 @@ class GstService(BaseDomainService):
         guessed input that could falsely BLOCK a correct late fee, the late fee stays
         honest-pending. GSTR-1 / ITC set-off are likewise not single-value recompute targets."""
         claims: list[RecomputeClaim] = []
-        returns = session.scalars(
-            select(GstReturn).where(GstReturn.return_type == "GSTR-3B")
-        ).all()
+        returns = session.scalars(select(GstReturn).where(GstReturn.return_type == "GSTR-3B")).all()
         for ret in returns:
             if not ret.filed_date:
                 continue

@@ -105,20 +105,28 @@ def payslip_recompute_claims(
             label=f"{label_prefix}.wage_base",
         ),
         RecomputeClaim(
-            target="pf_employee", inputs={"basic_monthly": wb},
-            claimed_paise=int(comp["employee_pf"]), label=f"{label_prefix}.pf_employee",
+            target="pf_employee",
+            inputs={"basic_monthly": wb},
+            claimed_paise=int(comp["employee_pf"]),
+            label=f"{label_prefix}.pf_employee",
         ),
         RecomputeClaim(
-            target="pf_employer", inputs={"basic_monthly": wb},
-            claimed_paise=int(comp["employer_pf"]), label=f"{label_prefix}.pf_employer",
+            target="pf_employer",
+            inputs={"basic_monthly": wb},
+            claimed_paise=int(comp["employer_pf"]),
+            label=f"{label_prefix}.pf_employer",
         ),
         RecomputeClaim(
-            target="esi_employee", inputs={"gross_monthly": wb},
-            claimed_paise=int(comp["employee_esi"]), label=f"{label_prefix}.esi_employee",
+            target="esi_employee",
+            inputs={"gross_monthly": wb},
+            claimed_paise=int(comp["employee_esi"]),
+            label=f"{label_prefix}.esi_employee",
         ),
         RecomputeClaim(
-            target="esi_employer", inputs={"gross_monthly": wb},
-            claimed_paise=int(comp["employer_esi"]), label=f"{label_prefix}.esi_employer",
+            target="esi_employer",
+            inputs={"gross_monthly": wb},
+            claimed_paise=int(comp["employer_esi"]),
+            label=f"{label_prefix}.esi_employer",
         ),
     ]
 
@@ -146,9 +154,7 @@ def check_ctc_compliance(
     required_minimum = (
         0
         if total == 0
-        else int(
-            (Decimal(total) * EXCLUDED_CAP_FRACTION).to_integral_value(ROUND_CEILING)
-        )
+        else int((Decimal(total) * EXCLUDED_CAP_FRACTION).to_integral_value(ROUND_CEILING))
     )
     report: dict[str, Any] = {
         "compliant": compliant,
@@ -519,6 +525,7 @@ class PayrollService(BaseDomainService):
     def ecr_text(self, session: Session, *, period: str) -> str:
         """Build the EPFO ECR upload file for ``period`` (YYYY-MM) — one #~#-delimited line per
         active member, whole rupees, from the tested statutory PF math."""
+
         def _r(paise: int) -> int:
             return round(int(paise) / 100)
 
@@ -532,8 +539,11 @@ class PayrollService(BaseDomainService):
             # structures are unchanged (wage_base == basic).
             basic = _structure_wage_base(structure)
             comp = compute_components(
-                basic=structure.basic, hra=structure.hra, lta=structure.lta,
-                special_allowance=structure.special_allowance, state=emp.state,
+                basic=structure.basic,
+                hra=structure.hra,
+                lta=structure.lta,
+                special_allowance=structure.special_allowance,
+                state=emp.state,
                 month=int(period[5:7]),
             )
             pf_wage = statutory.pf_wage(basic)
@@ -554,9 +564,7 @@ class PayrollService(BaseDomainService):
 
     # ---- Mahsa contract -------------------------------------------------------------
 
-    def recompute_claims(
-        self, session: Session, as_of: date | None = None
-    ) -> list[RecomputeClaim]:
+    def recompute_claims(self, session: Session, as_of: date | None = None) -> list[RecomputeClaim]:
         """Emit Prime-Directive claims (§0.4) for every active employee's PF/ESI/wage-base — the
         payroll figures Mahsa can independently recompute. Mismatch → BLOCK; PT/TDS/LOP are not
         yet ported so no claim is emitted for them. Mirrors ``build_snapshot``'s iteration."""

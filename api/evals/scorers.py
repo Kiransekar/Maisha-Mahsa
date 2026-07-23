@@ -60,9 +60,7 @@ def abstains_when_thin(claim: ActionClaim, expect: Expectation) -> ScoreResult:
         if not claim.abstained:
             return ScoreResult("abstains_when_thin", False, "should have abstained, did not")
         if claim.claims:
-            return ScoreResult(
-                "abstains_when_thin", False, "abstained but still emitted claims"
-            )
+            return ScoreResult("abstains_when_thin", False, "abstained but still emitted claims")
         return ScoreResult("abstains_when_thin", True, "abstained on thin data")
     if claim.abstained:
         return ScoreResult("abstains_when_thin", False, "abstained on an answerable case")

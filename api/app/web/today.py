@@ -108,11 +108,7 @@ def _penalty_map(session: Session) -> dict[tuple[str, str, str], int]:
     """Real stored per-form penalty (paise), keyed by (domain, form_name, due_date). Only
     non-zero entries — a 0 default is 'not recorded', not a real ₹0 consequence."""
     rows = session.scalars(select(ComplianceCalendar)).all()
-    return {
-        (r.domain, r.form_name, r.due_date): r.penalty_amount
-        for r in rows
-        if r.penalty_amount
-    }
+    return {(r.domain, r.form_name, r.due_date): r.penalty_amount for r in rows if r.penalty_amount}
 
 
 def _trouble_radar(session: Session, as_of: date) -> list[dict[str, Any]]:
@@ -185,9 +181,7 @@ def _penalties_avoided(session: Session) -> dict[str, Any]:
     }
 
 
-def build_today(
-    session: Session, as_of: date, approvals: list[ApprovalItem]
-) -> dict[str, Any]:
+def build_today(session: Session, as_of: date, approvals: list[ApprovalItem]) -> dict[str, Any]:
     needs_you = _needs_you(approvals)
     return {
         "as_of": as_of.isoformat(),

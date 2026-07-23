@@ -230,9 +230,7 @@ def parse_tally_xml(raw: bytes) -> TallyParse:
     :class:`TallyImportError`; row-level problems are collected in ``result.errors`` so the
     parse report can show everything at once."""
     if len(raw) > MAX_BYTES:
-        raise TallyImportError(
-            f"file is {len(raw)} bytes; the import cap is {MAX_BYTES} bytes"
-        )
+        raise TallyImportError(f"file is {len(raw)} bytes; the import cap is {MAX_BYTES} bytes")
     text = _decode(raw)
     # defusedxml-style forbid_dtd: a DTD is the only place entity definitions (billion-laughs)
     # or external entities (XXE) can live. Tally exports never carry one.
@@ -305,8 +303,7 @@ def parse_tally_xml(raw: bytes) -> TallyParse:
         date = _tally_date_to_iso(_text(el, "DATE"))
         if date is None:
             result.errors.append(
-                f"Tally voucher {label}: DATE {_text(el, 'DATE')!r} is not a readable "
-                "YYYYMMDD date"
+                f"Tally voucher {label}: DATE {_text(el, 'DATE')!r} is not a readable YYYYMMDD date"
             )
         lines: list[TallyVoucherLine] = []
         line_error = False

@@ -76,9 +76,7 @@ def to_archive(documents: list[dict], as_of: str) -> list[str]:
     """Document ids eligible for auto-archive: their ``retention_until`` has passed. Permanent
     records (``retention_until`` is None) are never archived."""
     return [
-        d["id"]
-        for d in documents
-        if d.get("retention_until") and d["retention_until"] <= as_of
+        d["id"] for d in documents if d.get("retention_until") and d["retention_until"] <= as_of
     ]
 
 

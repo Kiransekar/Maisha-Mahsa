@@ -31,10 +31,16 @@ def test_financial_year_boundary() -> None:
 
 def test_payload_schema_and_qr() -> None:
     p = einvoice_payload(
-        seller_gstin=_GSTIN, buyer_gstin="29AAB...", doc_no="INV-9", doc_date="2026-05-10",
-        taxable=Paise.from_rupees(100000), igst=0,
-        cgst=Paise.from_rupees(9000), sgst=Paise.from_rupees(9000),
-        total=Paise.from_rupees(118000), hsn="9983",
+        seller_gstin=_GSTIN,
+        buyer_gstin="29AAB...",
+        doc_no="INV-9",
+        doc_date="2026-05-10",
+        taxable=Paise.from_rupees(100000),
+        igst=0,
+        cgst=Paise.from_rupees(9000),
+        sgst=Paise.from_rupees(9000),
+        total=Paise.from_rupees(118000),
+        hsn="9983",
     )
     assert p["Version"] == "1.1"
     assert p["DocDtls"] == {"Typ": "INV", "No": "INV-9", "Dt": "10/05/2026"}
@@ -53,10 +59,16 @@ def test_draft_honesty_label_present_on_every_irn_surface() -> None:
     reading either surface cannot mistake it for a filed, legally valid e-invoice."""
     assert DRAFT_IRN_LABEL == _LABEL
     p = einvoice_payload(
-        seller_gstin=_GSTIN, buyer_gstin="29AAB...", doc_no="INV-9", doc_date="2026-05-10",
-        taxable=Paise.from_rupees(100000), igst=0,
-        cgst=Paise.from_rupees(9000), sgst=Paise.from_rupees(9000),
-        total=Paise.from_rupees(118000), hsn="9983",
+        seller_gstin=_GSTIN,
+        buyer_gstin="29AAB...",
+        doc_no="INV-9",
+        doc_date="2026-05-10",
+        taxable=Paise.from_rupees(100000),
+        igst=0,
+        cgst=Paise.from_rupees(9000),
+        sgst=Paise.from_rupees(9000),
+        total=Paise.from_rupees(118000),
+        hsn="9983",
     )
     assert p["IrnStatus"] == _LABEL
     assert p["QrData"]["Caption"] == _LABEL
@@ -64,8 +76,14 @@ def test_draft_honesty_label_present_on_every_irn_surface() -> None:
 
 def test_b2c_when_no_buyer_gstin() -> None:
     p = einvoice_payload(
-        seller_gstin=_GSTIN, buyer_gstin=None, doc_no="INV-11", doc_date="2026-05-10",
-        taxable=Paise.from_rupees(5000), igst=Paise.from_rupees(900), cgst=0, sgst=0,
+        seller_gstin=_GSTIN,
+        buyer_gstin=None,
+        doc_no="INV-11",
+        doc_date="2026-05-10",
+        taxable=Paise.from_rupees(5000),
+        igst=Paise.from_rupees(900),
+        cgst=0,
+        sgst=0,
         total=Paise.from_rupees(5900),
     )
     assert p["TranDtls"]["SupTyp"] == "B2C"

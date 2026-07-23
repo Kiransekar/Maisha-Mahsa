@@ -16,12 +16,19 @@ use std::fs;
 
 fn heads(v: &Value, key: &str) -> [i64; 3] {
     let h = v.get(key);
-    let g = |k: &str| h.and_then(|o| o.get(k)).and_then(Value::as_i64).unwrap_or(0);
+    let g = |k: &str| {
+        h.and_then(|o| o.get(k))
+            .and_then(Value::as_i64)
+            .unwrap_or(0)
+    };
     [g("igst"), g("cgst"), g("sgst")]
 }
 
 fn vectors_dir() -> String {
-    format!("{}/../api/tests/statutory_oracle/vectors", env!("CARGO_MANIFEST_DIR"))
+    format!(
+        "{}/../api/tests/statutory_oracle/vectors",
+        env!("CARGO_MANIFEST_DIR")
+    )
 }
 
 fn load_all() -> Vec<Value> {
@@ -40,7 +47,9 @@ fn load_all() -> Vec<Value> {
 }
 
 fn i(v: &Value, key: &str) -> i64 {
-    v.get(key).and_then(Value::as_i64).unwrap_or_else(|| panic!("missing int {key} in {v:?}"))
+    v.get(key)
+        .and_then(Value::as_i64)
+        .unwrap_or_else(|| panic!("missing int {key} in {v:?}"))
 }
 fn i_or(v: &Value, key: &str, default: i64) -> i64 {
     v.get(key).and_then(Value::as_i64).unwrap_or(default)
@@ -48,25 +57,38 @@ fn i_or(v: &Value, key: &str, default: i64) -> i64 {
 fn ymd(v: &Value, key: &str) -> (i32, u32, u32) {
     let s = v.get(key).and_then(Value::as_str).unwrap();
     let p: Vec<&str> = s.split('-').collect();
-    (p[0].parse().unwrap(), p[1].parse().unwrap(), p[2].parse().unwrap())
+    (
+        p[0].parse().unwrap(),
+        p[1].parse().unwrap(),
+        p[2].parse().unwrap(),
+    )
 }
 
 // s.2(y) key classification — mirror of app/core/statutory_wage.py (defects #5/#6/#7):
 // clause (a)-(i) exclusions feed the first-proviso add-back; clauses (j)-(k) are excluded but
 // outside the add-back span; ANY other key (inclusion limb, special_allowance, unknown) is wages.
 const EXCLUDED_ADDBACK_KEYS: [&str; 14] = [
-    "bonus", "statutory_bonus",                    // (a)
-    "house_accommodation", "amenity_value",        // (b)
-    "employer_pf", "employer_pension",             // (c)
-    "conveyance", "travelling_concession", "lta",  // (d)
-    "special_expenses_reimbursement",              // (e)
-    "hra",                                         // (f)
-    "award_settlement_remuneration",               // (g)
-    "overtime",                                    // (h)
-    "commission",                                  // (i)
+    "bonus",
+    "statutory_bonus", // (a)
+    "house_accommodation",
+    "amenity_value", // (b)
+    "employer_pf",
+    "employer_pension", // (c)
+    "conveyance",
+    "travelling_concession",
+    "lta",                            // (d)
+    "special_expenses_reimbursement", // (e)
+    "hra",                            // (f)
+    "award_settlement_remuneration",  // (g)
+    "overtime",                       // (h)
+    "commission",                     // (i)
 ];
-const EXCLUDED_TERMINAL_KEYS: [&str; 4] =
-    ["gratuity", "retrenchment_compensation", "retirement_benefit", "ex_gratia"]; // (j)-(k)
+const EXCLUDED_TERMINAL_KEYS: [&str; 4] = [
+    "gratuity",
+    "retrenchment_compensation",
+    "retirement_benefit",
+    "ex_gratia",
+]; // (j)-(k)
 
 // The targets Rust recomputes so far (§WS3.1 port order).
 const PORTED: [&str; 9] = [
@@ -84,7 +106,10 @@ const PORTED: [&str; 9] = [
 #[test]
 fn rust_matches_oracle_vectors_to_the_paisa() {
     let vectors = load_all();
-    assert!(!vectors.is_empty(), "no oracle vectors loaded — parity gate must never be empty");
+    assert!(
+        !vectors.is_empty(),
+        "no oracle vectors loaded — parity gate must never be empty"
+    );
 
     let mut failures: Vec<String> = Vec::new();
     let mut covered = 0usize;
@@ -111,7 +136,10 @@ fn rust_matches_oracle_vectors_to_the_paisa() {
                 let we = want[0].as_i64().unwrap();
                 let wr = want[1].as_i64().unwrap();
                 if emp.0 != we || empr.0 != wr {
-                    failures.push(format!("{id} esi: got ({},{}) want ({we},{wr})", emp.0, empr.0));
+                    failures.push(format!(
+                        "{id} esi: got ({},{}) want ({we},{wr})",
+                        emp.0, empr.0
+                    ));
                 }
             }
             "statutory_wage_base" => {
@@ -131,8 +159,12 @@ fn rust_matches_oracle_vectors_to_the_paisa() {
                     }
                 }
                 let in_kind = i_or(inputs, "in_kind", 0);
-                let got =
-                    pf_esi::statutory_wage_base(included, excluded_addback, excluded_terminal, in_kind);
+                let got = pf_esi::statutory_wage_base(
+                    included,
+                    excluded_addback,
+                    excluded_terminal,
+                    in_kind,
+                );
                 let want = expected.as_i64().unwrap();
                 if got.0 != want {
                     failures.push(format!("{id} wage_base: got {} want {want}", got.0));
@@ -141,7 +173,10 @@ fn rust_matches_oracle_vectors_to_the_paisa() {
             "tds_on_payment" => {
                 let section = inputs.get("section").and_then(Value::as_str).unwrap();
                 let amount = i(inputs, "amount");
-                let payee = inputs.get("payee_type").and_then(Value::as_str).unwrap_or("company");
+                let payee = inputs
+                    .get("payee_type")
+                    .and_then(Value::as_str)
+                    .unwrap_or("company");
                 let category = inputs.get("category").and_then(Value::as_str);
                 let ytd = i_or(inputs, "aggregate_ytd", 0);
                 let got = tds::tds_on_payment(section, amount, payee, category, ytd);
@@ -161,7 +196,10 @@ fn rust_matches_oracle_vectors_to_the_paisa() {
                     ymd(inputs, "boundary"),
                     i(inputs, "old_base"),
                     i(inputs, "new_base"),
-                    inputs.get("fixed_term").and_then(Value::as_bool).unwrap_or(false),
+                    inputs
+                        .get("fixed_term")
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false),
                 );
                 let want = expected.as_i64().unwrap();
                 if got.0 != want {
@@ -223,7 +261,10 @@ fn rust_matches_oracle_vectors_to_the_paisa() {
                     let key = k.as_str().unwrap();
                     let want = v.as_i64().unwrap();
                     if get(key) != Some(want) {
-                        failures.push(format!("{id} itc_setoff[{key}]: got {:?} want {want}", get(key)));
+                        failures.push(format!(
+                            "{id} itc_setoff[{key}]: got {:?} want {want}",
+                            get(key)
+                        ));
                     }
                 }
             }
@@ -237,6 +278,13 @@ fn rust_matches_oracle_vectors_to_the_paisa() {
         eprintln!("parity COVERAGE GAP — targets not yet ported to Rust: {uncovered:?}");
     }
 
-    assert!(covered > 0, "no ported vectors exercised — parity gate is vacuous");
-    assert!(failures.is_empty(), "Rust↔oracle parity mismatches:\n{}", failures.join("\n"));
+    assert!(
+        covered > 0,
+        "no ported vectors exercised — parity gate is vacuous"
+    );
+    assert!(
+        failures.is_empty(),
+        "Rust↔oracle parity mismatches:\n{}",
+        failures.join("\n")
+    );
 }

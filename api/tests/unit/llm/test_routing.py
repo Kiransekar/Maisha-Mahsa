@@ -34,7 +34,12 @@ class _TagProducer:
         self.tag = tag
 
     async def produce(
-        self, *, snapshot: dict[str, Any], query: str, domain: str, case_id: str = "",
+        self,
+        *,
+        snapshot: dict[str, Any],
+        query: str,
+        domain: str,
+        case_id: str = "",
         feedback: str | None = None,
     ) -> ActionClaim:
         return ActionClaim(domain=domain, narrative=self.tag)

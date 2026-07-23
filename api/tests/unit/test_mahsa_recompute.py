@@ -12,8 +12,11 @@ def _fold_payload(recompute: list[dict]) -> dict:
         "global_dims": ["a"] * 8,
         "validation": {"status": "green", "triggered": []},
         "shape": {
-            "status": "green", "color": "green", "layout": "global",
-            "requires_approval": False, "global_score": 100.0,
+            "status": "green",
+            "color": "green",
+            "layout": "global",
+            "requires_approval": False,
+            "global_score": 100.0,
         },
         "rules_version": "test",
         "recompute": recompute,
@@ -32,14 +35,33 @@ def test_claim_serialises_without_none_label():
 
 
 def test_verified_and_mismatch_and_honest_pending_parse():
-    res = FoldResult.model_validate(_fold_payload([
-        {"target": "esi_employee", "claimed_paise": 15100, "recomputed_paise": 15100,
-         "matches": True, "note": "verified"},
-        {"target": "tds_on_payment", "claimed_paise": 999999, "recomputed_paise": 500000,
-         "matches": False, "note": "MISMATCH"},
-        {"target": "itr_computation", "claimed_paise": 1, "recomputed_paise": None,
-         "matches": False, "note": "honest-pending"},
-    ]))
+    res = FoldResult.model_validate(
+        _fold_payload(
+            [
+                {
+                    "target": "esi_employee",
+                    "claimed_paise": 15100,
+                    "recomputed_paise": 15100,
+                    "matches": True,
+                    "note": "verified",
+                },
+                {
+                    "target": "tds_on_payment",
+                    "claimed_paise": 999999,
+                    "recomputed_paise": 500000,
+                    "matches": False,
+                    "note": "MISMATCH",
+                },
+                {
+                    "target": "itr_computation",
+                    "claimed_paise": 1,
+                    "recomputed_paise": None,
+                    "matches": False,
+                    "note": "honest-pending",
+                },
+            ]
+        )
+    )
     verified, mismatch, pending = res.recompute
     assert verified.matches and not verified.honest_pending
     # a real mismatch is NOT honest-pending — it is a hard block signal

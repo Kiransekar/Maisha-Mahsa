@@ -95,9 +95,13 @@ async fn fold_handler(
             0,
             TriggeredRule {
                 id: "MAHSA-PARITY-001".to_string(),
-                domain: domain.map(|d| d.as_str().to_string()).unwrap_or_else(|| "global".to_string()),
+                domain: domain
+                    .map(|d| d.as_str().to_string())
+                    .unwrap_or_else(|| "global".to_string()),
                 severity: Severity::Block,
-                description: format!("Recomputation mismatch — figure blocked pending correction. {diag}"),
+                description: format!(
+                    "Recomputation mismatch — figure blocked pending correction. {diag}"
+                ),
                 statute: "Mahsa Prime Directive".to_string(),
                 section: "MMX-1.0 §0.4".to_string(),
                 action: "block".to_string(),

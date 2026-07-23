@@ -54,8 +54,18 @@ def test_domains_list_has_live_health_and_honest_badges(session, mahsa_server):
     assert body["mahsa_down_message"] is None
     keys = {d["key"] for d in body["domains"]}
     assert keys == {
-        "treasury", "revenue", "payables", "payroll", "gst", "tax",
-        "ledger", "forecast", "equity", "compliance", "expense", "vault",
+        "treasury",
+        "revenue",
+        "payables",
+        "payroll",
+        "gst",
+        "tax",
+        "ledger",
+        "forecast",
+        "equity",
+        "compliance",
+        "expense",
+        "vault",
     }
     for d in body["domains"]:
         assert d["status"] in ("green", "yellow", "red")
@@ -112,9 +122,7 @@ def test_history_is_honestly_empty_under_two_captures(session, mahsa_server):
     assert empty["domain"] == "ledger"
     assert empty["series"] == {}
 
-    history_store.capture(
-        session, build_registry(), captured_at="2026-07-01", as_of=None
-    )
+    history_store.capture(session, build_registry(), captured_at="2026-07-01", as_of=None)
     session.commit()
 
     one_point = client.get("/api/domains/ledger/history").json()
@@ -166,7 +174,9 @@ def test_audit_room_reports_a_tampered_chain_truthfully(session, mahsa_server):
     assert body["total"] == 3
     # Newest first.
     assert [e["timestamp"] for e in body["entries"]] == [
-        "2026-07-22T00:00:00Z", "2026-07-21T00:00:00Z", "2026-07-20T00:00:00Z",
+        "2026-07-22T00:00:00Z",
+        "2026-07-21T00:00:00Z",
+        "2026-07-20T00:00:00Z",
     ]
 
     # Paging.

@@ -8,18 +8,32 @@ from app.domains.gst.gst_calc import gstr1_json
 
 def _b2b_line() -> dict:
     return {
-        "invoice_no": "INV-9", "idt": "2026-05-10", "pos": "MH", "gstin": "27AAPFU0939F1ZV",
-        "taxable": Paise.from_rupees(100000), "igst": 0,
-        "cgst": Paise.from_rupees(9000), "sgst": Paise.from_rupees(9000),
-        "hsn": "9983", "qty": 1, "val": Paise.from_rupees(118000),
+        "invoice_no": "INV-9",
+        "idt": "2026-05-10",
+        "pos": "MH",
+        "gstin": "27AAPFU0939F1ZV",
+        "taxable": Paise.from_rupees(100000),
+        "igst": 0,
+        "cgst": Paise.from_rupees(9000),
+        "sgst": Paise.from_rupees(9000),
+        "hsn": "9983",
+        "qty": 1,
+        "val": Paise.from_rupees(118000),
     }
 
 
 def _b2c_line() -> dict:
     return {
-        "invoice_no": "INV-10", "idt": "2026-05-12", "pos": "KA", "gstin": None,
-        "taxable": Paise.from_rupees(50000), "igst": Paise.from_rupees(9000),
-        "cgst": 0, "sgst": 0, "hsn": "9983", "qty": 1,
+        "invoice_no": "INV-10",
+        "idt": "2026-05-12",
+        "pos": "KA",
+        "gstin": None,
+        "taxable": Paise.from_rupees(50000),
+        "igst": Paise.from_rupees(9000),
+        "cgst": 0,
+        "sgst": 0,
+        "hsn": "9983",
+        "qty": 1,
     }
 
 

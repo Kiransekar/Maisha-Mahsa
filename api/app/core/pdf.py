@@ -68,10 +68,14 @@ def payslip_pdf(data: dict) -> bytes:
     for i in range(max(len(earn), len(ded))):
         e = earn[i] if i < len(earn) else ("", "")
         d = ded[i] if i < len(ded) else ("", "")
-        rows.append([
-            e[0], _inr(e[1]) if e[0] else "",
-            d[0], _inr(d[1]) if d[0] else "",
-        ])
+        rows.append(
+            [
+                e[0],
+                _inr(e[1]) if e[0] else "",
+                d[0],
+                _inr(d[1]) if d[0] else "",
+            ]
+        )
     rows.append(["Gross", _inr(data["gross"]), "Total deductions", _inr(data["total_deductions"])])
     table = Table(rows, colWidths=[140, 110, 140, 110])
     table.setStyle(_GRID)
@@ -120,22 +124,26 @@ def audit_pack_pdf(pack: dict) -> bytes:
         if figures:
             rows = [["Particulars", "Amount (₹)", "Badge", "Evidence"]]
             for f in figures:
-                rows.append([
-                    Paragraph(f["label"], styles["BodyText"]),
-                    _inr(f["value_paise"]),
-                    badge_text(f["badge"]),
-                    Paragraph(f["evidence_ref"], styles["BodyText"]),
-                ])
+                rows.append(
+                    [
+                        Paragraph(f["label"], styles["BodyText"]),
+                        _inr(f["value_paise"]),
+                        badge_text(f["badge"]),
+                        Paragraph(f["evidence_ref"], styles["BodyText"]),
+                    ]
+                )
                 # CITE.P1-1 (SPEC-MEMCITE-1.0 §B4.2): the figure's cell-level source anchors —
                 # excerpt + resolution state verbatim from the sealed pack. A MOVED or BROKEN
                 # citation prints as such; the export never claims RESOLVED for it.
                 for a in f.get("anchors", []):
-                    rows.append([
-                        Paragraph(f"source: {a.get('excerpt', '')}", styles["BodyText"]),
-                        "",
-                        str(a.get("resolution", "")).upper(),
-                        Paragraph(a.get("note") or "", styles["BodyText"]),
-                    ])
+                    rows.append(
+                        [
+                            Paragraph(f"source: {a.get('excerpt', '')}", styles["BodyText"]),
+                            "",
+                            str(a.get("resolution", "")).upper(),
+                            Paragraph(a.get("note") or "", styles["BodyText"]),
+                        ]
+                    )
             table = Table(rows, colWidths=[210, 100, 70, 120])
             table.setStyle(_GRID)
             elems.append(table)

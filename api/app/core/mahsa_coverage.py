@@ -33,5 +33,5 @@ def is_recomputed(target: str) -> bool:
 
 
 def badge_state(target: str) -> str:
-    """"verified" iff Mahsa recomputes ``target``; otherwise "honest_pending" (§0.4)."""
+    """ "verified" iff Mahsa recomputes ``target``; otherwise "honest_pending" (§0.4)."""
     return "verified" if is_recomputed(target) else "honest_pending"

@@ -191,15 +191,24 @@ def test_payslip_and_form16_pdf_download():
     # seed an employee + salary structure via the API, then download the statutory PDFs
     emp = client.post(
         "/api/payroll/employees",
-        json={"employee_code": "PSE1", "name": "Asha", "date_of_joining": "2021-04-01",
-              "state": "MH", "pan": "ABCDE1234F"},
+        json={
+            "employee_code": "PSE1",
+            "name": "Asha",
+            "date_of_joining": "2021-04-01",
+            "state": "MH",
+            "pan": "ABCDE1234F",
+        },
     )
     assert emp.status_code in (200, 201)
     eid = emp.json()["employee_id"] if "employee_id" in emp.json() else emp.json().get("id")
     salary = client.post(
         f"/api/payroll/employees/{eid}/salary",
-        json={"effective_from": "2026-04-01", "basic": 5000000, "hra": 2000000,
-              "special_allowance": 3000000},
+        json={
+            "effective_from": "2026-04-01",
+            "basic": 5000000,
+            "hra": 2000000,
+            "special_allowance": 3000000,
+        },
     )
     assert salary.status_code in (200, 201)
 
@@ -264,10 +273,10 @@ def test_gstr1_json_export_downloads():
     inv = client.post(
         "/api/revenue/invoices",
         json={
-            "invoice_number": "JEXP-1", "customer_id": cid, "invoice_date": "2026-05-10",
-            "lines": [
-                {"description": "svc", "quantity": 1, "rate": 10000000, "hsn_code": "9983"}
-            ],
+            "invoice_number": "JEXP-1",
+            "customer_id": cid,
+            "invoice_date": "2026-05-10",
+            "lines": [{"description": "svc", "quantity": 1, "rate": 10000000, "hsn_code": "9983"}],
             "gst_rate": 18,
         },
     )
@@ -304,8 +313,18 @@ def test_audit_page_renders_and_verifies_chain():
 # ── final coverage sweep: every screen renders ──────────────────────────────────────
 
 ALL_DOMAINS = (
-    "treasury", "revenue", "payables", "expense", "payroll", "gst",
-    "tax", "compliance", "ledger", "forecast", "equity", "vault",
+    "treasury",
+    "revenue",
+    "payables",
+    "expense",
+    "payroll",
+    "gst",
+    "tax",
+    "compliance",
+    "ledger",
+    "forecast",
+    "equity",
+    "vault",
 )
 
 

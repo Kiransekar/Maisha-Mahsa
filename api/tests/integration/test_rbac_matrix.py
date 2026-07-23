@@ -639,9 +639,7 @@ def test_full_api_matrix_every_route_x_every_role(client, auth_server) -> None:
     for role in Role:
         headers = _bearer(auth_server, role)
         for route_id, gate_names in API_ROUTE_GATES.items():
-            denied_details = [
-                GATES[g][1] for g in gate_names if role not in GATES[g][0]
-            ]
+            denied_details = [GATES[g][1] for g in gate_names if role not in GATES[g][0]]
             response = _call(client, route_id, headers)
             if denied_details:
                 if response.status_code != 403:
@@ -735,15 +733,11 @@ def test_htmx_action_submit_requires_write(client, auth_server) -> None:
     assert "created" in allowed.text
 
 
-def test_statutory_filing_hard_gate_is_stricter_than_the_capability(
-    client, auth_server
-) -> None:
+def test_statutory_filing_hard_gate_is_stricter_than_the_capability(client, auth_server) -> None:
     """The Approver HOLDS approve_filing (rbac) and is still refused a statutory filing route:
     WS5.2's hard gate admits Owner/Admin only and cannot be configured away. Paired with the
     allow direction: Admin gets past the gate (422 on the empty body, never 403)."""
-    denied = client.post(
-        "/api/gst/gstr3b", json={}, headers=_bearer(auth_server, Role.APPROVER)
-    )
+    denied = client.post("/api/gst/gstr3b", json={}, headers=_bearer(auth_server, Role.APPROVER))
     assert denied.status_code == 403
     assert denied.json()["detail"] == _FILING_DETAIL
 
@@ -763,8 +757,12 @@ def _seed_vault_doc(session) -> str:
     doc_id = "e" * 64
     session.add(
         Document(
-            id=doc_id, file_name="invoice.pdf", file_path="/vault/invoice.pdf",
-            doc_type="invoice", upload_date="2026-07-01", sha256=doc_id,
+            id=doc_id,
+            file_name="invoice.pdf",
+            file_path="/vault/invoice.pdf",
+            doc_type="invoice",
+            upload_date="2026-07-01",
+            sha256=doc_id,
         )
     )
     session.commit()
@@ -842,9 +840,12 @@ def test_sampling_route_is_deterministic_for_the_principals_org(client, auth_ser
     for i in range(6):
         session.add(
             JournalEntry(
-                entry_date=f"2026-07-{i + 1:02d}", reference=f"V-{i + 1}",
-                description=f"voucher {i + 1}", source="gst",
-                total_debit=100_00, total_credit=100_00,
+                entry_date=f"2026-07-{i + 1:02d}",
+                reference=f"V-{i + 1}",
+                description=f"voucher {i + 1}",
+                source="gst",
+                total_debit=100_00,
+                total_credit=100_00,
             )
         )
     session.commit()
@@ -987,14 +988,10 @@ def _seed_two_salaried_employees(session) -> None:
         ("E1", "Asha", 9_876_543, 1_234_567),
         ("E2", "Vikram", 7_654_321, 2_345_671),
     ):
-        emp = Employee(
-            employee_code=code, name=name, date_of_joining="2026-01-05", state="KA"
-        )
+        emp = Employee(employee_code=code, name=name, date_of_joining="2026-01-05", state="KA")
         session.add(emp)
         session.flush()
-        svc.set_salary_structure(
-            session, emp.id, effective_from="2026-06-01", basic=basic, hra=hra
-        )
+        svc.set_salary_structure(session, emp.id, effective_from="2026-06-01", basic=basic, hra=hra)
     session.commit()
 
 
@@ -1004,17 +1001,13 @@ def test_t11_overview_masks_per_employee_net_for_ca_and_approver(
     _seed_two_salaried_employees(session)
 
     # The unmasked truth first (Owner), so the byte-level assert checks REAL values.
-    owner = client.get(
-        "/api/payroll/runs/overview", headers=_bearer(auth_server, Role.OWNER)
-    )
+    owner = client.get("/api/payroll/runs/overview", headers=_bearer(auth_server, Role.OWNER))
     assert owner.status_code == 200, owner.text
     nets = [e["monthly_net_paise"] for e in owner.json()["employees"]]
     assert len(nets) == 2 and all(isinstance(n, int) and n > 0 for n in nets)
 
     for role in (Role.CA, Role.APPROVER):
-        resp = client.get(
-            "/api/payroll/runs/overview", headers=_bearer(auth_server, role)
-        )
+        resp = client.get("/api/payroll/runs/overview", headers=_bearer(auth_server, role))
         assert resp.status_code == 200, f"{role.value} holds read and must see the screen"
         body = resp.json()
         for emp in body["employees"]:
@@ -1025,9 +1018,7 @@ def test_t11_overview_masks_per_employee_net_for_ca_and_approver(
             assert str(net) not in resp.text, f"{role.value} received salary bytes"
 
     # the other cleared role: Accountant sees the values (non-Owner/Admin/Accountant rule)
-    acct = client.get(
-        "/api/payroll/runs/overview", headers=_bearer(auth_server, Role.ACCOUNTANT)
-    )
+    acct = client.get("/api/payroll/runs/overview", headers=_bearer(auth_server, Role.ACCOUNTANT))
     assert [e["monthly_net_paise"] for e in acct.json()["employees"]] == nets
 
 
@@ -1051,9 +1042,7 @@ def test_t11_run_preview_masks_per_employee_figures_but_keeps_totals(
     secret = per_emp_values - total_values  # values that exist ONLY per-employee
     assert secret, "seed must produce per-employee values distinct from every total"
 
-    ca = client.post(
-        "/api/payroll/runs/preview", json=body, headers=_bearer(auth_server, Role.CA)
-    )
+    ca = client.post("/api/payroll/runs/preview", json=body, headers=_bearer(auth_server, Role.CA))
     assert ca.status_code == 200, ca.text
     preview = ca.json()
     for emp in preview["employees"]:

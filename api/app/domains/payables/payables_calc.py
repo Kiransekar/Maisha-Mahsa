@@ -162,7 +162,10 @@ def tds_194t(amount: int, *, aggregate_ytd: int = 0) -> dict[str, Any]:
 
 
 def tcs_394_goods(
-    amount: int, *, aggregate_ytd: int = 0, rate: Decimal | str | None = None,
+    amount: int,
+    *,
+    aggregate_ytd: int = 0,
+    rate: Decimal | str | None = None,
     threshold: int | None = None,
 ) -> dict[str, Any]:
     """TCS on sale of goods — Income-tax Act 2025 s.394 (ex-206C(1H)). STRUCTURE ONLY: the rate

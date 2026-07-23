@@ -22,34 +22,64 @@ from app.core.rbac import (
 T, F = True, False
 EXPECTED: dict[Role, dict[Capability, bool]] = {
     Role.OWNER: {
-        Capability.READ: T, Capability.WRITE: T, Capability.APPROVE_PAYMENT: T,
-        Capability.APPROVE_FILING: T, Capability.MANAGE_USERS: T, Capability.VIEW_AUDIT: T,
-        Capability.EXPORT: T, Capability.INVEST_VIEW: T,
+        Capability.READ: T,
+        Capability.WRITE: T,
+        Capability.APPROVE_PAYMENT: T,
+        Capability.APPROVE_FILING: T,
+        Capability.MANAGE_USERS: T,
+        Capability.VIEW_AUDIT: T,
+        Capability.EXPORT: T,
+        Capability.INVEST_VIEW: T,
     },
     Role.ADMIN: {
-        Capability.READ: T, Capability.WRITE: T, Capability.APPROVE_PAYMENT: T,
-        Capability.APPROVE_FILING: T, Capability.MANAGE_USERS: T, Capability.VIEW_AUDIT: T,
-        Capability.EXPORT: T, Capability.INVEST_VIEW: F,
+        Capability.READ: T,
+        Capability.WRITE: T,
+        Capability.APPROVE_PAYMENT: T,
+        Capability.APPROVE_FILING: T,
+        Capability.MANAGE_USERS: T,
+        Capability.VIEW_AUDIT: T,
+        Capability.EXPORT: T,
+        Capability.INVEST_VIEW: F,
     },
     Role.ACCOUNTANT: {  # NO money/filing approvals, NO user management
-        Capability.READ: T, Capability.WRITE: T, Capability.APPROVE_PAYMENT: F,
-        Capability.APPROVE_FILING: F, Capability.MANAGE_USERS: F, Capability.VIEW_AUDIT: T,
-        Capability.EXPORT: T, Capability.INVEST_VIEW: F,
+        Capability.READ: T,
+        Capability.WRITE: T,
+        Capability.APPROVE_PAYMENT: F,
+        Capability.APPROVE_FILING: F,
+        Capability.MANAGE_USERS: F,
+        Capability.VIEW_AUDIT: T,
+        Capability.EXPORT: T,
+        Capability.INVEST_VIEW: F,
     },
     Role.APPROVER: {  # approves, but does not author records or manage users
-        Capability.READ: T, Capability.WRITE: F, Capability.APPROVE_PAYMENT: T,
-        Capability.APPROVE_FILING: T, Capability.MANAGE_USERS: F, Capability.VIEW_AUDIT: T,
-        Capability.EXPORT: F, Capability.INVEST_VIEW: F,
+        Capability.READ: T,
+        Capability.WRITE: F,
+        Capability.APPROVE_PAYMENT: T,
+        Capability.APPROVE_FILING: T,
+        Capability.MANAGE_USERS: F,
+        Capability.VIEW_AUDIT: T,
+        Capability.EXPORT: F,
+        Capability.INVEST_VIEW: F,
     },
     Role.CA: {  # read-only: audit room + queries + exported registers
-        Capability.READ: T, Capability.WRITE: F, Capability.APPROVE_PAYMENT: F,
-        Capability.APPROVE_FILING: F, Capability.MANAGE_USERS: F, Capability.VIEW_AUDIT: T,
-        Capability.EXPORT: T, Capability.INVEST_VIEW: F,
+        Capability.READ: T,
+        Capability.WRITE: F,
+        Capability.APPROVE_PAYMENT: F,
+        Capability.APPROVE_FILING: F,
+        Capability.MANAGE_USERS: F,
+        Capability.VIEW_AUDIT: T,
+        Capability.EXPORT: T,
+        Capability.INVEST_VIEW: F,
     },
     Role.INVESTOR: {  # only the scoped report, and only inside its window
-        Capability.READ: F, Capability.WRITE: F, Capability.APPROVE_PAYMENT: F,
-        Capability.APPROVE_FILING: F, Capability.MANAGE_USERS: F, Capability.VIEW_AUDIT: F,
-        Capability.EXPORT: F, Capability.INVEST_VIEW: T,
+        Capability.READ: F,
+        Capability.WRITE: F,
+        Capability.APPROVE_PAYMENT: F,
+        Capability.APPROVE_FILING: F,
+        Capability.MANAGE_USERS: F,
+        Capability.VIEW_AUDIT: F,
+        Capability.EXPORT: F,
+        Capability.INVEST_VIEW: T,
     },
 }
 
@@ -83,14 +113,19 @@ def test_permission_matrix(role: Role, capability: Capability):
 
 # --- Explicit spec negatives (WS5.1), independent of the parametrized sweep -------------------
 
+
 def test_accountant_cannot_approve_money_or_filings():
     assert can(Role.ACCOUNTANT, Capability.APPROVE_PAYMENT) is False
     assert can(Role.ACCOUNTANT, Capability.APPROVE_FILING) is False
 
 
 def test_ca_is_read_only():
-    for cap in (Capability.WRITE, Capability.APPROVE_PAYMENT, Capability.APPROVE_FILING,
-                Capability.MANAGE_USERS):
+    for cap in (
+        Capability.WRITE,
+        Capability.APPROVE_PAYMENT,
+        Capability.APPROVE_FILING,
+        Capability.MANAGE_USERS,
+    ):
         assert can(Role.CA, cap) is False
 
 

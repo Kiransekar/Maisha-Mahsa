@@ -84,8 +84,12 @@ def test_browse_reports_integrity_failure_loudly(session):
     tampered_id = "e" * 64
     session.add(
         Document(
-            id=tampered_id, file_name="invoice.pdf", file_path="/vault/invoice.pdf",
-            doc_type="invoice", upload_date="2026-07-01", sha256=tampered_id,
+            id=tampered_id,
+            file_name="invoice.pdf",
+            file_path="/vault/invoice.pdf",
+            doc_type="invoice",
+            upload_date="2026-07-01",
+            sha256=tampered_id,
             ocr_text="this text does not hash to the stored sha256",
         )
     )

@@ -50,16 +50,31 @@ def _seed_itc(session: Session) -> dict[str, int]:
     """Three register rows: matched, claimed-but-not-in-2B, in-2B-but-not-claimed."""
     rows = {
         "matched": ItcRegister(
-            gstin_supplier="29AAAAA0000A1Z5", invoice_number="M-1", invoice_date="2026-07-01",
-            taxable_value=100_000_00, total_tax=18_000_00, eligible_itc=1, in_2b=1,
+            gstin_supplier="29AAAAA0000A1Z5",
+            invoice_number="M-1",
+            invoice_date="2026-07-01",
+            taxable_value=100_000_00,
+            total_tax=18_000_00,
+            eligible_itc=1,
+            in_2b=1,
         ),
         "books_only": ItcRegister(
-            gstin_supplier="29BBBBB0000B1Z5", invoice_number="B-2", invoice_date="2026-07-02",
-            taxable_value=50_000_00, total_tax=9_000_00, eligible_itc=1, in_2b=0,
+            gstin_supplier="29BBBBB0000B1Z5",
+            invoice_number="B-2",
+            invoice_date="2026-07-02",
+            taxable_value=50_000_00,
+            total_tax=9_000_00,
+            eligible_itc=1,
+            in_2b=0,
         ),
         "twob_only": ItcRegister(
-            gstin_supplier="29CCCCC0000C1Z5", invoice_number="C-3", invoice_date="2026-07-03",
-            taxable_value=20_000_00, total_tax=3_600_00, eligible_itc=0, in_2b=1,
+            gstin_supplier="29CCCCC0000C1Z5",
+            invoice_number="C-3",
+            invoice_date="2026-07-03",
+            taxable_value=20_000_00,
+            total_tax=3_600_00,
+            eligible_itc=0,
+            in_2b=1,
         ),
     }
     session.add_all(rows.values())
@@ -211,8 +226,12 @@ def test_ims_confirm_needs_write_ca_can_only_preview(session):
 
 def _seed_invoice(session: Session) -> str:
     cust = Customer(
-        name="Acme", state="KA", gstin="29AAAAA0000A1Z5",
-        payment_terms=30, tds_applicable=0, tds_rate=0.0,
+        name="Acme",
+        state="KA",
+        gstin="29AAAAA0000A1Z5",
+        payment_terms=30,
+        tds_applicable=0,
+        tds_rate=0.0,
     )
     session.add(cust)
     session.flush()

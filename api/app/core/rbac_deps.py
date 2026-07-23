@@ -145,9 +145,7 @@ def require_filing(action: str) -> Callable[..., Principal]:
         verdict = decide_approval("basics", principal.role, action, 0)
         if verdict["required_role_ok"]:
             return principal
-        _audit_denial(
-            _denial_payload(principal, Capability.APPROVE_FILING, request.url.path)
-        )
+        _audit_denial(_denial_payload(principal, Capability.APPROVE_FILING, request.url.path))
         raise HTTPException(status_code=403, detail=str(verdict["reason"]))
 
     _dependency.required_capability = Capability.APPROVE_FILING  # type: ignore[attr-defined]
