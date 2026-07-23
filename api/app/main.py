@@ -32,7 +32,14 @@ from app.core.mahsa_client import MahsaClient, MahsaError
 from app.core.money import Paise
 from app.core.ocr import OcrUnavailable
 from app.core.overview import collect_kpis, upcoming_deadlines
-from app.core.principal import Principal, bind_org_guc, reset_current_org, set_current_org
+from app.core.principal import (
+    Principal,
+    bind_org_guc,
+    reset_current_org,
+    reset_current_user,
+    set_current_org,
+    set_current_user,
+)
 from app.core.rbac import Capability
 from app.core.rbac_deps import require
 from app.core.strategy import cap_table as cfo_cap_table
@@ -67,9 +74,11 @@ from app.web.api_filings import router as filings_api_router
 from app.web.api_gst import router as gst_spa_router
 from app.web.api_health import router as health_api_router
 from app.web.api_investor import router as investor_api_router
+from app.web.api_legal import router as legal_api_router
 from app.web.api_payroll import router as payroll_api_router
 from app.web.api_router import router as spa_api_router
 from app.web.api_statements import router as statements_api_router
+from app.web.api_tally import router as tally_api_router
 from app.web.charts import sparkline
 from app.web.exceptions_router import router as inbox_router
 from app.web.format import fact_rows, humanize
@@ -171,9 +180,11 @@ def create_app() -> FastAPI:
         request.state.role = principal.role
         request.state.org_id = principal.org_id
         org_token = set_current_org(principal.org_id)  # -> Postgres RLS, see above
+        user_token = set_current_user(principal.user_id)  # -> audit attribution (WS10.1)
         try:
             return await call_next(request)
         finally:
+            reset_current_user(user_token)
             reset_current_org(org_token)
 
     @app.get("/me")
@@ -257,7 +268,9 @@ def create_app() -> FastAPI:
     app.include_router(actions_api_router)
     app.include_router(gst_spa_router)
     app.include_router(statements_api_router)
+    app.include_router(tally_api_router)
     app.include_router(investor_api_router)
+    app.include_router(legal_api_router)
 
     registry = build_registry()
 

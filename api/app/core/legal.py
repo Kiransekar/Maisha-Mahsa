@@ -41,6 +41,10 @@ class DocType(StrEnum):
     TOS = "tos"
     PRIVACY = "privacy"
     DPA = "dpa"
+    #: WS10.1 — the DPDP consent/notice document (docs/legal/DPDP_NOTICE_DRAFT.md). Same
+    #: versioned-acceptance mechanics as the others; the Postgres CHECK constraint admits it
+    #: via migration 0010_dpdp_rights.
+    DPDP_NOTICE = "dpdp_notice"
 
 
 class OrgUnboundError(RuntimeError):
@@ -153,6 +157,37 @@ def latest_acceptance(session: Session, user_id: str, doc_type: DocType) -> Lega
         .order_by(LegalAcceptance.accepted_at.desc(), LegalAcceptance.id.desc())
         .limit(1)
     ).first()
+
+
+class ReacceptanceRequiredError(ValueError):
+    """WS10.1 — the caller must (re)accept the in-force version of a document before the
+    gated action proceeds. Subclasses ValueError so the web action layer's existing 422
+    handling surfaces the message and writes nothing."""
+
+
+def require_current_acceptance(
+    session: Session,
+    user_id: str | None,
+    doc_type: DocType,
+    now: datetime,
+    published: tuple[PublishedVersion, ...] = PUBLISHED,
+) -> None:
+    """WS10.1 consent gate for onboarding / employee-data ingestion: raise unless ``user_id``
+    has accepted the version of ``doc_type`` in force at ``now``.
+
+    Nothing published → no-op (nothing exists to accept — the honest state while every
+    document is still a counsel-gated draft, same stance as :func:`needs_reacceptance`).
+    Something published + no verified user → fail CLOSED: an unattributable caller cannot
+    have accepted anything.
+    """
+    current = current_version(doc_type, now, published)
+    if current is None:
+        return
+    if not user_id or needs_reacceptance(session, user_id, doc_type, now, published):
+        raise ReacceptanceRequiredError(
+            f"the current {doc_type.value} (version {current}) must be accepted before this "
+            "action — see Settings → Privacy"
+        )
 
 
 def needs_reacceptance(

@@ -106,6 +106,25 @@ def current_org() -> str | None:
     return _current_org.get()
 
 
+#: The verified user of the request being served (WS10.1) — same contract as ``_current_org``:
+#: set ONLY by the authentication middleware from the verified JWT's subject, never from a
+#: request body. Lets audit-sealing modules (e.g. ``app.core.dpdp``) attribute processing-log
+#: events to the caller without threading a principal through every action handler.
+_current_user: ContextVar[str | None] = ContextVar("maisha_current_user", default=None)
+
+
+def set_current_user(user_id: str | None) -> Token[str | None]:
+    return _current_user.set(user_id)
+
+
+def reset_current_user(token: Token[str | None]) -> None:
+    _current_user.reset(token)
+
+
+def current_user() -> str | None:
+    return _current_user.get()
+
+
 def bind_org_guc(dbapi_conn: object, dialect_name: str) -> bool:
     """Push the current org onto the DB connection so RLS (``app_current_org()``) sees it.
 

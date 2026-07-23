@@ -1,9 +1,10 @@
 # Maisha-Mahsa
 
-The complete startup financial suite for the Indian regulatory context. A single-user,
-open-source, self-hosted "virtual CFO": **Maisha** (Python/FastAPI) orchestrates and talks
-to a local LLM, while **Mahsa** (a 12 MB Rust DIF sidecar) is the deterministic gatekeeper
-that recomputes and validates every number against CA-signed rules before a human sees it.
+The complete startup financial suite for the Indian regulatory context. A multi-tenant
+"virtual CFO": **Maisha** (Python/FastAPI) orchestrates and talks to a local LLM, while
+**Mahsa** (a 12 MB Rust DIF sidecar) is the deterministic gatekeeper that recomputes and
+validates every number against primary-source statutory rules before a human sees it —
+a figure renders ✓ Verified only when Mahsa independently matched it to the paisa.
 
 > **New here? Read the [User Guide](./USER_GUIDE.md)** — install, run, and use every feature.
 >
@@ -41,10 +42,15 @@ Full setup and usage walkthrough: **[USER_GUIDE.md](./USER_GUIDE.md)**.
 
 ## Status
 
-Green and bottom-up verified — **57 Rust tests** (clippy-clean), **425 Python tests**, and
-the **13/13 golden LLM eval** all pass. **100 of 116 domain features** are built across all
-12 domains; **GST, Ledger, and Treasury are 100% complete**. See `BUILD_PROGRESS.md` for the
-authoritative tracker.
+Green and bottom-up verified — the full `make ci` gate (cargo tests + clippy, ruff + mypy,
+statutory grep-gates, 1200+ Python tests incl. real-loop E2E and a live RLS cross-tenant
+red-team, the statutory oracle with every vector primary-sourced, 13/13 golden LLM eval,
+and the React SPA gate: tsc + vitest + oxlint) passes end to end. **All 116 domain features
+are built across all 12 domains.** Multi-tenant (Postgres RLS), Better Auth JWT (single auth
+path), RBAC on every API route with field-level masking, React SPA (warm-paper + brass brand
+system) covering the whole CFO loop — enter data → verified figures → approve → file →
+receipt/evidence. `PROGRESS.md` is the authoritative build log; deployment runbook in
+`docs/DEPLOYMENT.md`.
 
 ## Features
 

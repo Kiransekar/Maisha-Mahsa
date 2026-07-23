@@ -18,12 +18,15 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core import dpdp, legal
 from app.core.mahsa_coverage import badge_state
 from app.core.money import Paise
+from app.core.principal import current_user
 from app.db.models.payables import Vendor
 from app.db.models.payroll import Employee
 from app.db.models.revenue import Customer
@@ -76,6 +79,7 @@ def _text_fig(key: str, label: str, value: str) -> dict[str, Any]:
 
 
 # ── handlers ──────────────────────────────────────────────────────────────────────
+
 
 def _create_account(session: Session, d: dict[str, str]) -> str:
     LedgerService().create_account(
@@ -130,6 +134,26 @@ def _submit_claim(session: Session, d: dict[str, str]) -> tuple[str, list[dict[s
             "reimbursement."
         )
     return (msg, [])
+
+
+def _dpdp_request(session: Session, d: dict[str, str]) -> str:
+    """WS10.1 — raise a data-principal rights request. Preview dry-runs the REAL create (SLA
+    date, legal-hold evaluation, calendar row, sealed event) and rolls it back; only the commit
+    keeps it — the standard preview→confirm discipline, nothing bespoke."""
+    res = dpdp.create_request(
+        session,
+        requester=d["requester"],
+        request_type=d["request_type"],
+        received_date=d["received_date"],
+        details=d.get("details") or None,
+    )
+    msg = (
+        f"DPDP {res['request_type']} request #{res['id']} recorded — respond by "
+        f"{res['due_date']} (90-day SLA, on the compliance calendar)."
+    )
+    if res["status"] == "held":
+        msg += f" LEGAL HOLD: {res['hold_basis']}"
+    return msg
 
 
 def _ingest_document(session: Session, d: dict[str, str]) -> str:
@@ -284,6 +308,12 @@ def _journal_entry(session: Session, d: dict[str, str]) -> tuple[str, list[dict[
 
 
 def _add_employee(session: Session, d: dict[str, str]) -> str:
+    # WS10.1 — employee-data ingestion is personal-data processing: the in-force DPDP notice
+    # (if one is published; drafts publish nothing) must be accepted by the verified caller
+    # first. Same gate as POST /api/payroll/employees, so both ingestion paths carry it.
+    legal.require_current_acceptance(
+        session, current_user(), legal.DocType.DPDP_NOTICE, datetime.now(UTC)
+    )
     emp = Employee(
         employee_code=d["employee_code"],
         name=d["name"],
@@ -343,112 +373,240 @@ _MSME_TYPES = ("micro", "small", "medium")
 
 ACTIONS: dict[str, list[Action]] = {
     "ledger": [
-        Action("ledger", "create-account", "Create account", (
-            Field("code", "Account code", placeholder="1000"),
-            Field("name", "Name", placeholder="Cash"),
-            Field("account_type", "Type", type="select", options=_ACCOUNT_TYPES),
-        ), _create_account),
-        Action("ledger", "journal-entry", "Journal entry", (
-            Field("entry_date", "Entry date", type="date"),
-            Field("description", "Narration", placeholder="Office rent for July"),
-            Field("lines", "Lines", type="lines", columns=(
-                Field("account_id", "Account ID", type="number", placeholder="1"),
-                Field("debit", "Debit (₹)", type="number", required=False, placeholder="0"),
-                Field("credit", "Credit (₹)", type="number", required=False, placeholder="0"),
-                Field("description", "Line narration", required=False),
-            )),
-        ), _journal_entry),
+        Action(
+            "ledger",
+            "create-account",
+            "Create account",
+            (
+                Field("code", "Account code", placeholder="1000"),
+                Field("name", "Name", placeholder="Cash"),
+                Field("account_type", "Type", type="select", options=_ACCOUNT_TYPES),
+            ),
+            _create_account,
+        ),
+        Action(
+            "ledger",
+            "journal-entry",
+            "Journal entry",
+            (
+                Field("entry_date", "Entry date", type="date"),
+                Field("description", "Narration", placeholder="Office rent for July"),
+                Field(
+                    "lines",
+                    "Lines",
+                    type="lines",
+                    columns=(
+                        Field("account_id", "Account ID", type="number", placeholder="1"),
+                        Field("debit", "Debit (₹)", type="number", required=False, placeholder="0"),
+                        Field(
+                            "credit", "Credit (₹)", type="number", required=False, placeholder="0"
+                        ),
+                        Field("description", "Line narration", required=False),
+                    ),
+                ),
+            ),
+            _journal_entry,
+        ),
     ],
     "revenue": [
-        Action("revenue", "create-customer", "New customer", (
-            Field("name", "Name", placeholder="Acme Pvt Ltd"),
-            Field("state", "State (place of supply)", required=False, placeholder="Maharashtra"),
-            Field("gstin", "GSTIN", required=False, placeholder="27AAAAA0000A1Z5"),
-            Field("payment_terms", "Payment terms (days)", type="number", required=False,
-                  placeholder="30"),
-        ), _create_customer),
-        Action("revenue", "create-invoice", "New invoice", (
-            Field("invoice_number", "Invoice number", placeholder="INV-001"),
-            Field("customer_id", "Customer ID", type="number", placeholder="1"),
-            Field("invoice_date", "Invoice date", type="date"),
-            Field("gst_rate", "GST rate (%)", type="number", required=False, placeholder="18"),
-            Field("lines", "Line items", type="lines", columns=(
-                Field("description", "Description", placeholder="Consulting — July"),
-                Field("quantity", "Qty", type="number", placeholder="1"),
-                Field("rate", "Rate (₹/unit)", type="number", placeholder="10000"),
-            )),
-        ), _create_invoice),
+        Action(
+            "revenue",
+            "create-customer",
+            "New customer",
+            (
+                Field("name", "Name", placeholder="Acme Pvt Ltd"),
+                Field(
+                    "state", "State (place of supply)", required=False, placeholder="Maharashtra"
+                ),
+                Field("gstin", "GSTIN", required=False, placeholder="27AAAAA0000A1Z5"),
+                Field(
+                    "payment_terms",
+                    "Payment terms (days)",
+                    type="number",
+                    required=False,
+                    placeholder="30",
+                ),
+            ),
+            _create_customer,
+        ),
+        Action(
+            "revenue",
+            "create-invoice",
+            "New invoice",
+            (
+                Field("invoice_number", "Invoice number", placeholder="INV-001"),
+                Field("customer_id", "Customer ID", type="number", placeholder="1"),
+                Field("invoice_date", "Invoice date", type="date"),
+                Field("gst_rate", "GST rate (%)", type="number", required=False, placeholder="18"),
+                Field(
+                    "lines",
+                    "Line items",
+                    type="lines",
+                    columns=(
+                        Field("description", "Description", placeholder="Consulting — July"),
+                        Field("quantity", "Qty", type="number", placeholder="1"),
+                        Field("rate", "Rate (₹/unit)", type="number", placeholder="10000"),
+                    ),
+                ),
+            ),
+            _create_invoice,
+        ),
     ],
     "payables": [
-        Action("payables", "create-vendor", "New vendor", (
-            Field("name", "Name", placeholder="Sharp Legal LLP"),
-            Field("tds_section", "TDS section", type="select", required=False,
-                  options=_TDS_SECTIONS),
-            Field("payee_type", "Payee type", type="select", options=_PAYEE_TYPES),
-            Field("gstin", "GSTIN", required=False, placeholder="29AAAAA0000A1Z5"),
-            Field("msme_type", "MSME class", type="select", required=False, options=_MSME_TYPES),
-            Field("payment_terms", "Payment terms (days)", type="number", required=False,
-                  placeholder="30"),
-        ), _create_vendor),
-        Action("payables", "create-bill", "Enter bill", (
-            Field("bill_number", "Bill number", placeholder="B-1042"),
-            Field("vendor_id", "Vendor ID", type="number", placeholder="1"),
-            Field("bill_date", "Bill date", type="date"),
-            Field("subtotal", "Taxable value (₹)", type="number", placeholder="60000"),
-            Field("gst_amount", "GST (₹)", type="number", required=False, placeholder="10800"),
-        ), _create_bill),
+        Action(
+            "payables",
+            "create-vendor",
+            "New vendor",
+            (
+                Field("name", "Name", placeholder="Sharp Legal LLP"),
+                Field(
+                    "tds_section",
+                    "TDS section",
+                    type="select",
+                    required=False,
+                    options=_TDS_SECTIONS,
+                ),
+                Field("payee_type", "Payee type", type="select", options=_PAYEE_TYPES),
+                Field("gstin", "GSTIN", required=False, placeholder="29AAAAA0000A1Z5"),
+                Field(
+                    "msme_type", "MSME class", type="select", required=False, options=_MSME_TYPES
+                ),
+                Field(
+                    "payment_terms",
+                    "Payment terms (days)",
+                    type="number",
+                    required=False,
+                    placeholder="30",
+                ),
+            ),
+            _create_vendor,
+        ),
+        Action(
+            "payables",
+            "create-bill",
+            "Enter bill",
+            (
+                Field("bill_number", "Bill number", placeholder="B-1042"),
+                Field("vendor_id", "Vendor ID", type="number", placeholder="1"),
+                Field("bill_date", "Bill date", type="date"),
+                Field("subtotal", "Taxable value (₹)", type="number", placeholder="60000"),
+                Field("gst_amount", "GST (₹)", type="number", required=False, placeholder="10800"),
+            ),
+            _create_bill,
+        ),
     ],
     "payroll": [
-        Action("payroll", "add-employee", "Add employee", (
-            Field("employee_code", "Employee code", placeholder="E001"),
-            Field("name", "Name", placeholder="Asha Rao"),
-            Field("date_of_joining", "Date of joining", type="date"),
-            Field("state", "State (for professional tax)", required=False,
-                  placeholder="Karnataka"),
-            Field("pan", "PAN", required=False, placeholder="ABCPE1234F"),
-        ), _add_employee),
-        Action("payroll", "salary-structure", "Set salary structure", (
-            Field("employee_id", "Employee ID", type="number", placeholder="1"),
-            Field("effective_from", "Effective from", type="date"),
-            Field("basic", "Basic (₹/month)", type="number", placeholder="50000"),
-            Field("hra", "HRA (₹/month)", type="number", required=False, placeholder="20000"),
-            Field("lta", "LTA (₹/month)", type="number", required=False, placeholder="0"),
-            Field("special_allowance", "Special allowance (₹/month)", type="number",
-                  required=False, placeholder="0"),
-        ), _salary_structure),
+        Action(
+            "payroll",
+            "add-employee",
+            "Add employee",
+            (
+                Field("employee_code", "Employee code", placeholder="E001"),
+                Field("name", "Name", placeholder="Asha Rao"),
+                Field("date_of_joining", "Date of joining", type="date"),
+                Field(
+                    "state", "State (for professional tax)", required=False, placeholder="Karnataka"
+                ),
+                Field("pan", "PAN", required=False, placeholder="ABCPE1234F"),
+            ),
+            _add_employee,
+        ),
+        Action(
+            "payroll",
+            "salary-structure",
+            "Set salary structure",
+            (
+                Field("employee_id", "Employee ID", type="number", placeholder="1"),
+                Field("effective_from", "Effective from", type="date"),
+                Field("basic", "Basic (₹/month)", type="number", placeholder="50000"),
+                Field("hra", "HRA (₹/month)", type="number", required=False, placeholder="20000"),
+                Field("lta", "LTA (₹/month)", type="number", required=False, placeholder="0"),
+                Field(
+                    "special_allowance",
+                    "Special allowance (₹/month)",
+                    type="number",
+                    required=False,
+                    placeholder="0",
+                ),
+            ),
+            _salary_structure,
+        ),
     ],
     "compliance": [
-        Action("compliance", "add-deadline", "Add deadline", (
-            Field("domain", "Domain", placeholder="gst"),
-            Field("form_name", "Form name", placeholder="GSTR-3B (Jun)"),
-            Field("due_date", "Due date", type="date"),
-            Field("filing_period", "Filing period", required=False, placeholder="2026-06"),
-        ), _add_deadline),
+        Action(
+            "compliance",
+            "add-deadline",
+            "Add deadline",
+            (
+                Field("domain", "Domain", placeholder="gst"),
+                Field("form_name", "Form name", placeholder="GSTR-3B (Jun)"),
+                Field("due_date", "Due date", type="date"),
+                Field("filing_period", "Filing period", required=False, placeholder="2026-06"),
+            ),
+            _add_deadline,
+        ),
+        Action(
+            "compliance",
+            "dpdp-request",
+            "DPDP rights request",
+            (
+                Field("requester", "Data principal", placeholder="A. Kumar (ex-employee)"),
+                Field("request_type", "Request type", type="select", options=dpdp.REQUEST_TYPES),
+                Field("received_date", "Received on", type="date"),
+                Field(
+                    "details",
+                    "Details",
+                    required=False,
+                    placeholder="scope of the request, contact channel…",
+                ),
+            ),
+            _dpdp_request,
+        ),
     ],
     "equity": [
-        Action("equity", "add-shareholder", "Add shareholder", (
-            Field("name", "Name", placeholder="Founder"),
-            Field("category", "Category", type="select", options=_SHAREHOLDER_CATS),
-            Field("shares_held", "Shares held", type="number", placeholder="700000"),
-        ), _add_shareholder),
+        Action(
+            "equity",
+            "add-shareholder",
+            "Add shareholder",
+            (
+                Field("name", "Name", placeholder="Founder"),
+                Field("category", "Category", type="select", options=_SHAREHOLDER_CATS),
+                Field("shares_held", "Shares held", type="number", placeholder="700000"),
+            ),
+            _add_shareholder,
+        ),
     ],
     "expense": [
-        Action("expense", "submit-claim", "Submit claim", (
-            Field("claim_date", "Claim date", type="date"),
-            Field("expense_date", "Expense date", type="date"),
-            Field("category", "Category", placeholder="travel"),
-            Field("amount", "Amount (₹)", type="number", placeholder="5000"),
-            # P1-8: receipt OCR (never authoritative) prefills expense_date/amount/vendor_gstin —
-            # all three stay editable here, same as every other field.
-            Field("vendor_gstin", "Vendor GSTIN", required=False, placeholder="27AAAAA0000A1Z5"),
-        ), _submit_claim),
+        Action(
+            "expense",
+            "submit-claim",
+            "Submit claim",
+            (
+                Field("claim_date", "Claim date", type="date"),
+                Field("expense_date", "Expense date", type="date"),
+                Field("category", "Category", placeholder="travel"),
+                Field("amount", "Amount (₹)", type="number", placeholder="5000"),
+                # P1-8: receipt OCR (never authoritative) prefills expense_date/amount/
+                # vendor_gstin — all three stay editable here, same as every other field.
+                Field(
+                    "vendor_gstin", "Vendor GSTIN", required=False, placeholder="27AAAAA0000A1Z5"
+                ),
+            ),
+            _submit_claim,
+        ),
     ],
     "vault": [
-        Action("vault", "ingest", "Ingest document", (
-            Field("file_name", "File name", placeholder="contract.pdf"),
-            Field("content", "Content / OCR text", placeholder="master services agreement…"),
-            Field("upload_date", "Upload date", type="date"),
-        ), _ingest_document),
+        Action(
+            "vault",
+            "ingest",
+            "Ingest document",
+            (
+                Field("file_name", "File name", placeholder="contract.pdf"),
+                Field("content", "Content / OCR text", placeholder="master services agreement…"),
+                Field("upload_date", "Upload date", type="date"),
+            ),
+            _ingest_document,
+        ),
     ],
 }
 

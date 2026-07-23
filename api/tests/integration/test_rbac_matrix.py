@@ -475,6 +475,10 @@ API_ROUTE_GATES: dict[str, tuple[str, ...]] = {
     "GET /api/ledger/pnl": ("read",),
     "GET /api/ledger/balance-sheet": ("read",),
     "POST /api/ledger/fold": ("read",),
+    # WS9.1 Tally import (app/web/api_tally.py): parse is the dry-run reconciliation report
+    # (read, api_actions preview precedent); commit is the typed-confirm book write (write).
+    "POST /api/ledger/tally/parse": ("read",),
+    "POST /api/ledger/tally/commit": ("read", "write"),
     # P1-5 statements (app/web/api_statements.py) — read-only wrappers over LedgerService
     "GET /api/statements": ("read",),
     "GET /api/statements/gl/{account_id}": ("read",),
@@ -506,6 +510,14 @@ API_ROUTE_GATES: dict[str, tuple[str, ...]] = {
     "POST /api/expense/parse-receipt": ("read",),
     "POST /api/expense/ocr-receipt": ("read",),
     "POST /api/expense/fold": ("read",),
+    # WS10.1 privacy surface (app/web/api_legal.py): the rights-request list and the notice
+    # status are reads; accepting the notice is the verified caller binding THEMSELVES to a
+    # published version (the /api/ca/accept precedent — identity IS the authorization), so it
+    # carries the router's read baseline, not write: a read-only CA's acceptance is as real as
+    # an Owner's. Raising a request goes through the generic action preview/commit rows above.
+    "GET /api/legal/dpdp/requests": ("read",),
+    "GET /api/legal/notice": ("read",),
+    "POST /api/legal/notice/accept": ("read",),
     # vault
     "POST /api/vault/documents": ("read", "write"),
     "GET /api/vault/search": ("read",),

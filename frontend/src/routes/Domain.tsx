@@ -33,6 +33,7 @@ import { ActionDrawer } from "../components/ActionDrawer";
 import { Sparkline } from "../components/Sparkline";
 import { GstDetail } from "./GstDetail";
 import { BankCsvImport } from "../components/BankCsvImport";
+import { TallyEmpty, TallyImport } from "../components/TallyImport";
 import { useConnectionHealth } from "../components/ConnectionHealth";
 import { booksFreshness, useNow } from "../lib/freshness";
 import { useTraceId } from "../lib/trace";
@@ -335,6 +336,19 @@ function DomainBody({
         <>
           <Section>Re-import bank statement</Section>
           <TreasuryReimport onImported={() => void refetch()} />
+        </>
+      )}
+
+      {/* WS9.1: Tally XML import — the SAME parse-report -> mapping -> typed-confirm component
+          Onboarding's Tally step uses (components/TallyImport.tsx), so the flow cannot fork.
+          Ledger-only: the import writes chart-of-accounts + journal entries, nothing else. */}
+      {data.domain === "ledger" && (
+        <>
+          <Section>Import from Tally</Section>
+          <TallyEmpty />
+          <div style={{ marginTop: 12 }}>
+            <TallyImport traceNamespace="ledger-tally" onImported={() => void refetch()} />
+          </div>
         </>
       )}
 

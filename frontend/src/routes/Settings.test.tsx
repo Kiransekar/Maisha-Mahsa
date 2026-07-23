@@ -136,3 +136,91 @@ describe("PendingInvitesList", () => {
     expect(html).not.toContain("No CA invites are pending");
   });
 });
+
+// ── WS10.1 Privacy section — the load-bearing pure branches ──────────────────────────────────
+
+import {
+  DpdpRequestsList,
+  noticeLine,
+  requestStatusLine,
+  type DpdpRequest,
+} from "./Settings";
+
+const REQ: DpdpRequest = {
+  id: 7,
+  requester: "A. Kumar",
+  request_type: "erasure",
+  details: null,
+  received_date: "2026-07-23",
+  due_date: "2026-10-21",
+  status: "open",
+  hold_basis: null,
+  closed_date: null,
+};
+
+describe("requestStatusLine — the status/date pairing is honest per state", () => {
+  it("open shows the SLA due date", () => {
+    expect(requestStatusLine(REQ)).toBe("open · respond by 2026-10-21");
+  });
+
+  it("held names the legal hold AND keeps the SLA date visible", () => {
+    const line = requestStatusLine({ ...REQ, status: "held" });
+    expect(line).toContain("legal hold");
+    expect(line).toContain("2026-10-21");
+  });
+
+  it("completed shows the close date, not the stale due date", () => {
+    const line = requestStatusLine({ ...REQ, status: "completed", closed_date: "2026-08-01" });
+    expect(line).toBe("completed 2026-08-01");
+    expect(line).not.toContain("2026-10-21");
+  });
+
+  it("an unknown future status renders verbatim, never re-interpreted", () => {
+    expect(requestStatusLine({ ...REQ, status: "escalated" })).toBe("escalated");
+  });
+});
+
+describe("noticeLine — nothing published renders NOTHING (never a fabricated notice)", () => {
+  it("null current_version -> null (no card)", () => {
+    expect(
+      noticeLine({ doc_type: "dpdp_notice", current_version: null, needs_acceptance: false }),
+    ).toBeNull();
+  });
+
+  it("in force + unaccepted -> asks for acceptance, naming the version", () => {
+    const line = noticeLine({
+      doc_type: "dpdp_notice",
+      current_version: "v1",
+      needs_acceptance: true,
+    });
+    expect(line).toContain("v1");
+    expect(line).toContain("not accepted");
+  });
+
+  it("in force + accepted -> states the accepted version", () => {
+    const line = noticeLine({
+      doc_type: "dpdp_notice",
+      current_version: "v2",
+      needs_acceptance: false,
+    });
+    expect(line).toBe("DPDP notice v2 accepted.");
+  });
+});
+
+describe("DpdpRequestsList", () => {
+  it("renders honest-empty", () => {
+    const html = renderToStaticMarkup(<DpdpRequestsList requests={[]} />);
+    expect(html).toContain("No data-principal rights requests");
+  });
+
+  it("a held request surfaces the statutory basis verbatim", () => {
+    const html = renderToStaticMarkup(
+      <DpdpRequestsList
+        requests={[{ ...REQ, status: "held", hold_basis: "Companies Act 2013 s.128(5) …" }]}
+      />,
+    );
+    expect(html).toContain("A. Kumar");
+    expect(html).toContain("legal hold");
+    expect(html).toContain("Companies Act 2013 s.128(5)");
+  });
+});

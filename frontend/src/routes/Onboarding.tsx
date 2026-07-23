@@ -32,8 +32,10 @@ import {
 } from "../components/VerifiedNumber";
 import { ErrorState } from "../components/ErrorState";
 import { BankCsvImport } from "../components/BankCsvImport";
+import { TallyEmpty, TallyImport } from "../components/TallyImport";
 import { Header, H2, Empty, MahsaDownBanner } from "./Today";
 import { honestState, type DomainData, type Figure } from "./Domain";
+import { DpdpNoticeCard } from "./Settings";
 
 // Re-exported so callers (and Onboarding.test.ts) keep importing the CSV dry-run logic from this
 // file's historical location, without a second copy of it existing here.
@@ -94,12 +96,13 @@ export function figureHeading(state: VerifyState | null): string {
 
 // ---- component ---------------------------------------------------------------------------
 
-type Step = 1 | 2 | 3;
+type Step = 1 | 2 | 3 | 4;
 
 const STEP_LABEL: Record<Step, string> = {
   1: "GSTIN",
-  2: "Bank statement",
-  3: "First figure",
+  2: "Tally books",
+  3: "Bank statement",
+  4: "First figure",
 };
 
 export function Onboarding() {
@@ -130,11 +133,11 @@ export function Onboarding() {
     onSuccess: (res) => setAccountId(res.id),
   });
 
-  // Step 3 — the payoff, only fetched once a statement has actually been imported.
+  // Step 4 — the payoff, only fetched once a statement has actually been imported.
   const domainQuery = useQuery({
     queryKey: ["onboarding-treasury"],
     queryFn: () => api<DomainData>("/domains/treasury"),
-    enabled: step === 3,
+    enabled: step === 4,
   });
 
   const submitBank = () => {
@@ -156,6 +159,10 @@ export function Onboarding() {
   return (
     <section style={{ maxWidth: 620 }}>
       <Header title="Get started" />
+      {/* WS10.1 consent capture point: the in-force DPDP notice (if one is published) is
+          surfaced before data entry begins — the SAME card Settings→Privacy renders, so the
+          two surfaces cannot disagree. Renders nothing while no notice is published. */}
+      <DpdpNoticeCard />
       <div
         style={{
           display: "flex",
@@ -165,7 +172,7 @@ export function Onboarding() {
           fontSize: 12,
         }}
       >
-        {([1, 2, 3] as Step[]).map((s) => (
+        {([1, 2, 3, 4] as Step[]).map((s) => (
           <span
             key={s}
             style={{
@@ -223,7 +230,28 @@ export function Onboarding() {
         </div>
       )}
 
+      {/* WS9.1 — the Tally step: optional, skippable, and the SAME parse-report -> mapping ->
+          typed-confirm component the /d/ledger screen uses (components/TallyImport.tsx), so the
+          migration flow cannot fork. Skipping writes nothing. */}
       {step === 2 && (
+        <div>
+          <H2>Coming from Tally?</H2>
+          <TallyEmpty />
+          <div style={{ marginTop: 12 }}>
+            <TallyImport traceNamespace="onboarding-tally" />
+          </div>
+          <StepButtons
+            onNext={() => setStep(3)}
+            nextLabel="Continue"
+            onBack={() => setStep(1)}
+          />
+          <div style={{ color: "var(--color-ink-faint)", fontSize: 11, marginTop: 8 }}>
+            Don't use Tally? Continue — nothing on this step is required.
+          </div>
+        </div>
+      )}
+
+      {step === 3 && (
         <div>
           <H2>Bank account</H2>
           {accountId === null ? (
@@ -260,7 +288,7 @@ export function Onboarding() {
                 nextDisabled={
                   !bankName || !accountNumber || !ifsc || openingPaise === null || createAccount.isPending
                 }
-                onBack={() => setStep(1)}
+                onBack={() => setStep(2)}
               />
             </>
           ) : (
@@ -273,12 +301,12 @@ export function Onboarding() {
                 accountId={accountId}
                 traceNamespace="onboarding-import"
                 footer={() => (
-                  <StepButtons onNext={() => setStep(3)} nextLabel="See your first figure" />
+                  <StepButtons onNext={() => setStep(4)} nextLabel="See your first figure" />
                 )}
               />
               <div style={{ marginTop: 12 }}>
                 <button
-                  onClick={() => setStep(1)}
+                  onClick={() => setStep(2)}
                   style={{
                     background: "transparent",
                     border: "none",
@@ -297,7 +325,7 @@ export function Onboarding() {
         </div>
       )}
 
-      {step === 3 && (
+      {step === 4 && (
         <div>
           <H2>{figureHeading(figureState)}</H2>
           {domainQuery.isLoading && (

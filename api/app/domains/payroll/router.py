@@ -7,10 +7,12 @@ from datetime import UTC, date, datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.core import legal
 from app.core.entitlement_deps import entitlement_payload, require_feature
 from app.core.entitlements import GuardDecision
 from app.core.loop import run_loop
 from app.core.mahsa_client import MahsaClient
+from app.core.principal import current_user
 from app.core.rbac import Capability
 from app.core.rbac_deps import require
 from app.db.models.payroll import Employee
@@ -31,6 +33,16 @@ _service = PayrollService()
 
 @router.post("/employees", dependencies=[Depends(require(Capability.WRITE))])
 def create_employee(body: NewEmployee, db: Session = Depends(get_session)) -> dict[str, int]:
+    # WS10.1 — employee-data ingestion requires the in-force DPDP notice (if any is published)
+    # to have been accepted by the verified caller. Same gate as the drawer's add-employee.
+    try:
+        legal.require_current_acceptance(
+            db, current_user(), legal.DocType.DPDP_NOTICE, datetime.now(UTC)
+        )
+    except legal.ReacceptanceRequiredError as exc:
+        # 409, not 403: the caller's ROLE is fine (rbac already passed); the blocking state is
+        # a missing acceptance, which the caller can fix and retry.
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     emp = Employee(
         employee_code=body.employee_code,
         name=body.name,

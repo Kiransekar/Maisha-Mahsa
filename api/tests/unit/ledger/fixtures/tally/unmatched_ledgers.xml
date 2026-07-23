@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ENVELOPE>
+ <HEADER>
+  <TALLYREQUEST>Import Data</TALLYREQUEST>
+ </HEADER>
+ <BODY>
+  <IMPORTDATA>
+   <REQUESTDESC>
+    <REPORTNAME>Day Book</REPORTNAME>
+   </REQUESTDESC>
+   <REQUESTDATA>
+    <TALLYMESSAGE>
+     <GROUP NAME="Vehicle Running" ACTION="Create">
+      <PARENT>Indirect Expenses</PARENT>
+     </GROUP>
+    </TALLYMESSAGE>
+    <TALLYMESSAGE>
+     <LEDGER NAME="Diesel Expense" ACTION="Create">
+      <PARENT>Vehicle Running</PARENT>
+      <OPENINGBALANCE>0.00</OPENINGBALANCE>
+      <!-- Deliberately does NOT tie out: computed closing is Dr 500.00 (-500.00 in Tally
+           signs); the stated closing below claims Dr 600.00. The reconciliation report must
+           list this ledger as a mismatch. -->
+      <CLOSINGBALANCE>-600.00</CLOSINGBALANCE>
+     </LEDGER>
+    </TALLYMESSAGE>
+    <TALLYMESSAGE>
+     <LEDGER NAME="Cash" ACTION="Create">
+      <PARENT>Cash-in-Hand</PARENT>
+      <OPENINGBALANCE>-1000.00</OPENINGBALANCE>
+      <CLOSINGBALANCE>-500.00</CLOSINGBALANCE>
+     </LEDGER>
+    </TALLYMESSAGE>
+    <TALLYMESSAGE>
+     <VOUCHER VCHTYPE="Payment" ACTION="Create">
+      <DATE>20260410</DATE>
+      <VOUCHERTYPENAME>Payment</VOUCHERTYPENAME>
+      <VOUCHERNUMBER>P-7</VOUCHERNUMBER>
+      <NARRATION>Diesel for delivery van</NARRATION>
+      <ALLLEDGERENTRIES.LIST>
+       <LEDGERNAME>Diesel Expense</LEDGERNAME>
+       <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE>
+       <AMOUNT>-500.00</AMOUNT>
+      </ALLLEDGERENTRIES.LIST>
+      <ALLLEDGERENTRIES.LIST>
+       <LEDGERNAME>Cash</LEDGERNAME>
+       <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE>
+       <AMOUNT>500.00</AMOUNT>
+      </ALLLEDGERENTRIES.LIST>
+     </VOUCHER>
+    </TALLYMESSAGE>
+   </REQUESTDATA>
+  </IMPORTDATA>
+ </BODY>
+</ENVELOPE>
