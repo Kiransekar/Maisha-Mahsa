@@ -15,8 +15,10 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core import audit_store, trace_store
+from app.core import memory as org_memory
 from app.core.domain import BaseDomainService
 from app.core.mahsa_client import FoldResult, MahsaClient
+from app.core.principal import current_org
 from app.llm.maisha import ClaimProducer
 from app.llm.retry import generate_verified
 from app.llm.schema import ActionClaim
@@ -44,6 +46,7 @@ async def run_loop(
     user_id: str = "founder",
     generator: ClaimProducer | None = None,
     max_retries: int = 2,
+    memory: str | None = None,
 ) -> LoopOutcome:
     # build_snapshot may accept an optional as_of (treasury does); fall back gracefully.
     try:
@@ -74,6 +77,13 @@ async def run_loop(
     latency_ms = 0
     requires_approval = fold.shape.requires_approval
     if generator is not None and query:
+        # SPEC-MEMCITE-1.0 §A7: the ONE choke point where org memory reaches the drafting
+        # layer. The org comes from the request contextvar the auth middleware set from the
+        # verified JWT (never a parameter a caller could spoof); no authenticated org means no
+        # memory. Memory is CONTEXT threaded to the prompt — generate_verified's facts map is
+        # built from the snapshot alone, so a memory figure can never verify (§A4).
+        if memory is None and (org := current_org()):
+            memory = org_memory.profile_block(session, org) or None
         started = time.perf_counter()
         draft = await generate_verified(
             generator,
@@ -82,6 +92,7 @@ async def run_loop(
             domain=service.domain,
             fold=fold,
             max_retries=max_retries,
+            memory=memory,
         )
         latency_ms = int((time.perf_counter() - started) * 1000)
         claim = draft.claim

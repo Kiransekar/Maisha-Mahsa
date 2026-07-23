@@ -80,14 +80,20 @@ async def generate_verified(
     domain: str,
     fold: FoldResult,
     max_retries: int,
+    memory: str | None = None,
 ) -> DraftResult:
+    # §A4 firewall: `facts` (and therefore `allowed`) comes ONLY from tools.enrich(snapshot).
+    # `memory` is context threaded to the generator's prompt and is NEVER merged here — so a
+    # number that exists only in memory can never become an allowed value and never verifies.
     facts = tools.enrich(snapshot)
     allowed = allowed_values(facts)
     feedback: str | None = None
+    # Only pass memory when present, so ClaimProducer stubs predating the kwarg keep working.
+    extra: dict[str, str] = {"memory": memory} if memory else {}
 
     for attempt in range(1, max_retries + 2):  # 1 initial try + max_retries
         claim = await generator.produce(
-            snapshot=snapshot, query=query, domain=domain, feedback=feedback
+            snapshot=snapshot, query=query, domain=domain, feedback=feedback, **extra
         )
         bad = unbacked_numbers(claim, allowed)
         if not bad:

@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import Integer, String, Text, func
+from sqlalchemy import Integer, LargeBinary, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -19,6 +19,9 @@ class Document(Base):
     domain: Mapped[str | None] = mapped_column(String)
     entity_id: Mapped[str | None] = mapped_column(String)
     ocr_text: Mapped[str | None] = mapped_column(Text)
+    # CITE.P0-1: the verbatim raw bytes for content-addressed source files (bank CSVs, Tally
+    # XML). ``id``/``sha256`` hash THESE bytes when present; text/OCR docs leave this NULL.
+    raw_content: Mapped[bytes | None] = mapped_column(LargeBinary)
     upload_date: Mapped[str] = mapped_column(String, nullable=False)
     retention_until: Mapped[str | None] = mapped_column(String)  # None = permanent
     sha256: Mapped[str] = mapped_column(String, nullable=False)

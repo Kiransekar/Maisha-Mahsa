@@ -12,15 +12,30 @@
 
 export type VerifyState = "verified" | "honest_pending" | "unbacked";
 
+// SPEC-MEMCITE-1.0 §B4.1: a rendered citation anchor — the excerpt ("Bank stmt HDFC-May.csv,
+// row 47: …"), a /vault link, and its resolution state per §B2. `resolution` is absent on
+// legacy coarse file-level refs (no row claim — never fabricated precision, §B5).
+export type DocumentRef = {
+  label: string;
+  url?: string | null;
+  resolution?: "resolved" | "moved" | "broken";
+  note?: string | null;
+};
+
 export type Working = {
   inputs?: { label: string; value: string }[];
   formula?: string | null;
   citations?: { text: string; url?: string | null }[];
-  documents?: { label: string }[];
+  documents?: DocumentRef[];
   verdict_hash?: string | null;
   rule_pack_version?: string | null;
   note?: string | null;
 };
+
+/** §B2: whether any citation behind the figure is BROKEN — this is what downgrades the badge. */
+export function hasBrokenCitation(working?: Working): boolean {
+  return (working?.documents ?? []).some((d) => d.resolution === "broken");
+}
 
 const MARK: Record<VerifyState, { glyph: string; label: string; color: string; title: string }> = {
   verified: {
@@ -50,10 +65,16 @@ const MARK: Record<VerifyState, { glyph: string; label: string; color: string; t
  */
 export type Freshness = boolean | "unknown";
 
-/** T4: a ✓ is only honest if the inputs are fresh. Staleness downgrades the badge, never hides. */
-export function effectiveState(state: VerifyState, stale: Freshness): VerifyState {
+/** T4: a ✓ is only honest if the inputs are fresh. Staleness downgrades the badge, never hides.
+ *  §B2 (SPEC-MEMCITE-1.0): a BROKEN citation behind the figure downgrades the same way — a ✓
+ *  standing on a source row that no longer resolves is a claim we can no longer make. */
+export function effectiveState(
+  state: VerifyState,
+  stale: Freshness,
+  brokenCitation = false,
+): VerifyState {
   // Fail closed: unknown freshness cannot sustain a ✓ any more than known staleness can.
-  return stale !== false && state === "verified" ? "honest_pending" : state;
+  return (stale !== false || brokenCitation) && state === "verified" ? "honest_pending" : state;
 }
 
 export function VerifyChip({ state }: { state: VerifyState }) {
@@ -133,7 +154,29 @@ function WorkingPanel({ working, state }: { working: Working; state: VerifyState
         {documents.length > 0 && (
           <Block title="Documents">
             {documents.map((d, i) => (
-              <div key={i}>{d.label}</div>
+              <div key={i}>
+                {d.url ? (
+                  <a href={d.url} style={{ color: "var(--color-accent)" }}>
+                    {d.label}
+                  </a>
+                ) : (
+                  d.label
+                )}
+                {/* §B2 MOVED: resolves, with a VISIBLE note — never silently. */}
+                {d.resolution === "moved" && (
+                  <span style={{ color: "var(--color-verify-pending)" }}>
+                    {" "}
+                    — {d.note ?? "row moved in the source file"}
+                  </span>
+                )}
+                {/* §B2 BROKEN: the panel states it plainly; the badge downgrade happens above. */}
+                {d.resolution === "broken" && (
+                  <span style={{ color: "var(--color-verify-unbacked)" }}>
+                    {" "}
+                    — citation broken{d.note ? `: ${d.note}` : ""}
+                  </span>
+                )}
+              </div>
             ))}
           </Block>
         )}
@@ -247,7 +290,8 @@ export function VerifiedNumber({
   // history simply omits this prop, so the card carries no trend, not a fabricated flat one.
   spark?: React.ReactNode;
 }) {
-  const shown = effectiveState(state, stale);
+  const brokenCitation = hasBrokenCitation(working);
+  const shown = effectiveState(state, stale, brokenCitation);
   return (
     <div
       style={{
@@ -281,6 +325,13 @@ export function VerifiedNumber({
           {stale === "unknown"
             ? "Downgraded from ✓: we couldn't check how fresh the inputs behind this figure are, so we won't claim it is still verified."
             : "Downgraded from ✓: the inputs behind this figure are stale, so the recomputation no longer stands."}
+        </div>
+      )}
+      {/* §B2 BROKEN downgrade is stated too — a silent downgrade is its own trust failure. */}
+      {brokenCitation && state === "verified" && stale === false && (
+        <div style={{ color: "var(--color-verify-pending)", fontSize: 11, marginTop: 6 }}>
+          Downgraded from ✓: a source citation behind this figure is broken — the cited row
+          could not be found in the stored source file. See the working below.
         </div>
       )}
       {note ? (

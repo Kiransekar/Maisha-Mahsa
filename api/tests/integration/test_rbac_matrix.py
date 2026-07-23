@@ -518,6 +518,15 @@ API_ROUTE_GATES: dict[str, tuple[str, ...]] = {
     "GET /api/legal/dpdp/requests": ("read",),
     "GET /api/legal/notice": ("read",),
     "POST /api/legal/notice/accept": ("read",),
+    # SPEC-MEMCITE-1.0 MEM.P0-2 (§A9 OWNER-DECISION): memory steers the agent's narrative —
+    # an admin surface. Owner/Admin write via the existing manage_users gate; every read role
+    # (incl. CA, deliberately) may view the block and its history. Playbook feedback is a
+    # books-side working decision: write (Owner/Admin/Accountant), the drawer-commit precedent.
+    "GET /api/memory": ("read",),
+    "PUT /api/memory": ("read", "manage_users"),
+    "POST /api/memory/append": ("read", "manage_users"),
+    "GET /api/memory/history": ("read",),
+    "POST /api/playbook/{playbook_id}/feedback": ("read", "write"),
     # vault
     "POST /api/vault/documents": ("read", "write"),
     "GET /api/vault/search": ("read",),
@@ -595,12 +604,15 @@ def _call(client: TestClient, route_id: str, headers: dict[str, str]) -> Respons
         ("{deadline_id}", "1"),
         ("{claim_id}", "1"),
         ("{thread_id}", "1"),
+        ("{playbook_id}", "GST-LATEFEE"),
     ):
         path = path.replace(param, value)
     if method == "GET":
         return client.get(path, headers=headers)
     # An empty JSON body: enough to reach the dependency gates. For a PERMITTED caller the
     # route may then 422/400/404 on the body — that is fine; what it must never do is 401/403.
+    if method == "PUT":
+        return client.put(path, json={}, headers=headers)
     return client.post(path, json={}, headers=headers)
 
 

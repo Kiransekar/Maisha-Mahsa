@@ -169,8 +169,15 @@ def _figure(
     citation: str | None = None,
     inputs: list[dict[str, str]] | None = None,
     note: str | None = None,
+    documents: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """One badged figure in the WS7.2 shape VerifiedNumber renders: value + state + working."""
+    """One badged figure in the WS7.2 shape VerifiedNumber renders: value + state + working.
+
+    ``documents`` (SPEC-MEMCITE-1.0 CITE.P0-3, §B4.1) carries rendered citation anchors —
+    excerpt + /vault url + resolution state. The filing flows compute from TYPED user inputs,
+    not imported files, so no anchor exists for them today and the block stays honestly empty
+    (§B5: never fabricated provenance); the seam is here for figures that gain row-level
+    sources."""
     state = _state(chk)
     resolved_note = note or (chk.note if chk else (None if mahsa_up else _MAHSA_DOWN_NOTE))
     return {
@@ -182,7 +189,7 @@ def _figure(
             "inputs": inputs or [],
             "formula": formula,
             "citations": [{"text": citation}] if citation else [],
-            "documents": [],
+            "documents": documents or [],
             "verdict_hash": None,  # filled with the preview's sealed verdict for ✓ figures
             "note": resolved_note,
         },

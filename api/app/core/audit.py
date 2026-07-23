@@ -15,8 +15,9 @@ from typing import Any
 GENESIS_HASH = "0" * 64
 
 
-def canonical_json(payload: dict[str, Any]) -> str:
-    """Deterministic JSON: sorted keys, no insignificant whitespace, UTF-8."""
+def canonical_json(payload: dict[str, Any] | list[Any]) -> str:
+    """Deterministic JSON: sorted keys, no insignificant whitespace, UTF-8. Accepts a list
+    too — SPEC-MEMCITE-1.0 row hashes are ``sha256(canonical_json([cells...]))``."""
     return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 

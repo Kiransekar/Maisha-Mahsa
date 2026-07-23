@@ -10,9 +10,14 @@ const BASE = import.meta.env.VITE_API_BASE ?? "";
 
 export class ApiError extends Error {
   status: number;
-  constructor(status: number, message: string) {
+  /** FastAPI's `{"detail": "..."}` body, when the response had one — the server's OWN words
+   *  (e.g. the memory-overflow char count), for callers that must render it verbatim rather
+   *  than invent a per-status sentence (MEM.P0-5, §0.4: never re-derive what the server said). */
+  detail?: string;
+  constructor(status: number, message: string, detail?: string) {
     super(message);
     this.status = status;
+    this.detail = detail;
   }
 }
 
@@ -32,7 +37,18 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   // The API has rejected this token (expired, revoked, or org/role no longer valid). Drop it so
   // the next call mints a fresh one instead of replaying a credential we know is dead.
   if (res.status === 401) clearAuthToken();
-  if (!res.ok) throw new ApiError(res.status, `${res.status} ${res.statusText}`);
+  if (!res.ok) {
+    let detail: string | undefined;
+    try {
+      const body: unknown = await res.json();
+      if (body && typeof body === "object" && typeof (body as { detail?: unknown }).detail === "string") {
+        detail = (body as { detail: string }).detail;
+      }
+    } catch {
+      // non-JSON or empty error body — no server detail to carry, statusText still applies
+    }
+    throw new ApiError(res.status, `${res.status} ${res.statusText}`, detail);
+  }
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
 }
 

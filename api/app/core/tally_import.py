@@ -21,9 +21,12 @@ edge, once: every paise figure this module returns is debit-positive.
 from __future__ import annotations
 
 import calendar
+import hashlib
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
+
+from app.core.audit import canonical_json
 
 #: Upload cap. A real Tally Day Book year-export is single-digit MB; 20 MB is generous headroom
 #: while still bounding parse memory. ponytail: raise if a real corpus file exceeds it.
@@ -96,7 +99,12 @@ class TallyVoucherLine:
 
 @dataclass(frozen=True)
 class TallyVoucher:
-    voucher_id: str  # VOUCHERNUMBER, or "voucher #N" by position when absent
+    #: VOUCHERNUMBER, or a content-hash id when absent (CITE.P0-4: positional ids silently
+    #: drift when the file is re-exported or re-ordered; a content hash does not).
+    voucher_id: str
+    #: sha256 over the voucher's canonical content (number, date, type, narration, lines) —
+    #: the tally_voucher citation anchor identity (SPEC-MEMCITE-1.0 §B3.2).
+    voucher_hash: str
     date: str | None  # ISO, None when DATE is missing/unreadable (listed in errors)
     voucher_type: str
     narration: str
@@ -288,12 +296,16 @@ def parse_tally_xml(raw: bytes) -> TallyParse:
             )
         )
 
+    fallback_seen: dict[str, int] = {}
     for i, el in enumerate(root.iter("VOUCHER"), start=1):
-        voucher_id = _text(el, "VOUCHERNUMBER") or f"voucher #{i}"
+        vnum = _text(el, "VOUCHERNUMBER")
+        # Error-naming label only — never stored. Stored ids are VOUCHERNUMBER or the
+        # content hash below (CITE.P0-4: positional ids drift on re-export/re-order).
+        label = vnum or f"unnumbered voucher (file position {i})"
         date = _tally_date_to_iso(_text(el, "DATE"))
         if date is None:
             result.errors.append(
-                f"Tally voucher {voucher_id}: DATE {_text(el, 'DATE')!r} is not a readable "
+                f"Tally voucher {label}: DATE {_text(el, 'DATE')!r} is not a readable "
                 "YYYYMMDD date"
             )
         lines: list[TallyVoucherLine] = []
@@ -303,13 +315,13 @@ def parse_tally_xml(raw: bytes) -> TallyParse:
         for entry in entries:
             ledger = _text(entry, "LEDGERNAME")
             if not ledger:
-                result.errors.append(f"Tally voucher {voucher_id}: a line has no LEDGERNAME")
+                result.errors.append(f"Tally voucher {label}: a line has no LEDGERNAME")
                 line_error = True
                 continue
             try:
                 amt = rupees_to_paise_exact(_text(entry, "AMOUNT"))
             except ValueError as exc:
-                result.errors.append(f"Tally voucher {voucher_id}, ledger {ledger!r}: {exc}")
+                result.errors.append(f"Tally voucher {label}, ledger {ledger!r}: {exc}")
                 line_error = True
                 continue
             # tally sign: negative = debit
@@ -322,12 +334,34 @@ def parse_tally_xml(raw: bytes) -> TallyParse:
             )
         if line_error:
             continue  # a voucher with an unreadable line must not import partially
+        voucher_type = _text(el, "VOUCHERTYPENAME") or (el.get("VCHTYPE") or "")
+        narration = _text(el, "NARRATION")
+        voucher_hash = hashlib.sha256(
+            canonical_json(
+                {
+                    "voucher_number": vnum or None,
+                    "date": date,
+                    "voucher_type": voucher_type,
+                    "narration": narration,
+                    "lines": [[ln.ledger, ln.debit_paise, ln.credit_paise] for ln in lines],
+                }
+            ).encode("utf-8")
+        ).hexdigest()
+        if vnum:
+            voucher_id = vnum
+        else:
+            n = fallback_seen.get(voucher_hash, 0) + 1
+            fallback_seen[voucher_hash] = n
+            # content-identical duplicates are interchangeable; the /n suffix only keeps
+            # their ids distinct within the file
+            voucher_id = f"voucher {voucher_hash[:12]}" + (f"/{n}" if n > 1 else "")
         result.vouchers.append(
             TallyVoucher(
                 voucher_id=voucher_id,
+                voucher_hash=voucher_hash,
                 date=date,
-                voucher_type=_text(el, "VOUCHERTYPENAME") or (el.get("VCHTYPE") or ""),
-                narration=_text(el, "NARRATION"),
+                voucher_type=voucher_type,
+                narration=narration,
                 lines=tuple(lines),
             )
         )

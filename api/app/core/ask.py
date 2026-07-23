@@ -16,9 +16,11 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core import memory as org_memory
 from app.core.domain import BaseDomainService
 from app.core.mahsa_client import MahsaClient, MahsaError
 from app.core.mahsa_coverage import is_recomputed
+from app.core.principal import Principal
 from app.core.router import DomainRouter
 from app.core.verify import FigureVerdict
 from app.llm.client import build_client
@@ -50,8 +52,16 @@ class Figure:
 class Citation:
     rule_id: str
     text: str
-    citation: str  # "<statute> / <section>"
+    citation: str  # "<statute> / <section>", or "audit <hash-prefix>" for recalled decisions
     domain: str
+    # SPEC-MEMCITE-1.0 §A7: episodic recall renders as decision+hash pointing at the
+    # tamper-evident chain, never a number-as-truth. None for statutory citations.
+    audit_hash: str | None = None
+    # SPEC-MEMCITE-1.0 §B4.3 (CITE.P0-3): an optional cell-level anchor — the answer layer
+    # echoes cell anchors where a source row backs the citation (TableRAG grounding, §B1).
+    # None wherever no anchor was minted: statutory cites and file-level refs stay coarse,
+    # never fabricated precision (§B5). CITE.P1-2 threads real values through Ask.
+    anchor: dict[str, Any] | None = None
 
 
 @dataclass
@@ -136,6 +146,7 @@ async def answer_query(
     as_of: date | None = None,
     mahsa: MahsaClient | None = None,
     generator: ClaimProducer | None = None,
+    principal: Principal | None = None,
 ) -> Answer:
     domain = registry.classify(query)
     if domain is None:
@@ -174,6 +185,16 @@ async def answer_query(
             label=f"{settings.llm_provider}:{model}",
         )
 
+    # SPEC-MEMCITE-1.0 §A7: with a verified caller, the org profile + CFO posture block is
+    # threaded to the drafting layer as CONTEXT (screened + labeled inside the generator;
+    # never merged into `facts`, so a memory figure can never verify — §A4). Principal-only
+    # org scoping (§A3): the org comes from the JWT-verified Principal, nowhere else.
+    mem: str | None = None
+    if principal is not None:
+        mem = org_memory.profile_text(session, principal) or None
+    # Passed as **kwargs only when present so ClaimProducer stubs predating `memory` still work.
+    extra: dict[str, str] = {"memory": mem} if mem else {}
+
     claim: ActionClaim | None = None
     verified: bool | None = None
     if gen is not None:
@@ -185,16 +206,30 @@ async def answer_query(
                 domain=domain,
                 fold=fold,
                 max_retries=settings.llm_max_retries,
+                memory=mem,
             )
             claim, verified = draft.claim, draft.verified
         else:
-            claim = await gen.produce(snapshot=snapshot, query=query, domain=domain)
+            claim = await gen.produce(snapshot=snapshot, query=query, domain=domain, **extra)
 
     figures = _figures(facts, claim)
     citations = [
         Citation(t.id, t.description, f"{t.statute} / {t.section}", t.domain)
         for t in (fold.validation.triggered if fold else [])
     ]
+    # Episodic recall (§A1 type 3): lexical, LLM-free, over the caller's org's OWN sealed
+    # chain — works identically with the LLM off. Rendered as decision+hash citations.
+    if principal is not None:
+        citations += [
+            Citation(
+                rule_id=f"decision:{r['action']}",
+                text=r["decision"],
+                citation=f"audit {r['audit_hash'][:12]}",
+                domain=r["domain"],
+                audit_hash=r["audit_hash"],
+            )
+            for r in org_memory.recall_decisions(session, principal, query)
+        ]
     status = fold.validation.status if fold else None
     requires_approval = (fold.shape.requires_approval if fold else False) or (verified is False)
 

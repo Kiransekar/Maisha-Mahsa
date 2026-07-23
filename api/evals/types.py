@@ -69,6 +69,7 @@ class ScriptedProducer:
         domain: str,
         case_id: str = "",
         feedback: str | None = None,
+        memory: str | None = None,  # accepted for ClaimProducer conformance; scripted = ignored
     ) -> ActionClaim:
         if case_id not in self._by_case:
             raise KeyError(f"no scripted claim for case '{case_id}'")

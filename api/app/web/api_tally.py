@@ -28,6 +28,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Form, HTTPException, UploadFile
@@ -39,9 +40,10 @@ from app.core.principal import Principal
 from app.core.rbac import Capability
 from app.core.rbac_deps import require, resolve_principal
 from app.core.tally_import import TallyImportError, TallyParse
-from app.db.models.ledger import ChartOfAccounts
+from app.db.models.ledger import ChartOfAccounts, JournalEntry
 from app.db.session import get_session
 from app.domains.ledger.service import LedgerService
+from app.domains.vault.service import VaultService
 from app.web.api_actions import preview_token
 
 router = APIRouter(
@@ -275,12 +277,23 @@ async def tally_commit(
 
     try:
         resolution, created = _resolve_mapping(db, parsed, mapping_dict)
+        # CITE.P0-4 (SPEC-MEMCITE-1.0 §B3.2): vault-ingest the source XML (content-addressed,
+        # verbatim) so every committed voucher carries a resolvable anchor — the file's
+        # sha256 + the voucher's content hash; the anchor line is the JournalLine's ordinal.
+        source_doc = VaultService().ingest_bytes(
+            db,
+            file_name=file.filename or "tally-export.xml",
+            content=raw,
+            upload_date=datetime.now(UTC).date().isoformat(),
+            doc_type="tally_export",
+            domain="ledger",
+        )
         journals = 0
         for v in parsed.vouchers:
             try:
                 # post_journal_entry re-checks balance — the double-entry gate stays
                 # authoritative even if the pre-check above ever drifts.
-                _service.post_journal_entry(
+                posted = _service.post_journal_entry(
                     db,
                     entry_date=v.date or "",
                     description=v.narration or v.voucher_type or f"Tally {v.voucher_id}",
@@ -300,6 +313,11 @@ async def tally_commit(
                     status_code=422,
                     detail=f"Tally voucher {v.voucher_id}: {exc}. Nothing was imported.",
                 ) from exc
+            entry = db.get(JournalEntry, posted["journal_entry_id"])
+            if entry is None:  # pragma: no cover — post_journal_entry just flushed it
+                raise RuntimeError(f"journal entry {posted['journal_entry_id']} vanished")
+            entry.voucher_hash = v.voucher_hash
+            entry.source_doc_id = source_doc["id"]
             journals += 1
     except HTTPException:
         db.rollback()

@@ -193,3 +193,91 @@ def test_roundtrip_daybook_trial_balance_ties_to_the_paisa(session) -> None:  # 
     # and each ledger's closing balance matches Tally's own stated closing (debit-positive)
     gl = svc.general_ledger(session, ids["hdfc bank"])
     assert gl["closing_balance"] == 1765433
+
+
+# ── CITE.P0-4: content-hash voucher identity (SPEC-MEMCITE-1.0 §B3.2) ─────────────────
+
+
+def _envelope(vouchers_xml: str) -> bytes:
+    return f"<?xml version='1.0'?><ENVELOPE>{vouchers_xml}</ENVELOPE>".encode()
+
+
+#: One numbered voucher and one WITHOUT a VOUCHERNUMBER — the fallback-id case.
+_NUMBERED = """
+<TALLYMESSAGE><VOUCHER VCHTYPE="Sales">
+ <DATE>20260401</DATE><VOUCHERTYPENAME>Sales</VOUCHERTYPENAME>
+ <VOUCHERNUMBER>V-77</VOUCHERNUMBER><NARRATION>Invoice</NARRATION>
+ <ALLLEDGERENTRIES.LIST><LEDGERNAME>Debtors</LEDGERNAME><AMOUNT>-100.00</AMOUNT></ALLLEDGERENTRIES.LIST>
+ <ALLLEDGERENTRIES.LIST><LEDGERNAME>Sales</LEDGERNAME><AMOUNT>100.00</AMOUNT></ALLLEDGERENTRIES.LIST>
+</VOUCHER></TALLYMESSAGE>"""
+_UNNUMBERED = """
+<TALLYMESSAGE><VOUCHER VCHTYPE="Payment">
+ <DATE>20260407</DATE><VOUCHERTYPENAME>Payment</VOUCHERTYPENAME>
+ <NARRATION>Office rent</NARRATION>
+ <ALLLEDGERENTRIES.LIST><LEDGERNAME>Rent</LEDGERNAME><AMOUNT>-50.00</AMOUNT></ALLLEDGERENTRIES.LIST>
+ <ALLLEDGERENTRIES.LIST><LEDGERNAME>Bank</LEDGERNAME><AMOUNT>50.00</AMOUNT></ALLLEDGERENTRIES.LIST>
+</VOUCHER></TALLYMESSAGE>"""
+
+
+def _expected_hash(
+    vnum: str | None, date: str, vtype: str, narration: str, lines: list[list]
+) -> str:
+    """Independent recompute (hashlib + json, not the code under test)."""
+    import hashlib
+    import json
+
+    payload = json.dumps(
+        {
+            "voucher_number": vnum,
+            "date": date,
+            "voucher_type": vtype,
+            "narration": narration,
+            "lines": lines,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def test_unnumbered_voucher_gets_a_content_hash_id_not_a_positional_one() -> None:
+    p = parse_tally_xml(_envelope(_NUMBERED + _UNNUMBERED))
+    assert p.errors == []
+    numbered, unnumbered = p.vouchers
+    assert numbered.voucher_id == "V-77"
+
+    expected = _expected_hash(
+        None, "2026-04-07", "Payment", "Office rent", [["Rent", 5000, 0], ["Bank", 0, 5000]]
+    )
+    assert unnumbered.voucher_hash == expected
+    assert unnumbered.voucher_id == f"voucher {expected[:12]}"
+
+    # the numbered voucher's hash binds its number and content
+    assert numbered.voucher_hash == _expected_hash(
+        "V-77", "2026-04-01", "Sales", "Invoice", [["Debtors", 10000, 0], ["Sales", 0, 10000]]
+    )
+
+
+def test_voucher_ids_and_hashes_survive_a_reordered_reexport() -> None:
+    """The defect the spec names: positional ids silently drift when the file is re-exported
+    in a different order. Content-hash ids must not."""
+    a = parse_tally_xml(_envelope(_NUMBERED + _UNNUMBERED))
+    b = parse_tally_xml(_envelope(_UNNUMBERED + _NUMBERED))
+    ids_a = {v.voucher_id: v.voucher_hash for v in a.vouchers}
+    ids_b = {v.voucher_id: v.voucher_hash for v in b.vouchers}
+    assert ids_a == ids_b
+
+
+def test_identical_unnumbered_vouchers_share_a_hash_but_get_distinct_ids() -> None:
+    p = parse_tally_xml(_envelope(_UNNUMBERED + _UNNUMBERED))
+    v1, v2 = p.vouchers
+    assert v1.voucher_hash == v2.voucher_hash
+    assert v1.voucher_id != v2.voucher_id
+    assert v2.voucher_id == f"{v1.voucher_id}/2"
+
+
+def test_positional_voucher_fallback_grep_gate() -> None:
+    """CITE.P0-4 grep-gate: the positional 'voucher #N' fallback must never come back."""
+    src = Path(tally_import.__file__).read_text()
+    assert "voucher #" not in src, "positional voucher ids drift on re-export (§B3.2)"

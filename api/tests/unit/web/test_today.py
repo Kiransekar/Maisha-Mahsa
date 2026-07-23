@@ -68,6 +68,52 @@ def test_cash_strip_is_three_honest_pending_panels(session: Session) -> None:
     assert strip[2]["value"] == "∞ — no net burn"  # no burn seeded -> honest infinity
 
 
+def test_cash_strip_carries_resolved_citation_anchors(session: Session) -> None:
+    """CITE.P0-3 (§B4.1): once a bank statement is imported vault-first, the previously-empty
+    working.documents block carries the rendered anchors — excerpt, /vault url, resolution."""
+    from app.domains.treasury.service import TreasuryService
+
+    acct = BankAccount(bank_name="HDFC", account_number="2", ifsc="HDFC0002")
+    session.add(acct)
+    session.flush()
+    TreasuryService().import_csv(
+        session,
+        acct.id,
+        "date,description,debit,credit\n2026-07-01,NEFT-000123,0,120000\n",
+        file_name="HDFC-May.csv",
+    )
+    strip = build_today(session, AS_OF, [])["cash_strip"]
+    for panel in strip:  # all three figures derive from the same statements
+        [doc] = panel["documents"]
+        assert doc["label"] == "HDFC-May.csv, row 2: 2026-07-01 NEFT-000123 ₹1,20,000.00 Cr"
+        assert doc["resolution"] == "resolved"
+        assert doc["url"].startswith("/vault?doc=")
+
+
+def test_cash_strip_states_broken_citation_never_silently(session: Session) -> None:
+    """§B2: tamper the stored source file → the anchor resolves BROKEN and the panel says so
+    (the SPA badge downgrade keys off exactly this field)."""
+    import hashlib
+
+    from app.db.models.vault import Document
+    from app.domains.treasury.service import TreasuryService
+
+    acct = BankAccount(bank_name="HDFC", account_number="3", ifsc="HDFC0003")
+    session.add(acct)
+    session.flush()
+    csv_text = "date,description,debit,credit\n2026-07-01,NEFT,0,120000\n"
+    TreasuryService().import_csv(session, acct.id, csv_text, file_name="hdfc.csv")
+    doc = session.get(Document, hashlib.sha256(csv_text.encode("utf-8")).hexdigest())
+    assert doc is not None
+    doc.raw_content = b"tampered"
+    session.flush()
+
+    strip = build_today(session, AS_OF, [])["cash_strip"]
+    [entry] = strip[0]["documents"]
+    assert entry["resolution"] == "broken"
+    assert entry["note"] and "integrity" in entry["note"]
+
+
 def test_needs_you_lists_unresolved_and_states_action(session: Session) -> None:
     approvals = [
         ApprovalItem(

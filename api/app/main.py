@@ -75,6 +75,8 @@ from app.web.api_gst import router as gst_spa_router
 from app.web.api_health import router as health_api_router
 from app.web.api_investor import router as investor_api_router
 from app.web.api_legal import router as legal_api_router
+from app.web.api_memory import playbook_router as playbook_api_router
+from app.web.api_memory import router as memory_api_router
 from app.web.api_payroll import router as payroll_api_router
 from app.web.api_router import router as spa_api_router
 from app.web.api_statements import router as statements_api_router
@@ -271,6 +273,8 @@ def create_app() -> FastAPI:
     app.include_router(tally_api_router)
     app.include_router(investor_api_router)
     app.include_router(legal_api_router)
+    app.include_router(memory_api_router)
+    app.include_router(playbook_api_router)
 
     registry = build_registry()
 

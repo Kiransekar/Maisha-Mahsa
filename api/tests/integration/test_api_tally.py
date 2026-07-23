@@ -294,3 +294,53 @@ def test_doctype_upload_is_refused_at_parse(session: Session) -> None:
     )
     assert r.status_code == 422
     assert "DOCTYPE" in r.json()["detail"]
+
+
+def test_commit_stores_voucher_anchors_and_vault_ingests_the_source_xml(
+    session: Session,
+) -> None:
+    """CITE.P0-4 (SPEC-MEMCITE-1.0 §B3.2): committing a Tally file vault-ingests the exact
+    bytes (content-addressed) and stamps every journal entry with its voucher content hash +
+    the source document id. Expected values recomputed independently with hashlib/json."""
+    import hashlib
+
+    from app.db.models.vault import Document
+
+    _seed_daybook_accounts(session)
+    client = _client(session)
+    raw = (FIXTURES / "daybook_minimal.xml").read_bytes()
+    token = client.post("/api/ledger/tally/parse", files=_file("daybook_minimal.xml")).json()[
+        "preview_token"
+    ]
+    r = client.post(
+        "/api/ledger/tally/commit",
+        files=_file("daybook_minimal.xml"),
+        data={"preview_token": token, "confirm_text": "import", "mapping": "{}"},
+    )
+    assert r.status_code == 200, r.text
+
+    doc_sha = hashlib.sha256(raw).hexdigest()
+    doc = session.get(Document, doc_sha)
+    assert doc is not None, "the source XML must be a content-addressed vault document"
+    assert doc.raw_content == raw
+
+    entries = list(session.scalars(select(JournalEntry)).all())
+    assert len(entries) == 3
+    assert all(e.source_doc_id == doc_sha for e in entries)
+
+    # voucher "3" recomputed independently: Rent 12,345.67 Dr / HDFC Bank 12,345.67 Cr
+    payload = json.dumps(
+        {
+            "voucher_number": "3",
+            "date": "2026-04-07",
+            "voucher_type": "Payment",
+            "narration": "Office rent April (with paise)",
+            "lines": [["Rent", 1234567, 0], ["HDFC Bank", 0, 1234567]],
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
+    by_ref = {e.reference: e.voucher_hash for e in entries}
+    assert by_ref["3"] == hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    assert all(h and len(h) == 64 for h in by_ref.values())

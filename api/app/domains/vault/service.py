@@ -91,6 +91,82 @@ class VaultService(BaseDomainService):
             "duplicate": False,
         }
 
+    def ingest_bytes(
+        self,
+        session: Session,
+        *,
+        file_name: str,
+        content: bytes,
+        upload_date: str,
+        doc_type: str | None = None,
+        domain: str | None = None,
+        entity_id: str | None = None,
+        tags: str | None = None,
+        uploaded_by: str | None = None,
+    ) -> dict[str, Any]:
+        """CITE.P0-1 (SPEC-MEMCITE-1.0 §B1): raw-bytes ingest for citable source files (bank
+        CSVs, Tally XML). The document id is the SHA-256 over the RAW BYTES, which are stored
+        verbatim (``raw_content``, path ``vault/{sha}``) so citation anchors resolve against
+        the immutable original; integrity covers the bytes. Identical bytes dedupe to the same
+        id; changed bytes are a NEW document. The text/OCR ``ingest`` path is untouched."""
+        sha = vault_calc.sha256_hex(content)
+        existing = session.get(Document, sha)
+        if existing is not None:
+            return {
+                "id": existing.id,
+                "sha256": existing.sha256,
+                "doc_type": existing.doc_type,
+                "retention_until": existing.retention_until,
+                "duplicate": True,
+            }
+
+        try:  # keep text files searchable; the bytes stay canonical for identity/integrity
+            text: str | None = content.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            text = None
+        resolved_type = vault_calc.classify(file_name, doc_type)
+        retain = vault_calc.retention_until(upload_date, resolved_type)
+        doc = Document(
+            id=sha,
+            file_name=file_name,
+            file_path=f"vault/{sha}",
+            doc_type=resolved_type,
+            domain=domain,
+            entity_id=entity_id,
+            ocr_text=text,
+            raw_content=content,
+            upload_date=upload_date,
+            retention_until=retain,
+            sha256=sha,
+            tags=tags,
+            uploaded_by=uploaded_by,
+            version=1,
+        )
+        session.add(doc)
+        session.flush()
+        return {
+            "id": sha,
+            "sha256": sha,
+            "doc_type": resolved_type,
+            "retention_until": retain,
+            "duplicate": False,
+        }
+
+    def get_bytes(self, session: Session, doc_id: str) -> bytes:
+        """The verbatim stored bytes of a raw-ingested document, re-verified against the
+        document's own SHA-256 before they are returned (§B2: verifiable or loudly broken)."""
+        doc = session.get(Document, doc_id)
+        if doc is None:
+            raise ValueError(f"document {doc_id} not found")
+        if doc.raw_content is None:
+            raise ValueError(f"document {doc_id} has no stored raw bytes (text/OCR document)")
+        if not vault_calc.verify_integrity(doc.sha256, doc.raw_content):
+            raise ValueError(
+                f"document {doc_id} failed its integrity check — stored bytes no longer "
+                f"hash to {doc.sha256}"
+            )
+        return doc.raw_content
+
     # ---- access ---------------------------------------------------------------------
 
     def _docs(self, session: Session) -> list[dict]:
@@ -99,6 +175,7 @@ class VaultService(BaseDomainService):
                 "id": d.id,
                 "file_name": d.file_name,
                 "ocr_text": d.ocr_text,
+                "raw_content": d.raw_content,
                 "tags": d.tags,
                 "sha256": d.sha256,
                 "doc_type": d.doc_type,
@@ -138,8 +215,10 @@ class VaultService(BaseDomainService):
             if can_view_sensitivity(role, sensitivity):
                 entry["restricted"] = False
                 entry["tags"] = d.get("tags")
+                # bytes docs (CITE.P0-1) hash their raw bytes; text/OCR docs hash their text
+                raw = d.get("raw_content")
                 entry["integrity_ok"] = vault_calc.verify_integrity(
-                    d["sha256"], d.get("ocr_text") or ""
+                    d["sha256"], raw if raw is not None else (d.get("ocr_text") or "")
                 )
             else:
                 entry["restricted"] = True

@@ -35,6 +35,11 @@ class JournalEntry(Base):
     total_credit: Mapped[int] = mapped_column(Integer, nullable=False)
     is_auto_generated: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[str] = mapped_column(server_default=func.current_timestamp())
+    # CITE.P0-4 (SPEC-MEMCITE-1.0 §B3.2): tally_voucher citation anchor — the content hash of
+    # the source voucher and the vault-ingested export file it came from. NULL for entries not
+    # imported from Tally; the anchor line number is the JournalLine's ordinal in the entry.
+    voucher_hash: Mapped[str | None] = mapped_column(String)
+    source_doc_id: Mapped[str | None] = mapped_column(ForeignKey("documents.id"))
 
 
 class JournalLine(Base):

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy import ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -25,6 +25,12 @@ class BankAccount(Base):
 
 class BankTransaction(Base):
     __tablename__ = "bank_transactions"
+    # SPEC-MEMCITE-1.0 CITE.P0-2: re-uploading the same statement file is a no-op — the
+    # anchor triple is unique per source document. Legacy rows keep NULL anchors (SQLite and
+    # Postgres both treat NULLs as distinct, so pre-anchor rows never collide).
+    __table_args__ = (
+        UniqueConstraint("source_doc_id", "row_hash", "occurrence", name="uq_bank_txn_anchor"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     account_id: Mapped[int] = mapped_column(ForeignKey("bank_accounts.id"), nullable=False)
@@ -38,6 +44,14 @@ class BankTransaction(Base):
     matched_invoice_id: Mapped[int | None] = mapped_column(Integer)
     matched_vendor_id: Mapped[int | None] = mapped_column(Integer)
     is_reconciled: Mapped[int] = mapped_column(Integer, default=0)
+    # CITE.P0-2 cell-level citation anchor (SPEC-MEMCITE-1.0 §B1/§B3): the vault document the
+    # row came from, its 1-based RAW source line, the sha256 of canonical_json([trimmed cells
+    # in column order]), and the ordinal among identical rows in that file. All nullable —
+    # legacy rows have no anchors and must render document-less (no fabricated provenance).
+    source_doc_id: Mapped[str | None] = mapped_column(ForeignKey("documents.id"))
+    source_row: Mapped[int | None] = mapped_column(Integer)
+    row_hash: Mapped[str | None] = mapped_column(String)
+    occurrence: Mapped[int | None] = mapped_column(Integer)
 
 
 class FixedDeposit(Base):

@@ -21,7 +21,11 @@
      formula          str|None              — recompute description, e.g. RecomputeCheck.note
      note             str|None              — extra Mahsa note
      citations        list[{rule_id, text, citation}]  — statute + section, [] if none
-     documents        list[{label, url}]    — linked source documents, [] if none
+     documents        list[{label, url, resolution?, note?}] — linked source documents /
+                                              rendered citation anchors (SPEC-MEMCITE-1.0
+                                              §B2/§B4.1: resolution is "resolved" | "moved" |
+                                              "broken"; moved and broken are stated VISIBLY,
+                                              never silently), [] if none
      verdict_hash     str|None              — Verdict.hash; None => not yet sealed (honest)
      rule_pack_version str|None
 #}
@@ -80,7 +84,14 @@
     <h4>Linked documents</h4>
     {% if panel.documents %}
       <ul class="vpanel__docs">
-        {% for d in panel.documents %}<li><a href="{{ d.url }}">{{ d.label }}</a></li>{% endfor %}
+        {% for d in panel.documents %}
+        <li>
+          {% if d.url %}<a href="{{ d.url }}">{{ d.label }}</a>{% else %}{{ d.label }}{% endif %}
+          {%- if d.resolution == "moved" %} <span class="muted">— {{ d.note or "row moved in the source file" }}</span>
+          {%- elif d.resolution == "broken" %} <strong>— citation broken{% if d.note %}: {{ d.note }}{% endif %}</strong>
+          {%- endif %}
+        </li>
+        {% endfor %}
       </ul>
     {% else %}
       <p class="muted">No documents linked.</p>
@@ -106,12 +117,20 @@
 
 {% if panel is defined %}
 <link rel="stylesheet" href="/static/css/verified_number.css">
-<details class="vnum vnum--{{ panel.state }}">
+{# §B2 (SPEC-MEMCITE-1.0): a BROKEN citation behind the figure downgrades a ✓ to ◐ — same
+   rule as the SPA's effectiveState, so the two surfaces cannot disagree. Downgrade only,
+   never an upgrade. #}
+{% set vnum_broken = (panel.documents or []) | selectattr("resolution", "equalto", "broken") | list | length > 0 %}
+{% set vnum_state = "honest_pending" if (panel.state == "verified" and vnum_broken) else panel.state %}
+<details class="vnum vnum--{{ vnum_state }}">
   <summary>
-    <span class="vglyph vglyph--{{ panel.state }}" title="{{ vnum_title(panel.state) }}">{{ vnum_glyph(panel.state) }}</span>
+    <span class="vglyph vglyph--{{ vnum_state }}" title="{{ vnum_title(vnum_state) }}">{{ vnum_glyph(vnum_state) }}</span>
     <span class="vnum-label">{{ panel.label }}</span>
     <span class="vnum-value tnum">{{ panel.value }}</span>
   </summary>
+  {% if vnum_broken and panel.state == "verified" %}
+  <p class="vpanel__pending-note">Downgraded from ✓: a source citation behind this figure is broken — see Linked documents below.</p>
+  {% endif %}
   {{ vnum_body(panel) }}
 </details>
 {% endif %}

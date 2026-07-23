@@ -78,7 +78,7 @@ import csv
 import hashlib
 import io
 import zipfile
-from typing import Any, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 from app.core.audit import canonical_json
 from app.core.mahsa_coverage import badge_state
@@ -110,20 +110,35 @@ class AuditFigure(TypedDict):
     value_paise: int
     badge: str
     evidence_ref: str
+    # SPEC-MEMCITE-1.0 §B4.2 (CITE.P0-3): optional cell-level citation anchors alongside the
+    # dotted computation path — the path says WHICH computation, the anchors say WHICH source
+    # rows. Present only where a minting path recorded one (§B5: absence renders as absence);
+    # when present they are inside the sealed sections, so tampering an anchor breaks the
+    # pack's integrity hash. Excerpt rendering in the exports is CITE.P1-1.
+    anchors: NotRequired[list[dict[str, Any]]]
 
 
-def _figure(label: str, value_paise: Any, target: str, evidence_ref: str) -> AuditFigure:
+def _figure(
+    label: str,
+    value_paise: Any,
+    target: str,
+    evidence_ref: str,
+    anchors: list[dict[str, Any]] | None = None,
+) -> AuditFigure:
     if not isinstance(value_paise, int) or isinstance(value_paise, bool):
         raise TypeError(
             f"{label!r}: value_paise must be an exact int (paise), got "
             f"{type(value_paise).__name__}"
         )
-    return {
+    fig: AuditFigure = {
         "label": label,
         "value_paise": value_paise,
         "badge": badge_state(target),
         "evidence_ref": evidence_ref,
     }
+    if anchors:
+        fig["anchors"] = anchors
+    return fig
 
 
 def _extra_figures(section_data: dict[str, Any]) -> list[AuditFigure]:
@@ -131,7 +146,13 @@ def _extra_figures(section_data: dict[str, Any]) -> list[AuditFigure]:
     each carrying its own genuine Mahsa coverage target — see module docstring."""
     extras = section_data.get("extra_figures", [])
     return [
-        _figure(item["label"], item["value_paise"], item["target"], item["evidence_ref"])
+        _figure(
+            item["label"],
+            item["value_paise"],
+            item["target"],
+            item["evidence_ref"],
+            item.get("anchors"),
+        )
         for item in extras
     ]
 

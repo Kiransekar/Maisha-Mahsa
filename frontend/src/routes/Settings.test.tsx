@@ -137,6 +137,54 @@ describe("PendingInvitesList", () => {
   });
 });
 
+// ── MEM.P0-5 Company memory — the load-bearing pure branches ─────────────────────────────────
+
+import { historyAuditLine, memoryWriteErrorText, type MemoryHistoryRow } from "./Settings";
+
+describe("memoryWriteErrorText — a 422 renders the server's OWN dynamic message verbatim", () => {
+  it("422 with a detail body: the exact server sentence, not a client re-derivation", () => {
+    const err = new ApiError(
+      422,
+      "422",
+      "CFO memory is 2301 chars after consolidation; the limit is 2200. Remove or shorten a line to make room (durable facts only).",
+    );
+    expect(memoryWriteErrorText(err)).toBe(
+      "CFO memory is 2301 chars after consolidation; the limit is 2200. Remove or shorten a line to make room (durable facts only).",
+    );
+  });
+
+  it("422 with no detail body falls to the generic save-failed sentence, never blank", () => {
+    expect(memoryWriteErrorText(new ApiError(422, "422"))).toMatch(/could not be saved/i);
+  });
+
+  it("403 names the Owner/Admin gate (app_memory.py: PUT/append wear manage_users)", () => {
+    expect(memoryWriteErrorText(new ApiError(403, "403"))).toBe(
+      "Only Owner and Admin can edit company memory.",
+    );
+  });
+
+  it("anything else falls to the generic retry, never a raw status code", () => {
+    expect(memoryWriteErrorText(new TypeError("offline"))).toMatch(/could not be saved/i);
+  });
+});
+
+describe("historyAuditLine — the link text naming the sealed audit event", () => {
+  const ROW: MemoryHistoryRow = {
+    content: "- old posture",
+    superseded_at: "2026-07-20T10:00:00",
+    superseded_by: "user-a",
+    audit_seq: 42,
+  };
+
+  it("names the audit event id when present", () => {
+    expect(historyAuditLine(ROW)).toBe("sealed · audit #42");
+  });
+
+  it("degrades honestly (no fabricated id) when the seal wasn't linked", () => {
+    expect(historyAuditLine({ ...ROW, audit_seq: null })).toBe("sealed");
+  });
+});
+
 // ── WS10.1 Privacy section — the load-bearing pure branches ──────────────────────────────────
 
 import {

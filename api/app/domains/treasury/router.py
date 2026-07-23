@@ -71,9 +71,24 @@ def list_accounts(db: Session = Depends(get_session)) -> list[AccountSummary]:
 async def import_statement(
     account_id: int, file: UploadFile, db: Session = Depends(get_session)
 ) -> dict[str, int]:
-    raw = (await file.read()).decode("utf-8-sig")
+    data = await file.read()
     try:
-        result = _service.import_csv(db, account_id, raw)
+        text = data.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise HTTPException(
+            status_code=400, detail="file is not UTF-8 text — is this a CSV export?"
+        ) from exc
+    try:
+        # CITE.P0-2: the ORIGINAL bytes go to the vault (content-addressed anchor target);
+        # the decoded text is what gets parsed. Time is injected here, at the edge.
+        result = _service.import_csv(
+            db,
+            account_id,
+            text,
+            file_name=file.filename or "bank-statement.csv",
+            raw_bytes=data,
+            upload_date=datetime.now(UTC).date().isoformat(),
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     db.commit()

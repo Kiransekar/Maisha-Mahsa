@@ -249,6 +249,10 @@ async def ask_json(
     body: AskBody,
     db: Session = Depends(get_session),
     mahsa: MahsaClient = Depends(get_mahsa),
+    # SPEC-MEMCITE-1.0 MEM.P0-4: the verified caller, threaded through so answer_query can
+    # inject the org's memory block and run org-scoped episodic recall. Same JWT-verified
+    # seam as every other principal in the app; the route's capability gate is unchanged.
+    principal: Principal = Depends(resolve_principal),
 ) -> dict[str, Any]:
     """The Ask.tsx backend: the SAME ``app.core.ask.answer_query`` pipeline the HTMX /ask page
     calls, verbatim — no forked logic, so a figure's verdict can never drift between the two
@@ -260,6 +264,7 @@ async def ask_json(
         settings=get_settings(),
         as_of=_today(),
         mahsa=mahsa,
+        principal=principal,
     )
     return {
         "query": answer.query,
@@ -270,7 +275,15 @@ async def ask_json(
             for f in answer.figures
         ],
         "citations": [
-            {"rule_id": c.rule_id, "text": c.text, "citation": c.citation, "domain": c.domain}
+            {
+                "rule_id": c.rule_id,
+                "text": c.text,
+                "citation": c.citation,
+                "domain": c.domain,
+                "audit_hash": c.audit_hash,
+                # CITE.P0-3: cell anchors ride along where present; None stays None (§B5).
+                "anchor": c.anchor,
+            }
             for c in answer.citations
         ],
         "status": answer.status,

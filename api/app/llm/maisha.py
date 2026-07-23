@@ -32,6 +32,7 @@ class ClaimProducer(Protocol):
         domain: str,
         case_id: str = "",
         feedback: str | None = None,
+        memory: str | None = None,
     ) -> ActionClaim: ...
 
 
@@ -50,6 +51,7 @@ class MaishaGenerator:
         domain: str,
         case_id: str = "",
         feedback: str | None = None,
+        memory: str | None = None,
     ) -> ActionClaim:
         # Input guardrails run before the model sees anything (Agents-SDK input-guard pattern).
         guard = scan_input(query, redact_pii=self._redact_pii)
@@ -63,6 +65,25 @@ class MaishaGenerator:
         if guard.findings:
             _log.info("redacted PII before send for domain %r: %s", domain, guard.findings)
 
+        # SPEC-MEMCITE-1.0 §A6: remembered text is DATA, not instructions — the memory block
+        # passes the SAME injection screen the query gets. A block that trips it is DROPPED from
+        # the prompt (the query still gets answered) and the event is logged loudly, never
+        # silently. PII redaction applies on the cloud path exactly as for the query.
+        mem: str | None = None
+        if memory:
+            mguard = scan_input(memory, redact_pii=self._redact_pii)
+            if mguard.injection:
+                _log.warning(
+                    "memory block for domain %r dropped by injection screen: %s",
+                    domain,
+                    mguard.findings,
+                )
+            else:
+                mem = mguard.text
+                if mguard.findings:
+                    _log.info("redacted PII in memory block for domain %r: %s", domain,
+                              mguard.findings)
+
         facts = tools.enrich(snapshot)
         user = prompt.build_user_prompt(
             domain=domain,
@@ -70,6 +91,7 @@ class MaishaGenerator:
             facts=facts,
             rules=prompt.rules_for_domain(domain),
             feedback=feedback,
+            memory=mem,
         )
         raw = await self._client.complete(
             system=prompt.SYSTEM_PROMPT,

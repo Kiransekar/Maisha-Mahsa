@@ -27,9 +27,11 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.anchors import bank_documents
 from app.core.approvals import ApprovalItem
 from app.core.overview import upcoming_deadlines
 from app.db.models.shared import ComplianceCalendar
+from app.db.models.treasury import BankTransaction
 from app.domains.gst import gst_calc
 from app.domains.treasury.service import TreasuryService
 from app.web.format import inr
@@ -41,7 +43,9 @@ _MAX_LATE_FEE = gst_calc.late_fee_3b(10**6)
 _PENDING_CONSEQUENCE = "₹ impact shown on review"
 
 
-def _honest_panel(label: str, value: str, note: str) -> dict[str, Any]:
+def _honest_panel(
+    label: str, value: str, note: str, documents: list[dict[str, Any]] | None = None
+) -> dict[str, Any]:
     """A Verified-Number chip panel in the honest-pending (◐) state — the WS7.2 shape, with no
     verdict fabricated (verdict_hash stays None => 'not yet sealed')."""
     return {
@@ -52,7 +56,7 @@ def _honest_panel(label: str, value: str, note: str) -> dict[str, Any]:
         "formula": None,
         "note": note,
         "citations": [],
-        "documents": [],
+        "documents": documents or [],
         "verdict_hash": None,
         "rule_pack_version": None,
     }
@@ -63,10 +67,17 @@ def _cash_strip(session: Session, as_of: date) -> list[dict[str, Any]]:
     runway = m["runway_months"]
     runway_display = "∞ — no net burn" if runway is None else f"{runway:g} months"
     note = "Mahsa recomputes this in the domain fold; shown here as-is, not yet sealed."
+    # SPEC-MEMCITE-1.0 CITE.P0-3 (§B4.1): the cell-level citation anchors behind these figures
+    # — every anchored bank row, rendered as "file, row N: …" excerpts with a live resolution
+    # state (RESOLVED / MOVED-with-note / BROKEN, §B2). All three figures derive from the same
+    # imported statements, so they share the one resolved set. Legacy rows without anchors
+    # contribute nothing — absence renders as absence, never fabricated provenance (§B5).
+    txns = session.scalars(select(BankTransaction).order_by(BankTransaction.id)).all()
+    documents = bank_documents(session, txns)
     return [
-        _honest_panel("Cash on hand", inr(m["cash_paise"]), note),
-        _honest_panel("Monthly burn", inr(m["monthly_burn_paise"]), note),
-        _honest_panel("Runway", runway_display, note),
+        _honest_panel("Cash on hand", inr(m["cash_paise"]), note, documents),
+        _honest_panel("Monthly burn", inr(m["monthly_burn_paise"]), note, documents),
+        _honest_panel("Runway", runway_display, note, documents),
     ]
 
 

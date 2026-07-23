@@ -6,8 +6,6 @@ service is deterministic and testable — it never reads the clock itself.
 
 from __future__ import annotations
 
-import csv
-import io
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -15,10 +13,12 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core import anchors
 from app.core.domain import BaseDomainService
 from app.core.money import Paise
 from app.db.models.treasury import BankAccount, BankTransaction
 from app.domains.treasury.manifest import MANIFEST
+from app.domains.vault.service import VaultService
 
 # Canonical field -> ordered list of header substrings seen across Indian bank statements.
 _HEADER_MAP: dict[str, tuple[str, ...]] = {
@@ -156,36 +156,59 @@ class TreasuryService(BaseDomainService):
             raise ValueError("unrecognised bank CSV: need a date column and a debit/credit column")
         return cols
 
-    def import_csv(self, session: Session, account_id: int, csv_text: str) -> dict[str, int]:
+    def import_csv(
+        self,
+        session: Session,
+        account_id: int,
+        csv_text: str,
+        *,
+        file_name: str = "bank-statement.csv",
+        raw_bytes: bytes | None = None,
+        upload_date: str | None = None,
+    ) -> dict[str, int]:
         """Import a bank statement CSV into ``bank_transactions`` and update the account
-        balance. Returns counts + closing balance (paise). Idempotency is the caller's
-        concern (dedupe by reference is a future feature — see manifest)."""
+        balance. Returns counts + closing balance (paise).
+
+        CITE.P0-2 (SPEC-MEMCITE-1.0 §B3.1) — vault-first, cell-citable, idempotent:
+        the raw CSV bytes are ingested into the vault FIRST (content-addressed, verbatim),
+        then every imported row is stamped with its citation anchor: ``source_doc_id`` (the
+        file's sha256), ``source_row`` (1-based RAW line number in the original file, CSVW
+        source-number semantics), ``row_hash`` (sha256 of ``canonical_json`` over the trimmed
+        cells in column order), and ``occurrence`` (ordinal among identical rows in the file).
+        A row whose ``(source_doc_id, row_hash, occurrence)`` already exists is skipped, so
+        re-uploading the same file is a NO-OP — row counts and the account balance are
+        unchanged. This fixes the previously non-idempotent re-upload.
+        """
         account = session.get(BankAccount, account_id)
         if account is None:
             raise ValueError(f"bank account {account_id} not found")
 
-        reader = csv.reader(io.StringIO(csv_text))
-        rows = [r for r in reader if any(cell.strip() for cell in r)]
-        if not rows:
-            return {
-                "account_id": account_id,
-                "rows_imported": 0,
-                "rows_skipped": 0,
-                "closing_balance_paise": account.current_balance,
-            }
+        # Records with their 1-based RAW line numbers — the SAME parser the resolution
+        # service (app.core.anchors, CITE.P0-3) replays at read time, so minted anchors and
+        # resolved anchors can never drift apart.
+        records = anchors.csv_records(csv_text)
 
-        cols = self._resolve_columns(rows[0])
-        imported = 0
+        empty = {
+            "account_id": account_id,
+            "rows_imported": 0,
+            "rows_skipped": 0,
+            "rows_duplicate": 0,
+            "closing_balance_paise": account.current_balance,
+        }
+        if not records:
+            return empty
+
+        cols = self._resolve_columns(records[0][1])
+
+        # Parse pass (pure) — collect the importable rows before any write.
+        parsed: list[tuple[int, list[str], date, Paise, Paise, str | None]] = []
         skipped = 0
-        running = Paise(account.current_balance)
-
-        for row in rows[1:]:
+        for line_no, row in records[1:]:
             date_raw = _cell(row, cols, "date")
             txn_date = _parse_date(date_raw) if date_raw else None
             if txn_date is None:
                 skipped += 1
                 continue
-
             debit_raw = _cell(row, cols, "debit")
             credit_raw = _cell(row, cols, "credit")
             debit = _parse_amount(debit_raw) if debit_raw else Paise(0)
@@ -193,10 +216,49 @@ class TreasuryService(BaseDomainService):
             if debit == 0 and credit == 0:
                 skipped += 1
                 continue
+            parsed.append((line_no, row, txn_date, debit, credit, _cell(row, cols, "balance")))
+
+        if not parsed:
+            empty["rows_skipped"] = skipped
+            return empty
+
+        # Vault-first: the source file becomes a content-addressed document the anchors
+        # resolve against. ``upload_date`` falls back to the statement's latest transaction
+        # date — deterministic (no clock in the service), and retention metadata only.
+        raw = raw_bytes if raw_bytes is not None else csv_text.encode("utf-8")
+        doc = VaultService().ingest_bytes(
+            session,
+            file_name=file_name,
+            content=raw,
+            upload_date=upload_date or max(p[2] for p in parsed).isoformat(),
+            doc_type="bank_statement",
+            domain="treasury",
+        )
+        doc_id: str = doc["id"]
+        existing_anchors = {
+            (rh, occ)
+            for rh, occ in session.execute(
+                select(BankTransaction.row_hash, BankTransaction.occurrence).where(
+                    BankTransaction.source_doc_id == doc_id
+                )
+            )
+        }
+
+        imported = 0
+        duplicates = 0
+        occurrences: dict[str, int] = {}
+        running = Paise(account.current_balance)
+
+        for line_no, row, txn_date, debit, credit, balance_raw in parsed:
+            row_hash = anchors.row_hash(row)
+            occ = occurrences.get(row_hash, 0) + 1
+            occurrences[row_hash] = occ
+            if (row_hash, occ) in existing_anchors:
+                duplicates += 1  # already imported from this exact file — re-upload no-op
+                continue
 
             running = Paise(running + credit - debit)
             balance = running
-            balance_raw = _cell(row, cols, "balance")
             if balance_raw:
                 parsed_bal = _parse_amount(balance_raw)
                 if parsed_bal != 0:
@@ -212,6 +274,10 @@ class TreasuryService(BaseDomainService):
                     debit=int(debit),
                     credit=int(credit),
                     balance=int(balance),
+                    source_doc_id=doc_id,
+                    source_row=line_no,
+                    row_hash=row_hash,
+                    occurrence=occ,
                 )
             )
             imported += 1
@@ -222,6 +288,7 @@ class TreasuryService(BaseDomainService):
             "account_id": account_id,
             "rows_imported": imported,
             "rows_skipped": skipped,
+            "rows_duplicate": duplicates,
             "closing_balance_paise": int(running),
         }
 

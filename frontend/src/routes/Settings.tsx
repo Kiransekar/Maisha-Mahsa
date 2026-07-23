@@ -14,6 +14,7 @@
 
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { api, ApiError } from "../lib/api";
 import { ErrorState } from "../components/ErrorState";
 import { ActionDrawer } from "../components/ActionDrawer";
@@ -138,9 +139,300 @@ export function Settings() {
           onInvited={() => qc.invalidateQueries({ queryKey: ["ca-pending"] })}
         />
       )}
+      <MemorySection />
       <PrivacySection />
     </section>
   );
+}
+
+// ── MEM.P0-5 — Company memory: view/edit the CFO posture block + history (app/web/api_memory.py) ──
+
+export type CfoBlock = { content: string; used: number; limit: number; audit_hash?: string };
+type MemoryData = { profile: string; cfo: CfoBlock };
+export type MemoryHistoryRow = {
+  content: string;
+  superseded_at: string;
+  superseded_by: string;
+  audit_seq: number | null;
+};
+type MemoryHistoryResponse = { history: MemoryHistoryRow[] };
+
+/** The write routes (PUT/append) wear `manage_users` (Owner/Admin only, see api_memory.py);
+ * read (this whole tab) is open to everyone with `read`, including a read-only CA. So there is
+ * no proactive client-side role check here (ponytail: the CA-seat pattern derives its
+ * disabled-reason from a denied LOAD — memory's GET never denies a reader) — a non-owner who
+ * tries to save simply gets this text from the server's own 403, same precedent as
+ * `inviteErrorText`. */
+export function memoryWriteErrorText(error: unknown): string {
+  if (error instanceof ApiError) {
+    // 422 = the overflow reject, and its message is DYNAMIC (the exact char count) — the
+    // server's own words, rendered verbatim, never a re-derived client sentence (§0.4).
+    if (error.status === 422 && error.detail) return error.detail;
+    if (error.status === 403) return "Only Owner and Admin can edit company memory.";
+  }
+  return "The change could not be saved — try again.";
+}
+
+/** One line naming the sealed audit event a history row is linked to (survey §7.7 — auditable
+ * updates made visible). The Audit Room has no per-row deep link today, so this points at the
+ * room itself; the event id is still shown so it can be matched against the visible chain. */
+export function historyAuditLine(r: MemoryHistoryRow): string {
+  return r.audit_seq != null ? `sealed · audit #${r.audit_seq}` : "sealed";
+}
+
+const memBoxStyle: React.CSSProperties = {
+  border: "1px solid var(--color-border)",
+  background: "var(--color-surface)",
+  borderRadius: 4,
+  padding: "10px 12px",
+  fontSize: 13,
+};
+
+const memLabelStyle: React.CSSProperties = {
+  fontSize: 10,
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+  color: "var(--color-ink-faint)",
+  marginBottom: 6,
+};
+
+function CharMeter({ used, limit }: { used: number; limit: number }) {
+  const over = used > limit;
+  return (
+    <span
+      className="tnum"
+      style={{ fontSize: 12, color: over ? "var(--color-verify-unbacked)" : "var(--color-ink-faint)" }}
+    >
+      {used}/{limit} chars
+    </span>
+  );
+}
+
+export function MemorySection() {
+  const traceId = useTraceId("settings-memory");
+  const qc = useQueryClient();
+  const { data, error, isLoading, refetch } = useQuery({
+    queryKey: ["memory"],
+    queryFn: () => api<MemoryData>("/memory"),
+  });
+  const { data: history } = useQuery({
+    queryKey: ["memory-history"],
+    queryFn: () => api<MemoryHistoryResponse>("/memory/history"),
+  });
+
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const [appendLine, setAppendLine] = useState("");
+
+  function invalidate() {
+    qc.invalidateQueries({ queryKey: ["memory"] });
+    qc.invalidateQueries({ queryKey: ["memory-history"] });
+  }
+
+  const save = useMutation({
+    mutationFn: (content: string) =>
+      api<CfoBlock>("/memory", { method: "PUT", body: JSON.stringify({ content }) }),
+    onSuccess: () => {
+      setEditing(false);
+      invalidate();
+    },
+  });
+
+  const append = useMutation({
+    mutationFn: (line: string) =>
+      api<CfoBlock>("/memory/append", { method: "POST", body: JSON.stringify({ line }) }),
+    onSuccess: () => {
+      setAppendLine("");
+      invalidate();
+    },
+  });
+
+  return (
+    <div style={{ marginTop: 28 }}>
+      <H2>Company memory</H2>
+      {isLoading && !data && !error ? (
+        <p style={{ color: "var(--color-ink-muted)" }}>Loading…</p>
+      ) : error ? (
+        <ErrorState error={error} traceId={traceId} onRetry={refetch} />
+      ) : data ? (
+        <>
+          <p style={{ fontSize: 12, color: "var(--color-ink-muted)", lineHeight: 1.55, margin: "0 0 12px" }}>
+            Steers how Maisha talks about your company — durable preferences only,{" "}
+            <strong style={{ fontWeight: 600, color: "var(--color-ink)" }}>never a source of
+            figures</strong>: every rupee on screen still comes from the books, not from this text.
+          </p>
+
+          <div style={memBoxStyle}>
+            <div style={memLabelStyle}>Org profile — derived from your company records, always current</div>
+            <pre style={{ margin: 0, whiteSpace: "pre-wrap", fontFamily: "inherit" }}>
+              {data.profile || "—"}
+            </pre>
+          </div>
+
+          <div style={{ ...memBoxStyle, marginTop: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", ...memLabelStyle, marginBottom: 6 }}>
+              <span>CFO posture</span>
+              <CharMeter used={editing ? draft.length : data.cfo.used} limit={data.cfo.limit} />
+            </div>
+
+            {editing ? (
+              <>
+                <textarea
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  rows={8}
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    border: "1px solid var(--color-border-strong)",
+                    borderRadius: 4,
+                    background: "var(--color-surface)",
+                    color: "var(--color-ink)",
+                    padding: "6px 8px",
+                    fontSize: 13,
+                    fontFamily: "inherit",
+                  }}
+                />
+                {save.error != null && (
+                  <p style={{ color: "var(--color-verify-unbacked)", fontSize: 12, margin: "6px 0 0" }}>
+                    {memoryWriteErrorText(save.error)}
+                  </p>
+                )}
+                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                  <button
+                    type="button"
+                    disabled={save.isPending}
+                    onClick={() => save.mutate(draft)}
+                    style={memButtonStyle(true)}
+                  >
+                    {save.isPending ? "Saving…" : "Save"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={save.isPending}
+                    onClick={() => setEditing(false)}
+                    style={memButtonStyle(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <pre style={{ margin: 0, whiteSpace: "pre-wrap", fontFamily: "inherit" }}>
+                  {data.cfo.content || "— nothing recorded yet"}
+                </pre>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDraft(data.cfo.content);
+                    setEditing(true);
+                  }}
+                  style={{ ...memButtonStyle(false), marginTop: 8 }}
+                >
+                  Edit
+                </button>
+              </>
+            )}
+          </div>
+
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const line = appendLine.trim();
+              if (line) append.mutate(line);
+            }}
+            style={{ display: "flex", gap: 8, marginTop: 10 }}
+          >
+            <input
+              value={appendLine}
+              onChange={(e) => setAppendLine(e.target.value)}
+              placeholder="Add one durable fact…"
+              style={{
+                flex: "1 1 auto",
+                padding: "8px 10px",
+                borderRadius: 4,
+                border: "1px solid var(--color-border-strong)",
+                background: "var(--color-surface)",
+                color: "var(--color-ink)",
+                fontSize: 13,
+                fontFamily: "inherit",
+              }}
+            />
+            <button
+              type="submit"
+              disabled={append.isPending || appendLine.trim().length === 0}
+              style={memButtonStyle(false)}
+            >
+              {append.isPending ? "Adding…" : "Add"}
+            </button>
+          </form>
+          {append.error != null && (
+            <p style={{ color: "var(--color-verify-unbacked)", fontSize: 12, margin: "6px 0 0" }}>
+              {memoryWriteErrorText(append.error)}
+            </p>
+          )}
+
+          <div style={{ marginTop: 20 }}>
+            <H2>Memory history</H2>
+            {history == null ? null : history.history.length === 0 ? (
+              <Empty>No memory edits yet — every save or append is versioned here.</Empty>
+            ) : (
+              <div>
+                {history.history.map((r, i) => (
+                  <div
+                    key={i}
+                    className="tnum"
+                    style={{
+                      padding: "9px 12px",
+                      marginBottom: 6,
+                      borderRadius: 4,
+                      border: "1px solid var(--color-border)",
+                      background: "var(--color-surface)",
+                      fontSize: 13,
+                    }}
+                  >
+                    <pre style={{ margin: "0 0 6px", whiteSpace: "pre-wrap", fontFamily: "inherit" }}>
+                      {r.content}
+                    </pre>
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 12,
+                        fontSize: 12,
+                        color: "var(--color-ink-faint)",
+                      }}
+                    >
+                      <span>
+                        superseded {r.superseded_at.slice(0, 10)} by {r.superseded_by}
+                      </span>
+                      <Link to="/audit" className="ident" style={{ color: "var(--color-accent)" }}>
+                        {historyAuditLine(r)}
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function memButtonStyle(primary: boolean): React.CSSProperties {
+  return {
+    border: `1px solid ${primary ? "var(--color-accent)" : "var(--color-border-strong)"}`,
+    background: primary ? "var(--color-accent)" : "var(--color-surface)",
+    color: primary ? "var(--color-on-accent)" : "var(--color-ink)",
+    borderRadius: 4,
+    padding: "6px 14px",
+    fontSize: 13,
+    fontFamily: "inherit",
+    cursor: "pointer",
+  };
 }
 
 // ── WS10.1 — Privacy: DPDP notice status + rights requests (list · raise · status) ────────────
