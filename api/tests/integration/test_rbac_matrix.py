@@ -44,6 +44,7 @@ from app.core import betterauth  # noqa: E402
 from app.core.mahsa_client import MahsaClient  # noqa: E402
 from app.core.money import Paise  # noqa: E402
 from app.core.rbac import Capability, Role  # noqa: E402
+from app.db.models.payroll import Employee  # noqa: E402
 from app.db.models.treasury import BankAccount, BankTransaction  # noqa: E402
 from app.db.session import get_session  # noqa: E402
 from app.deps import get_mahsa  # noqa: E402
@@ -378,6 +379,8 @@ API_ROUTE_GATES: dict[str, tuple[str, ...]] = {
     "GET /api/health/connections": ("read",),
     "GET /api/domains": ("read",),
     "GET /api/domains/{domain}": ("read",),
+    # P1-1 Ask Maisha SPA screen (app/web/api_domains.py): read-only, same pipeline as HTMX /ask.
+    "POST /api/ask": ("read",),
     # P0-2 generic action preview/commit: preview is a dry-run (read, api_bulk precedent);
     # commit carries the capability the HTMX drawer flow already requires (write).
     "POST /api/domains/{domain}/actions/{key}/preview": ("read",),
@@ -398,6 +401,8 @@ API_ROUTE_GATES: dict[str, tuple[str, ...]] = {
     # WS8.3 CA seat onboarding: inviting is user management (Owner/Admin); accepting is done
     # by the invited CA's own token (no extra capability — identity IS the authorization).
     "POST /api/ca/invite": ("read", "manage_users"),
+    # P1-3 settings surface: the pending-invites list carries the same gate as inviting.
+    "GET /api/ca/pending": ("read", "manage_users"),
     "POST /api/ca/accept": ("read",),
     # P0-1 filing flow (app/web/api_filings.py): previews are readable (the queue is honest to
     # every role), confirms wear the WS5.2 statutory hard gate, evidence is an audit read.
@@ -463,6 +468,12 @@ API_ROUTE_GATES: dict[str, tuple[str, ...]] = {
     "GET /api/ledger/pnl": ("read",),
     "GET /api/ledger/balance-sheet": ("read",),
     "POST /api/ledger/fold": ("read",),
+    # P1-5 statements (app/web/api_statements.py) — read-only wrappers over LedgerService
+    "GET /api/statements": ("read",),
+    "GET /api/statements/gl/{account_id}": ("read",),
+    # P1-4 investor-update preview (app/web/api_investor.py) — read-only wrapper over the
+    # existing app.core.strategy.investor_update generator; sending stays on the HTMX surface.
+    "POST /api/investor/preview": ("read",),
     # compliance — marking a deadline filed is a statutory filing
     "POST /api/compliance/deadlines": ("read", "write"),
     "POST /api/compliance/seed": ("read", "write"),
@@ -486,6 +497,7 @@ API_ROUTE_GATES: dict[str, tuple[str, ...]] = {
     "POST /api/expense/claims/{claim_id}/approve": ("read", "approve_payment"),
     "GET /api/expense/analytics": ("read",),
     "POST /api/expense/parse-receipt": ("read",),
+    "POST /api/expense/ocr-receipt": ("read",),
     "POST /api/expense/fold": ("read",),
     # vault
     "POST /api/vault/documents": ("read", "write"),
@@ -800,6 +812,23 @@ def test_sampling_route_is_deterministic_for_the_principals_org(client, auth_ser
     assert s1.json()["population"] == 6
 
 
+def test_threads_payload_carries_the_callers_own_capabilities(client, auth_server) -> None:
+    """P1-2: the SPA renders respond/export controls from the payload's server-computed verdict,
+    never a client-side role guess — so the payload must carry it, per role, truthfully."""
+    ca = client.get("/api/audit/threads", headers=_bearer(auth_server, Role.CA)).json()
+    assert ca["can_respond"] is False  # a CA can never answer its own query
+    assert "missing capability: write" in ca["respond_denied_reason"]
+    assert ca["can_export"] is True
+
+    acct = client.get("/api/audit/threads", headers=_bearer(auth_server, Role.ACCOUNTANT)).json()
+    assert acct["can_respond"] is True
+    assert acct["respond_denied_reason"] is None
+    assert acct["can_export"] is True
+
+    approver = client.get("/api/audit/threads", headers=_bearer(auth_server, Role.APPROVER)).json()
+    assert approver["can_export"] is False  # pack downloads must not render for an Approver
+
+
 def test_htmx_thread_surface_carries_the_same_decision(client, auth_server, session) -> None:
     """The HTMX audit room mirrors the JSON gates: CA raises via the form (303 back to /audit),
     CA cannot respond there either, and the raised thread renders on the page."""
@@ -858,11 +887,23 @@ def test_ca_invite_accept_lifecycle_and_referral_events(client, auth_server, ses
     assert denied.status_code == 403
     assert denied.json()["detail"] == "missing capability: manage_users"
 
+    # P1-3 settings surface: the pending list carries the invite, same gate as inviting itself
+    pending = client.get("/api/ca/pending", headers=owner)
+    assert pending.status_code == 200, pending.text
+    assert [i["email"] for i in pending.json()["invites"]] == ["ca@example.com"]
+    pending_denied = client.get("/api/ca/pending", headers=_bearer(auth_server, Role.ACCOUNTANT))
+    assert pending_denied.status_code == 403
+    assert pending_denied.json()["detail"] == "missing capability: manage_users"
+
     # the CA accepts with their OWN verified token — matched on the token's email
     accepted = client.post("/api/ca/accept", json={}, headers=ca)
     assert accepted.status_code == 200, accepted.text
     assert accepted.json()["status"] == "active"
     assert accepted.json()["referred_org"] is False  # first org for this CA
+
+    # accepted -> no longer "pending" (kills a filter that forgets the status column)
+    after_accept = client.get("/api/ca/pending", headers=owner)
+    assert after_accept.json()["invites"] == []
 
     # referral events sealed append-only on the org's chain, PII-minimal (hash, not address)
     chain = load_chain_for(session, "org-7")
@@ -876,3 +917,162 @@ def test_ca_invite_accept_lifecycle_and_referral_events(client, auth_server, ses
     dup = client.post("/api/ca/invite", json={"email": "CA@example.com"}, headers=owner)
     assert dup.status_code == 409
     assert len(load_chain_for(session, "org-7")) == len(chain)
+
+
+# --------------------------------------------------------------------------------------------
+# P1-7 (contract T11) — FIELD-level RBAC masking, byte-level. Screen gates above prove who may
+# open a route; these prove that a role allowed IN still cannot receive a sensitive ₹: the
+# per-employee salary figure is absent from the RESPONSE BYTES for CA/Approver, replaced by
+# {"restricted": true, "reason": ...}, and present for Owner/Admin/Accountant. Dropping the
+# app.core.landing.mask_field call reintroduces the bytes and fails these directly.
+# --------------------------------------------------------------------------------------------
+
+_RESTRICTED_SALARY = {"restricted": True, "reason": "requires salary_detail clearance"}
+
+
+def _seed_two_salaried_employees(session) -> None:
+    """Two employees with DISTINCT odd salaries, so every aggregate total (which stays visible)
+    differs from every per-employee figure (which must not appear) — the byte-level asserts
+    below would be vacuous if a total could coincide with a part."""
+    from app.domains.payroll.service import PayrollService
+
+    svc = PayrollService()
+    for code, name, basic, hra in (
+        ("E1", "Asha", 9_876_543, 1_234_567),
+        ("E2", "Vikram", 7_654_321, 2_345_671),
+    ):
+        emp = Employee(
+            employee_code=code, name=name, date_of_joining="2026-01-05", state="KA"
+        )
+        session.add(emp)
+        session.flush()
+        svc.set_salary_structure(
+            session, emp.id, effective_from="2026-06-01", basic=basic, hra=hra
+        )
+    session.commit()
+
+
+def test_t11_overview_masks_per_employee_net_for_ca_and_approver(
+    client, auth_server, session
+) -> None:
+    _seed_two_salaried_employees(session)
+
+    # The unmasked truth first (Owner), so the byte-level assert checks REAL values.
+    owner = client.get(
+        "/api/payroll/runs/overview", headers=_bearer(auth_server, Role.OWNER)
+    )
+    assert owner.status_code == 200, owner.text
+    nets = [e["monthly_net_paise"] for e in owner.json()["employees"]]
+    assert len(nets) == 2 and all(isinstance(n, int) and n > 0 for n in nets)
+
+    for role in (Role.CA, Role.APPROVER):
+        resp = client.get(
+            "/api/payroll/runs/overview", headers=_bearer(auth_server, role)
+        )
+        assert resp.status_code == 200, f"{role.value} holds read and must see the screen"
+        body = resp.json()
+        for emp in body["employees"]:
+            # masked -> the exact restricted shape, with the reason (never blank/absent)
+            assert emp["monthly_net_paise"] == _RESTRICTED_SALARY
+        # BYTE-LEVEL: the salary value appears NOWHERE in the response body.
+        for net in nets:
+            assert str(net) not in resp.text, f"{role.value} received salary bytes"
+
+    # the other cleared role: Accountant sees the values (non-Owner/Admin/Accountant rule)
+    acct = client.get(
+        "/api/payroll/runs/overview", headers=_bearer(auth_server, Role.ACCOUNTANT)
+    )
+    assert [e["monthly_net_paise"] for e in acct.json()["employees"]] == nets
+
+
+def test_t11_run_preview_masks_per_employee_figures_but_keeps_totals(
+    client, auth_server, session
+) -> None:
+    _seed_two_salaried_employees(session)
+    body = {"month_year": "2026-07"}
+
+    owner = client.post(
+        "/api/payroll/runs/preview", json=body, headers=_bearer(auth_server, Role.OWNER)
+    )
+    assert owner.status_code == 200, owner.text
+    per_emp_values = {
+        str(f["value_paise"])
+        for e in owner.json()["employees"]
+        for f in e["figures"]
+        if f["value_paise"]
+    }
+    total_values = {str(f["value_paise"]) for f in owner.json()["totals"] if f["value_paise"]}
+    secret = per_emp_values - total_values  # values that exist ONLY per-employee
+    assert secret, "seed must produce per-employee values distinct from every total"
+
+    ca = client.post(
+        "/api/payroll/runs/preview", json=body, headers=_bearer(auth_server, Role.CA)
+    )
+    assert ca.status_code == 200, ca.text
+    preview = ca.json()
+    for emp in preview["employees"]:
+        for f in emp["figures"]:
+            assert f["restricted"] is True
+            assert f["reason"] == "requires salary_detail clearance"
+            assert "value_paise" not in f and "working" not in f
+            assert set(f) <= {"restricted", "reason", "target", "label"}
+    # BYTE-LEVEL: no per-employee-only value appears anywhere in the CA's response.
+    for v in secret:
+        assert v not in ca.text, "CA received per-employee salary bytes"
+    # aggregates stay honest and visible (the run's size is not a secret from the CA)
+    assert [f["value_paise"] for f in preview["totals"]] == [
+        f["value_paise"] for f in owner.json()["totals"]
+    ]
+
+    # Accountant (cleared, holds write): full figures — the flow is usable end-to-end.
+    acct = client.post(
+        "/api/payroll/runs/preview", json=body, headers=_bearer(auth_server, Role.ACCOUNTANT)
+    )
+    assert {
+        str(f["value_paise"])
+        for e in acct.json()["employees"]
+        for f in e["figures"]
+        if f["value_paise"]
+    } == per_emp_values
+
+
+def test_t11_domain_figures_and_after_figures_share_the_one_masking_boundary(
+    client, auth_server, monkeypatch
+) -> None:
+    """The crash-era regression: api_domains._figures_for lost its role param while the
+    api_actions after_figures call site kept it (the ORCH HOTFIX then dropped BOTH to unmasked
+    2-arg). Rebuilt atomically: role is a required positional, and every figure list leaves
+    through app.core.landing.mask_figures. No domain snapshot fact is in T11's sensitive set
+    yet, so this drives one through the boundary and proves it byte-level; dropping the
+    mask_figures call in _figures_for fails this directly, and reverting api_actions to a 2-arg
+    call is a TypeError caught by test_preview_then_commit_creates_with_badged_after_figures."""
+    from app.web import api_domains
+
+    real_enrich = api_domains.enrich
+    monkeypatch.setattr(
+        api_domains,
+        "enrich",
+        lambda snapshot: {**real_enrich(snapshot), "monthly_net_paise": 4_242_424},
+    )
+
+    # presence for a cleared role — the value really flows when clearance holds
+    owner = client.get("/api/domains/payroll", headers=_bearer(auth_server, Role.OWNER))
+    assert owner.status_code == 200, owner.text
+    unmasked = [f for f in owner.json()["figures"] if f.get("key") == "monthly_net_paise"]
+    assert unmasked and unmasked[0]["raw"] == 4_242_424
+
+    for role in (Role.CA, Role.APPROVER):
+        resp = client.get("/api/domains/payroll", headers=_bearer(auth_server, role))
+        assert resp.status_code == 200, f"{role.value} holds read and must see the screen"
+        masked = [f for f in resp.json()["figures"] if f.get("key") == "monthly_net_paise"]
+        assert len(masked) == 1
+        assert masked[0]["restricted"] is True
+        assert masked[0]["reason"] == "requires salary_detail clearance"
+        # only identifying keys survive — never value-bearing ones (value/raw/state)
+        assert set(masked[0]) <= {"restricted", "reason", "target", "key", "label"}
+        # BYTE-LEVEL: the value appears nowhere in the body, raw or ₹-formatted
+        assert "4242424" not in resp.text and "42,424" not in resp.text
+
+    # the five-hub overview shares the helper — its coverage loop must not 500 either
+    overview = client.get("/api/domains", headers=_bearer(auth_server, Role.CA))
+    assert overview.status_code == 200, overview.text

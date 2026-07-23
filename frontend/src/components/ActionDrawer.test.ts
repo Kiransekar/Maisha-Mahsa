@@ -21,6 +21,7 @@ import {
   initialValues,
   isConfirmKey,
   lineEnterAdvance,
+  mergedInitialValues,
   parseLines,
   setCell,
   type ActionPreviewData,
@@ -60,6 +61,27 @@ describe("the form is derived from the schema", () => {
     expect(controlType("select")).toBe("select");
     expect(controlType("text")).toBe("text");
     expect(controlType("richtext-from-the-future")).toBe("text"); // never a crash, never a guess
+  });
+});
+
+describe("mergedInitialValues — a prefill (P1-8 receipt OCR) can only fill fields the schema has", () => {
+  it("overlays prefill onto the blank form", () => {
+    expect(mergedInitialValues(spec, { code: "1000" })).toEqual({
+      code: "1000",
+      name: "",
+      account_type: "",
+    });
+  });
+
+  it("with no prefill, is identical to initialValues", () => {
+    expect(mergedInitialValues(spec)).toEqual(initialValues(spec));
+  });
+
+  it("drops a prefilled key the action's own schema does not declare", () => {
+    // A field OCR could invent (or a schema drift) never reaches the form or the server.
+    expect(mergedInitialValues(spec, { vendor_gstin: "27AAAAA0000A1Z5" })).toEqual(
+      initialValues(spec),
+    );
   });
 });
 

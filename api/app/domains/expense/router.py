@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.loop import run_loop
 from app.core.mahsa_client import MahsaClient
+from app.core.ocr import OcrUnavailable
 from app.core.rbac import Capability
 from app.core.rbac_deps import require
 from app.db.session import get_session
@@ -65,6 +66,19 @@ def analytics(db: Session = Depends(get_session)) -> dict:
 @router.post("/parse-receipt")
 def parse_receipt(body: ReceiptText) -> dict:
     return _service.parse_receipt(body.ocr_text)
+
+
+@router.post("/ocr-receipt")
+async def ocr_receipt(file: UploadFile = File(...)) -> dict:
+    """P1-8 — thin JSON wrapper over the SAME handler ``/d/expense/ocr-receipt`` calls
+    (``ExpenseService.ocr_capture``): one parser, so the SPA and the HTMX drawer can never see
+    different fields for the same photo. Read-only (router baseline) — OCR never mutates a
+    claim; the parsed {amount_paise, gstin, date} only prefill an editable form field on the
+    client, never a committed value."""
+    try:
+        return _service.ocr_capture(await file.read())
+    except OcrUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @router.post("/fold")

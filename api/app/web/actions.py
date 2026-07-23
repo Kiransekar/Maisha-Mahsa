@@ -103,15 +103,33 @@ def _add_shareholder(session: Session, d: dict[str, str]) -> str:
     return f"Shareholder {d['name']} ({shares:,} shares) added."
 
 
-def _submit_claim(session: Session, d: dict[str, str]) -> str:
-    ExpenseService().submit_claim(
+def _submit_claim(session: Session, d: dict[str, str]) -> tuple[str, list[dict[str, Any]]]:
+    # ponytail: ExpenseClaim has no dedicated GSTIN column — the OCR-parsed GSTIN (P1-8) folds
+    # into the free-text `description` rather than a schema migration; add a real column when
+    # expense claims need to reconcile against a vendor's ITC.
+    gstin = (d.get("vendor_gstin") or "").strip()
+    description = f"GSTIN {gstin}" if gstin else None
+    result = ExpenseService().submit_claim(
         session,
         claim_date=d["claim_date"],
         expense_date=d["expense_date"],
         category=d["category"],
         amount=Paise.from_rupees(d["amount"]),
+        description=description,
     )
-    return f"Expense claim ₹{d['amount']} ({d['category']}) submitted."
+    msg = f"Expense claim ₹{d['amount']} ({d['category']}) submitted."
+    if result["over_policy"]:
+        limit_text = (
+            Paise.from_paise(result["policy_limit"]).format_inr()
+            if result["policy_limit"] is not None
+            else "no set limit"
+        )
+        msg += (
+            f" WARNING — over the {d['category']} policy limit ({limit_text}) by "
+            f"{Paise.from_paise(result['excess']).format_inr()}; needs approval before "
+            "reimbursement."
+        )
+    return (msg, [])
 
 
 def _ingest_document(session: Session, d: dict[str, str]) -> str:
@@ -420,6 +438,9 @@ ACTIONS: dict[str, list[Action]] = {
             Field("expense_date", "Expense date", type="date"),
             Field("category", "Category", placeholder="travel"),
             Field("amount", "Amount (₹)", type="number", placeholder="5000"),
+            # P1-8: receipt OCR (never authoritative) prefills expense_date/amount/vendor_gstin —
+            # all three stay editable here, same as every other field.
+            Field("vendor_gstin", "Vendor GSTIN", required=False, placeholder="27AAAAA0000A1Z5"),
         ), _submit_claim),
     ],
     "vault": [

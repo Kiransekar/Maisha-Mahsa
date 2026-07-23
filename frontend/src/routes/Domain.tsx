@@ -18,16 +18,27 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { api } from "../lib/api";
+import { authHeaders } from "../lib/auth";
 import {
   VerifiedNumber,
   effectiveState,
+  isRestricted,
+  LockChip,
+  type Freshness,
+  type RestrictedField,
   type VerifyState,
 } from "../components/VerifiedNumber";
 import { ErrorState } from "../components/ErrorState";
 import { ActionDrawer } from "../components/ActionDrawer";
 import { BankCsvImport } from "../components/BankCsvImport";
+import { useConnectionHealth } from "../components/ConnectionHealth";
+import { booksFreshness, useNow } from "../lib/freshness";
 import { useTraceId } from "../lib/trace";
 import { Empty, Header, MahsaDownBanner } from "./Today";
+
+// Same seam as lib/api.ts / BankCsvImport.tsx — a multipart body must not carry the shared
+// `api()` helper's JSON content-type, so the receipt upload below bypasses it directly.
+const API_BASE = import.meta.env.VITE_API_BASE ?? "";
 
 export type Figure = {
   key: string;
@@ -77,7 +88,8 @@ export type DomainData = {
   mahsa_up: boolean;
   mahsa_down_message: string | null;
   health: { status: string; score: number | null; requires_approval: boolean } | null;
-  figures: Figure[];
+  // T11: a sensitive figure arrives as a RestrictedField — the server stripped the value.
+  figures: (Figure | RestrictedField)[];
   deadlines: Deadline[];
   actions: ActionSpec[];
 };
@@ -129,6 +141,39 @@ export function deadlineWhen(d: Deadline): { text: string; overdue: boolean } {
   return { overdue: false, text: `due in ${days(n)} — ${d.due_date}` };
 }
 
+// P1-8 — expense receipt OCR. `/api/expense/ocr-receipt` returns this shape (mirrors
+// `expense_calc.parse_receipt`); OCR is never authoritative, so every field it yields only ever
+// PREFILLS an editable ActionDrawer field, same preview-then-confirm gate as manual entry.
+export type ReceiptOcrResult = {
+  amount_paise: number | null;
+  gstin: string | null;
+  date: string | null;
+};
+
+/** The server's date regex accepts a bare ISO date OR `DD/MM/YYYY`/`DD-MM-YYYY` (day-first,
+ *  the Indian convention `expense_calc._DATE_RE` was written against). A bare ISO date is
+ *  trusted as-is; the day-first form is reordered into ISO for the `<input type="date">`
+ *  field. Anything else (or nothing found) leaves the date field for the user to fill in —
+ *  guessing a US month/day swap would be worse than an honest blank. */
+export function receiptDateToIso(raw: string | null): string {
+  if (!raw) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const m = /^(\d{2})[/-](\d{2})[/-](\d{4})$/.exec(raw);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : "";
+}
+
+/** OCR result -> the `submit-claim` action's prefill map. `mergedInitialValues` (ActionDrawer)
+ *  only ever applies keys the action's own schema declares, so a field this doesn't set (or a
+ *  future schema without `vendor_gstin`) just stays blank rather than injecting anything. */
+export function ocrResultToPrefill(r: ReceiptOcrResult): Record<string, string> {
+  const prefill: Record<string, string> = {};
+  const iso = receiptDateToIso(r.date);
+  if (iso) prefill.expense_date = iso;
+  if (typeof r.amount_paise === "number") prefill.amount = (r.amount_paise / 100).toString();
+  if (r.gstin) prefill.vendor_gstin = r.gstin;
+  return prefill;
+}
+
 // The ₹ half of the alert grammar. `/api/domains/{d}` ships the raw compliance calendar, which
 // carries no penalty amount (unlike `/api/today`, which joins `ComplianceCalendar.penalty_amount`
 // and the ported GSTR-3B late fee). Invariant 2: we say so, we do not print ₹0.
@@ -138,11 +183,18 @@ export const IMPACT_UNKNOWN = "₹ impact not yet known — we don't guess";
 
 export function Domain() {
   const { domain = "" } = useParams();
-  const { data, isLoading, error, refetch } = useQuery({
+  const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
     queryKey: ["domain", domain],
     queryFn: () => api<DomainData>(`/domains/${encodeURIComponent(domain)}`),
   });
   const traceId = useTraceId(`domain-${domain}`);
+  // T4: `honestState` already downgrades a ✓ when Mahsa itself is unreachable; this ADDS the
+  // real connection-health/payload-age check (same one Approvals wires) so a ✓ here also can't
+  // survive on inputs the sources behind them never confirmed are current.
+  const health = useConnectionHealth();
+  const now = useNow();
+  const age = dataUpdatedAt ? now - dataUpdatedAt : 0;
+  const fresh = booksFreshness(health.data, age);
 
   if (isLoading && !data) return <p style={{ color: "var(--color-ink-muted)" }}>Loading…</p>;
 
@@ -166,7 +218,29 @@ export function Domain() {
   }
   if (!data) return null;
 
-  const verified = data.figures.filter((f) => honestState(f.state, data.mahsa_up) === "verified");
+  return <DomainBody data={data} refetch={refetch} stale={fresh.stale} />;
+}
+
+/** Split out so the receipt-OCR prefill state (expense-only) doesn't have to be threaded
+ *  through the loading/error early-returns above. */
+function DomainBody({
+  data,
+  refetch,
+  stale,
+}: {
+  data: DomainData;
+  refetch: () => void;
+  stale: Freshness;
+}) {
+  // P1-8: the most recent receipt parse, and a nonce that forces the submit-claim ActionDrawer
+  // to remount (fresh prefill, fresh preview state) each time a new photo is read — same
+  // "key changes -> component resets" pattern TreasuryReimport uses for its account picker.
+  const [receiptPrefill, setReceiptPrefill] = useState<Record<string, string> | undefined>();
+  const [receiptNonce, setReceiptNonce] = useState(0);
+
+  const verified = data.figures.filter(
+    (f) => !isRestricted(f) && honestState(f.state, data.mahsa_up) === "verified",
+  );
 
   return (
     <section>
@@ -224,7 +298,12 @@ export function Domain() {
             does not yet ship the inputs → formula → citations trail, so the working panels below
             show the fact key and an unsealed verdict — an honest gap, not a sealed empty.
           </p>
-          <FigureGrid figures={data.figures} mahsaUp={data.mahsa_up} asOf={data.as_of} />
+          <FigureGrid
+            figures={data.figures}
+            mahsaUp={data.mahsa_up}
+            asOf={data.as_of}
+            stale={stale}
+          />
         </>
       )}
 
@@ -255,17 +334,36 @@ export function Domain() {
             ₹ echoed to the paisa — before anything is written. Enter advances fields;
             ⌘/Ctrl+Enter confirms from the preview.
           </p>
-          {data.actions.map((a) => (
-            <ActionDrawer
-              key={a.key}
-              domain={data.domain}
-              a={a}
-              // The one badge gate: preview figures pass through the same honestState as every
-              // other badge on this screen, so the drawer cannot invent its own path to a ✓.
-              badge={(s) => honestState(s, data.mahsa_up)}
-              onCommitted={() => void refetch()}
-            />
-          ))}
+          {data.actions.map((a) => {
+            // P1-8: the expense claim form additionally offers a receipt photo that prefills
+            // it (GSTIN/amount/date) — every other action is untouched.
+            const isClaimForm = data.domain === "expense" && a.key === "submit-claim";
+            return (
+              <div key={a.key}>
+                {isClaimForm && (
+                  <ExpenseReceiptCapture
+                    onParsed={(prefill) => {
+                      setReceiptPrefill(prefill);
+                      setReceiptNonce((n) => n + 1);
+                    }}
+                  />
+                )}
+                <ActionDrawer
+                  // Remounts on every new parse so the prefill + preview state starts fresh
+                  // (same "key change resets the child" pattern as TreasuryReimport below).
+                  key={isClaimForm ? `${a.key}-${receiptNonce}` : a.key}
+                  domain={data.domain}
+                  a={a}
+                  // The one badge gate: preview figures pass through the same honestState as
+                  // every other badge on this screen, so the drawer cannot invent its own path
+                  // to a ✓.
+                  badge={(s) => honestState(s, data.mahsa_up)}
+                  onCommitted={() => void refetch()}
+                  prefill={isClaimForm ? receiptPrefill : undefined}
+                />
+              </div>
+            );
+          })}
         </>
       )}
     </section>
@@ -349,16 +447,90 @@ function TreasuryReimport({ onImported }: { onImported: () => void }) {
   );
 }
 
-function FigureGrid({
+/** P1-8 — receipt capture for the expense claim form. Uploads to `/api/expense/ocr-receipt`
+ *  (a thin wrapper over the SAME `ExpenseService.ocr_capture` the HTMX drawer calls) and hands
+ *  the parsed {amount_paise, gstin, date} up as an ActionDrawer prefill. OCR is never
+ *  authoritative: nothing here writes a claim — it only fills in fields the user still reviews
+ *  and confirms through the normal preview-then-confirm gate. */
+function ExpenseReceiptCapture({
+  onParsed,
+}: {
+  onParsed: (prefill: Record<string, string>) => void;
+}) {
+  const traceId = useTraceId("expense-receipt-ocr");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+
+  async function chooseFile(file: File | null) {
+    if (!file || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append("file", file, file.name);
+      const res = await fetch(`${API_BASE}/api/expense/ocr-receipt`, {
+        method: "POST",
+        credentials: "include",
+        headers: await authHeaders(),
+        body: form,
+      });
+      if (!res.ok) throw new Error(await res.text().catch(() => `${res.status}`));
+      onParsed(ocrResultToPrefill((await res.json()) as ReceiptOcrResult));
+    } catch (e) {
+      setError(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      style={{
+        border: "1px solid var(--color-border)",
+        background: "var(--color-surface)",
+        borderRadius: 4,
+        padding: "7px 12px",
+        marginBottom: 4,
+      }}
+    >
+      <label style={{ fontSize: 12, color: "var(--color-ink-muted)", display: "block" }}>
+        Capture a receipt — GSTIN, amount and date are read off it into the form below, editable
+        before you submit.
+        <input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          aria-label="Receipt photo"
+          disabled={busy}
+          onChange={(e) => void chooseFile(e.target.files?.[0] ?? null)}
+          style={{ display: "block", marginTop: 4 }}
+        />
+      </label>
+      {busy && (
+        <p style={{ fontSize: 12, color: "var(--color-ink-faint)", margin: "6px 0 0" }}>
+          Reading the receipt…
+        </p>
+      )}
+      {error !== null && (
+        <ErrorState error={error} traceId={traceId} operation="read" onRetry={() => setError(null)} />
+      )}
+    </div>
+  );
+}
+
+/** P1-6 mutation guard: if a caller stops passing `stale` through here (or this stops forwarding
+ *  it to VerifiedNumber), a figure keeps reading ✓ on sources nobody confirmed are current —
+ *  see the "downgrades" tests in Domain.test.ts. */
+export function FigureGrid({
   figures,
   mahsaUp,
   asOf,
   stale = false,
 }: {
-  figures: Figure[];
+  figures: (Figure | RestrictedField)[];
   mahsaUp: boolean;
   asOf: string;
-  stale?: boolean;
+  stale?: Freshness;
 }) {
   return (
     <div
@@ -368,19 +540,40 @@ function FigureGrid({
         gap: 8, // dense interior: the 8px rung, not Today's 12
       }}
     >
-      {figures.map((f) => (
-        <VerifiedNumber
-          key={f.key}
-          label={f.label}
-          value={f.value}
-          state={honestState(f.state, mahsaUp)}
-          asOf={asOf}
-          stale={stale}
-          // T7: every badged figure stays interrogable. Only what the server actually sent goes
-          // in here — the fact key that decided the badge, and no invented formula or citation.
-          working={{ inputs: [{ label: "Fact key", value: f.key }] }}
-        />
-      ))}
+      {figures.map((f) =>
+        // T11: a masked figure is a visible lock (label + server reason), never a blank slot
+        // and never a VerifiedNumber (which would show a false ✕ on a value that exists).
+        isRestricted(f) ? (
+          <div
+            key={f.key ?? f.label ?? "restricted"}
+            style={{
+              background: "var(--color-surface)",
+              border: "1px solid var(--color-border)",
+              borderRadius: 8,
+              padding: "10px 12px",
+            }}
+          >
+            <div style={{ color: "var(--color-ink-muted)", fontSize: 12 }}>
+              {f.label ?? "Restricted figure"}
+            </div>
+            <div style={{ marginTop: 8 }}>
+              <LockChip reason={f.reason} />
+            </div>
+          </div>
+        ) : (
+          <VerifiedNumber
+            key={f.key}
+            label={f.label}
+            value={f.value}
+            state={honestState(f.state, mahsaUp)}
+            asOf={asOf}
+            stale={stale}
+            // T7: every badged figure stays interrogable. Only what the server actually sent goes
+            // in here — the fact key that decided the badge, and no invented formula or citation.
+            working={{ inputs: [{ label: "Fact key", value: f.key }] }}
+          />
+        ),
+      )}
     </div>
   );
 }

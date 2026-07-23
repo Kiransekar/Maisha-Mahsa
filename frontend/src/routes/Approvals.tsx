@@ -35,14 +35,15 @@
 //      by `booksFreshness()`, which combines the real /api/health/connections payload with the
 //      age of this page's own data; the query also refetches on window focus.
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "../lib/api";
 import { inr, inrOrPending } from "../lib/money";
-import { effectiveState, VerifyChip, type VerifyState } from "../components/VerifiedNumber";
-import { useConnectionHealth, type FreshnessData } from "../components/ConnectionHealth";
+import { effectiveState, VerifyChip, type Freshness, type VerifyState } from "../components/VerifiedNumber";
+import { useConnectionHealth } from "../components/ConnectionHealth";
 import { ErrorState } from "../components/ErrorState";
 import { useTraceId } from "../lib/trace";
+import { ago, booksFreshness, PAYLOAD_MAX_AGE_MS, useNow, type BooksFreshness } from "../lib/freshness";
 import { Empty, H2, Header, MahsaDownBanner } from "./Today";
 
 export type Figure = {
@@ -168,91 +169,18 @@ export function drift(claimedPaise: number, recomputedPaise: number | null): Dri
 }
 
 // ── freshness (HIGH) ─────────────────────────────────────────────────────────
-
-/** How long this page's own payload may stand behind a ✓. An approval screen left open past this
- *  is restating figures nobody has re-checked, so the chips downgrade until it refetches. */
-export const PAYLOAD_MAX_AGE_MS = 120_000;
-
-export type BooksFreshness = { stale: boolean; why: string | null };
-
-/** Plain-language age. Never "0 minutes" — that reads as "just now" when it is up to 59s stale. */
-export function ago(ms: number): string {
-  const m = Math.floor(ms / 60_000);
-  if (m < 1) return "less than a minute ago";
-  if (m < 60) return `${m} minute${m === 1 ? "" : "s"} ago`;
-  const h = Math.floor(m / 60);
-  return `${h} hour${h === 1 ? "" : "s"} ago`;
-}
-
-function labelsFor(health: FreshnessData, keys: string[]): string {
-  return keys.map((k) => health.sources.find((s) => s.key === k)?.label ?? k).join(", ");
-}
-
-/**
- * Can a ✓ on THIS screen still be believed?
- *
- * Two independent ways it can stop being believable, and we report the stronger one:
- *   · the SOURCES behind the books are stale or have never synced (server's own judgement, from
- *     /api/health/connections — we never re-derive staleness here);
- *   · this PAGE's payload is old, because the tab was left open.
- *
- * A missing health payload answers `stale`, deliberately and in line with isSourceStale(): if the
- * check did not come back we cannot confirm the inputs are current, and an unconfirmed ✓ is the
- * fabricated-verification failure invariant 1 exists to prevent. One failed health request must
- * never silently restore ✓ on the screen where money gets committed.
- *
- * ponytail: this is a WHOLE-SCREEN downgrade, not per-figure. The approvals payload carries no
- * per-figure source key, so any domain→source mapping would be a client-side guess — precisely the
- * invented binding correction #1 above exists to remove. Over-cautious is a safe direction; making
- * up which feed backs which figure is not. Upgrade path: have the server put the source keys it
- * actually folded onto each Figure, then downgrade per figure via stateForSource().
- */
-export function booksFreshness(
-  health: FreshnessData | undefined,
-  payloadAgeMs: number,
-): BooksFreshness {
-  if (health === undefined) {
-    return {
-      stale: true,
-      why: "We could not check when the sources behind these figures last synced, so nothing here is shown as ✓. You can still approve — it will be recorded as an unverified approval.",
-    };
-  }
-  const never = health.overall.never_synced;
-  if (never.length > 0) {
-    return {
-      stale: true,
-      why: `${labelsFor(health, never)} has never synced, so the books behind these figures are not fully backed.`,
-    };
-  }
-  const stale = health.overall.stale;
-  if (stale.length > 0) {
-    return {
-      stale: true,
-      why: `${labelsFor(health, stale)} is past its freshness limit, so a recomputation against it no longer stands.`,
-    };
-  }
-  if (payloadAgeMs > PAYLOAD_MAX_AGE_MS) {
-    return {
-      stale: true,
-      why: `These figures were loaded ${ago(payloadAgeMs)} and have not been re-checked since. Reload before approving if you want a ✓ you can rely on.`,
-    };
-  }
-  return { stale: false, why: null };
-}
+// Lifted to lib/freshness.ts (P1-6) so Today.tsx and Domain.tsx thread the SAME real freshness
+// check instead of re-deriving it — re-exported here so this file's own tests, and
+// PayrollRun.tsx/Filings.tsx which already imported this set from "./Approvals", keep working
+// unchanged. ponytail: this is a WHOLE-SCREEN downgrade on this particular screen, not
+// per-figure — the approvals payload carries no per-figure source key, so any domain→source
+// mapping here would be a client-side guess (precisely the invented-binding correction #1 above
+// exists to remove). Upgrade path if that ever changes: downgrade per figure via
+// stateForSource() instead, the way Domain.tsx's `honestState` composes with `stale` today.
+export { ago, booksFreshness, PAYLOAD_MAX_AGE_MS, useNow };
+export type { BooksFreshness };
 
 // ── screen ───────────────────────────────────────────────────────────────────
-
-/** Re-render on a timer so a tab left open actually crosses the staleness threshold. Without this
- *  the downgrade would only fire on the next user interaction — i.e. never, in the case we care
- *  about. ponytail: a 30s tick, not a scheduled timeout; the resolution is plenty for a 2m limit. */
-export function useNow(intervalMs = 30_000): number {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(id);
-  }, [intervalMs]);
-  return now;
-}
 
 export function Approvals() {
   const qc = useQueryClient();
@@ -370,7 +298,7 @@ function ApprovalCard({
   onDecided,
 }: {
   item: ApprovalItem;
-  stale: boolean;
+  stale: Freshness;
   ageMs: number;
   onDecided: (r: Receipt) => void;
 }) {
@@ -581,7 +509,7 @@ function ApprovalCard({
   );
 }
 
-function FigureRow({ figure, stale }: { figure: Figure; stale: boolean }) {
+function FigureRow({ figure, stale }: { figure: Figure; stale: Freshness }) {
   const shown = effectiveState(figure.state as VerifyState, stale);
   const unverified = shown !== "verified";
   const rec = figure.recomputed_paise;

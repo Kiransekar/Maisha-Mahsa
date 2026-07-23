@@ -9,8 +9,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { inr } from "../lib/money";
-import { VerifiedNumber, type VerifyState, type Working } from "../components/VerifiedNumber";
+import { VerifiedNumber, type Freshness, type VerifyState, type Working } from "../components/VerifiedNumber";
 import { ErrorState } from "../components/ErrorState";
+import { useConnectionHealth } from "../components/ConnectionHealth";
+import { booksFreshness, useNow } from "../lib/freshness";
 
 type Panel = Working & { label: string; value: string; state: VerifyState; note: string | null };
 type NeedsYou = {
@@ -50,10 +52,17 @@ const KIND_NOTE: Record<string, string> = {
 };
 
 export function Today() {
-  const { data, isLoading, error, refetch } = useQuery({
+  const { data, isLoading, error, refetch, dataUpdatedAt } = useQuery({
     queryKey: ["today"],
     queryFn: () => api<TodayData>("/today"),
   });
+  // T4: a ✓ on this page is only honest if BOTH the sources behind it are current and this
+  // payload itself hasn't gone stale sitting in a tab — same real check Approvals wires,
+  // threaded here so the cash strip stops relying on `mahsa_up`/request-error alone.
+  const health = useConnectionHealth();
+  const now = useNow();
+  const age = dataUpdatedAt ? now - dataUpdatedAt : 0;
+  const fresh = booksFreshness(health.data, age);
 
   if (isLoading && !data) return <p style={{ color: "var(--color-ink-muted)" }}>Loading…</p>;
 
@@ -68,20 +77,7 @@ export function Today() {
           {data && (
             <>
               <H2>Last known — not current</H2>
-              <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                {data.cash_strip.map((p) => (
-                  <VerifiedNumber
-                    key={p.label}
-                    label={p.label}
-                    value={p.value}
-                    state={p.state}
-                    note={p.note}
-                    working={p}
-                    asOf={data.as_of}
-                    stale
-                  />
-                ))}
-              </div>
+              <CashStrip panels={data.cash_strip} asOf={data.as_of} stale />
             </>
           )}
         </ErrorState>
@@ -96,19 +92,7 @@ export function Today() {
       {!data.mahsa_up && <MahsaDownBanner />}
 
       <H2>Cash</H2>
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        {data.cash_strip.map((p) => (
-          <VerifiedNumber
-            key={p.label}
-            label={p.label}
-            value={p.value}
-            state={p.state}
-            note={p.note}
-            working={p}
-            asOf={data.as_of}
-          />
-        ))}
-      </div>
+      <CashStrip panels={data.cash_strip} asOf={data.as_of} stale={fresh.stale} />
 
       <H2>Needs you</H2>
       {data.needs_you.length === 0 ? (
@@ -171,6 +155,38 @@ export function Today() {
         </div>
       </div>
     </section>
+  );
+}
+
+/** The cash strip's own render, pulled out so both the happy path and the last-known-on-error
+ *  path go through the exact same wiring — including `stale`, which is what actually downgrades
+ *  a ✓ (VerifiedNumber's own `effectiveState`). P1-6 mutation guard: if a caller stops passing
+ *  `stale` through here, a verified figure keeps showing ✓ on inputs nobody confirmed are
+ *  current — see Today.test.ts. */
+export function CashStrip({
+  panels,
+  asOf,
+  stale,
+}: {
+  panels: Panel[];
+  asOf: string;
+  stale: Freshness;
+}) {
+  return (
+    <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+      {panels.map((p) => (
+        <VerifiedNumber
+          key={p.label}
+          label={p.label}
+          value={p.value}
+          state={p.state}
+          note={p.note}
+          working={p}
+          asOf={asOf}
+          stale={stale}
+        />
+      ))}
+    </div>
   );
 }
 

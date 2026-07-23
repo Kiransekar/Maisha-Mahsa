@@ -11,7 +11,12 @@ import { AuditRoom } from "./routes/AuditRoom";
 import { Onboarding } from "./routes/Onboarding";
 import { Filings } from "./routes/Filings";
 import { PayrollRun } from "./routes/PayrollRun";
+import { Statements } from "./routes/Statements";
+import { Ask } from "./routes/Ask";
 import { SignIn } from "./routes/SignIn";
+import { Settings } from "./routes/Settings";
+import { CaAccept } from "./routes/CaAccept";
+import { Cfo } from "./routes/Cfo";
 import {
   sessionStatus,
   switchOrganization,
@@ -125,6 +130,11 @@ export function App() {
                 {/* T2: appended, never reshuffled. */}
                 <Route path="/file" element={<Filings />} />
                 <Route path="/payroll-run" element={<PayrollRun />} />
+                <Route path="/statements" element={<Statements />} />
+                <Route path="/ask" element={<Ask />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/ca/accept" element={<CaAccept />} />
+                <Route path="/cfo" element={<Cfo />} />
                 <Route path="*" element={<p>Not found.</p>} />
               </Routes>
             </Shell>

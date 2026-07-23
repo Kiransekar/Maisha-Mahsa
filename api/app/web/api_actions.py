@@ -281,6 +281,8 @@ async def action_commit(
         "committed": True,
         "created": message,
         "normalized": normalized,
-        # The domain's badged snapshot AFTER the write — same §0.4 machinery as GET /domains/{d}.
-        "after_figures": _figures_for(db, domain),
+        # The domain's badged snapshot AFTER the write — same §0.4 machinery as GET /domains/{d},
+        # T11-masked for the committer's role (role is a required positional in _figures_for, so
+        # this can never silently regress to an unmasked 2-arg call again).
+        "after_figures": _figures_for(db, domain, principal.role),
     }

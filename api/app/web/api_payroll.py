@@ -40,9 +40,10 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.core.entitlement_deps import require_feature
+from app.core.landing import mask_field, mask_figures
 from app.core.mahsa_client import MahsaClient, MahsaError, RecomputeCheck
 from app.core.principal import Principal
-from app.core.rbac import Capability, can
+from app.core.rbac import Capability, Role, can
 from app.core.rbac_deps import require, resolve_principal
 from app.core.verdict import Figure, build_verdict
 from app.core.verify import verify_claims
@@ -260,6 +261,14 @@ def _flat(employees: list[dict[str, Any]], totals: list[dict[str, Any]]) -> list
     return [f for e in employees for f in e["figures"]] + list(totals)
 
 
+def _masked_employees(role: Role, employees: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """T11 serialization boundary: per-employee salary figures are masked for roles without
+    salary_detail clearance (CA/Approver keep the run's existence and the aggregate totals;
+    the per-employee ₹ leaves the body entirely). Applied AFTER confirm-token minting — the
+    token seals the real figures; masking is presentation, never the seal."""
+    return [{**e, "figures": mask_figures(role, e["figures"])} for e in employees]
+
+
 # ── routes ───────────────────────────────────────────────────────────────────────────────
 
 
@@ -281,8 +290,14 @@ def runs_overview(
                 "name": emp.name,
                 "state_code": emp.state,
                 "date_of_joining": emp.date_of_joining,
-                # null == "not yet known — we don't guess", never ₹0 (a structure may not exist).
-                "monthly_net_paise": None if structure is None else int(structure.net_salary),
+                # null == "not yet known — we don't guess", never ₹0 (a structure may not
+                # exist). T11: masked to {"restricted": true, ...} for roles without
+                # salary_detail clearance — the paise never enter the body.
+                "monthly_net_paise": mask_field(
+                    principal.role,
+                    "monthly_net_paise",
+                    None if structure is None else int(structure.net_salary),
+                ),
                 "has_salary_structure": structure is not None,
             }
         )
@@ -362,7 +377,8 @@ async def run_preview(
         "as_of": _now().date().isoformat(),
         "mahsa_up": mahsa_up,
         "employee_count": len(employees),
-        "employees": employees,
+        # T11: token first (sealing the REAL figures), then per-employee masking for the body.
+        "employees": _masked_employees(principal.role, employees),
         "totals": totals,
         "verdict_hash": verdict_hash,
         "rule_pack_version": rules_version,
@@ -444,7 +460,9 @@ async def run_confirm(
         "month_year": body.month_year,
         "status": "draft",
         "employee_count": result["employee_count"],
-        "employees": employees,
+        # T11 at the boundary here too — a no-op for today's write-holding roles (all cleared
+        # for salary_detail), load-bearing the day the two sets diverge.
+        "employees": _masked_employees(principal.role, employees),
         "totals": totals,
         "verdict_hash": verdict_hash,
         "mahsa_up": mahsa_up,

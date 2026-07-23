@@ -1,9 +1,36 @@
 // The three pure branches shared by both hub altitudes. Each one is a place a ✓ could be
 // fabricated or a deadline could be misread, which is the only reason they are functions.
 
-import { describe, expect, it } from "vitest";
-import { coverageText, deadlineWhen, honestState, type Deadline } from "./Domain";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { describe, expect, it, vi } from "vitest";
+import type { FreshnessData } from "../components/ConnectionHealth";
+import { FRESHNESS_QUERY_KEY } from "../components/ConnectionHealth";
+import {
+  coverageText,
+  deadlineWhen,
+  Domain,
+  FigureGrid,
+  honestState,
+  ocrResultToPrefill,
+  receiptDateToIso,
+  type Deadline,
+  type DomainData,
+  type Figure,
+} from "./Domain";
 import { kpiValue, runwayText } from "./Domains";
+
+// r:health-wiring: the wiring test below pre-seeds the query cache, so `Domain()`'s own `api()`
+// call is never actually reached during a synchronous `renderToStaticMarkup` pass (no effects
+// run — no fetch is kicked off). Mocked anyway per the ticket, and to fail loudly rather than hit
+// the network if that ever stops being true.
+vi.mock("../lib/api", () => ({
+  api: vi.fn(async () => {
+    throw new Error("Domain.test.ts: api() should not be reached — the query cache is pre-seeded");
+  }),
+}));
 
 describe("honestState — a ✓ can only come from a live, recognised server state", () => {
   it("passes the three known states straight through while Mahsa is up", () => {
@@ -27,6 +54,66 @@ describe("honestState — a ✓ can only come from a live, recognised server sta
   it("leaves an already-failing figure failing during an outage", () => {
     // A downgrade must never accidentally soften ✕ into ◐.
     expect(honestState("unbacked", false)).toBe("unbacked");
+  });
+});
+
+describe("FigureGrid — P1-6: connection-health/payload-age staleness downgrades ✓ too, not just mahsaUp", () => {
+  const figure = (state: string): Figure => ({
+    key: "gst_payable",
+    label: "GST payable",
+    value: "₹1,000",
+    raw: null,
+    state,
+  });
+
+  it("keeps ✓ when Mahsa is up and nothing is stale", () => {
+    const html = renderToStaticMarkup(
+      createElement(FigureGrid, {
+        figures: [figure("verified")],
+        mahsaUp: true,
+        asOf: "2026-07-22",
+        stale: false,
+      }),
+    );
+    expect(html).toContain("recomputed"); // the ✓ chip label
+    expect(html).not.toContain("Downgraded from ✓");
+  });
+
+  it("downgrades to ◐ when `stale` is threaded through, even though Mahsa itself is up", () => {
+    // THE mutation this guards: if Domain() stops passing the real `booksFreshness(...).stale`
+    // into FigureGrid, or FigureGrid stops forwarding it to VerifiedNumber, a figure keeps
+    // reading ✓ purely because Mahsa is reachable — the exact gap the "on the happy path we
+    // never asked /api/health/connections" finding named.
+    const html = renderToStaticMarkup(
+      createElement(FigureGrid, {
+        figures: [figure("verified")],
+        mahsaUp: true,
+        asOf: "2026-07-22",
+        stale: true,
+      }),
+    );
+    expect(html).toContain("Downgraded from ✓");
+  });
+
+  it("never upgrades a figure Mahsa itself did not back", () => {
+    const html = renderToStaticMarkup(
+      createElement(FigureGrid, {
+        figures: [figure("unbacked")],
+        mahsaUp: true,
+        asOf: "2026-07-22",
+        stale: true,
+      }),
+    );
+    expect(html).not.toContain("Downgraded from ✓");
+  });
+
+  it("still applies the outage downgrade with `stale` defaulted (mahsaUp alone is enough)", () => {
+    const html = renderToStaticMarkup(
+      createElement(FigureGrid, { figures: [figure("verified")], mahsaUp: false, asOf: "2026-07-22" }),
+    );
+    // honestState() already downgrades a verified figure during an outage — confirms the default
+    // `stale = false` doesn't mask that pre-existing behaviour.
+    expect(html).toContain("not yet sealed"); // the ◐ chip label
   });
 });
 
@@ -92,6 +179,37 @@ describe("kpiValue — an empty source is not a ₹0 position", () => {
   });
 });
 
+describe("receiptDateToIso — a day-first receipt date, or an honest blank", () => {
+  it("trusts a bare ISO date as-is", () => {
+    expect(receiptDateToIso("2026-07-01")).toBe("2026-07-01");
+  });
+
+  it("reorders DD/MM/YYYY and DD-MM-YYYY (day first) into ISO", () => {
+    expect(receiptDateToIso("28/06/2026")).toBe("2026-06-28");
+    expect(receiptDateToIso("28-06-2026")).toBe("2026-06-28");
+  });
+
+  it("never guesses a month/day swap on a shape it does not recognise", () => {
+    expect(receiptDateToIso("Jun 28 2026")).toBe("");
+    expect(receiptDateToIso(null)).toBe("");
+  });
+});
+
+describe("ocrResultToPrefill — OCR only ever prefills the form's own fields", () => {
+  it("maps amount_paise to rupees, gstin and the ISO date", () => {
+    expect(ocrResultToPrefill({ amount_paise: 123456, gstin: "27AAAAA0000A1Z5", date: "28/06/2026" }))
+      .toEqual({ amount: "1234.56", vendor_gstin: "27AAAAA0000A1Z5", expense_date: "2026-06-28" });
+  });
+
+  it("a genuine zero amount still prefills (not treated as 'nothing found')", () => {
+    expect(ocrResultToPrefill({ amount_paise: 0, gstin: null, date: null })).toEqual({ amount: "0" });
+  });
+
+  it("omits any field OCR could not read rather than prefilling a guess", () => {
+    expect(ocrResultToPrefill({ amount_paise: null, gstin: null, date: null })).toEqual({});
+  });
+});
+
 describe("deadlineWhen — the 'when' half of the alert grammar", () => {
   const base: Deadline = { domain: "gst", form_name: "GSTR-3B", due_date: "2026-07-20", label: "T-7" };
 
@@ -117,5 +235,135 @@ describe("deadlineWhen — the 'when' half of the alert grammar", () => {
     const w = deadlineWhen({ ...base, label: "OVERDUE" });
     expect(w.overdue).toBe(true);
     expect(w.text).toBe("overdue — was due 2026-07-20");
+  });
+});
+
+// ── T11 field-level RBAC: a masked domain figure is a visible lock, never a false badge ──────
+// The server (app.core.landing.mask_field) stripped the value; the SPA must state the
+// restriction with its reason — not render a blank slot, and not route the shape through
+// VerifiedNumber (whose honestState would show a false ✕ on a value that exists server-side).
+
+describe("FigureGrid — T11 restricted figures render the lock chip with the server's reason", () => {
+  const masked = {
+    restricted: true as const,
+    reason: "requires salary_detail clearance",
+    key: "monthly_net_paise",
+    label: "Monthly net paise",
+  };
+
+  it("renders the label, 'restricted', and the reason; no badge chip", () => {
+    const html = renderToStaticMarkup(
+      createElement(FigureGrid, { figures: [masked], mahsaUp: true, asOf: "2026-07-22" }),
+    );
+    expect(html).toContain("Monthly net paise");
+    expect(html).toContain("restricted");
+    expect(html).toContain("requires salary_detail clearance");
+    // no verification chip on a value this role cannot see
+    expect(html).not.toContain("recomputed");
+    expect(html).not.toContain("not yet sealed");
+  });
+
+  it("renders unmasked siblings normally alongside a masked figure", () => {
+    const ok: Figure = {
+      key: "total_gross",
+      label: "Total gross",
+      value: "₹99,000",
+      raw: 9_900_000,
+      state: "verified",
+    };
+    const html = renderToStaticMarkup(
+      createElement(FigureGrid, {
+        figures: [masked, ok],
+        mahsaUp: true,
+        asOf: "2026-07-22",
+        stale: false,
+      }),
+    );
+    expect(html).toContain("₹99,000");
+    expect(html).toContain("recomputed"); // the sibling keeps its honest ✓
+    expect(html).toContain("requires salary_detail clearance");
+  });
+});
+
+// ── r:health-wiring: the real `Domain()` component, not just FigureGrid's own prop-forwarding ──
+// The FigureGrid describe block above pins FigureGrid's own forwarding of a `stale` prop it is
+// handed directly — it never calls `Domain()`, so it could not have caught (and did not catch)
+// `Domain()` computing `fresh.stale` and then hard-coding `stale={false}` (or dropping it) on the
+// happy-path `<FigureGrid ... stale={stale} />` call inside `DomainBody`.
+
+function health(over: Partial<FreshnessData["overall"]> = {}): FreshnessData {
+  return {
+    as_of: "2026-07-22",
+    sources: [{
+      key: "gst_filings",
+      label: "GST filings",
+      last_updated: "2026-07-13",
+      age_days: 9,
+      threshold_days: 2,
+      stale: true,
+      synced: true,
+      note: "past its 2-day freshness limit",
+    }],
+    overall: {
+      status: "fresh",
+      healthy: true,
+      headline: "",
+      worst_age_days: 0,
+      never_synced: [],
+      stale: [],
+      ...over,
+    },
+  };
+}
+
+function domainData(): DomainData {
+  return {
+    domain: "gst",
+    as_of: "2026-07-22",
+    mahsa_up: true,
+    mahsa_down_message: null,
+    health: null,
+    figures: [{ key: "gst_payable", label: "GST payable", value: "₹1,000", raw: 1_00_000, state: "verified" }],
+    deadlines: [],
+    actions: [],
+  };
+}
+
+/** Pre-seeds BOTH queries `Domain()` reads so the very first (synchronous) render already
+ *  reflects the steady state — matching Today.test.ts's wiring-test approach. */
+function renderDomain(healthData: FreshnessData) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  qc.setQueryData(["domain", "gst"], domainData());
+  qc.setQueryData(FRESHNESS_QUERY_KEY, healthData);
+  return renderToStaticMarkup(
+    createElement(
+      QueryClientProvider,
+      { client: qc },
+      createElement(
+        MemoryRouter,
+        { initialEntries: ["/d/gst"] },
+        createElement(
+          Routes,
+          null,
+          createElement(Route, { path: "/d/:domain", element: createElement(Domain) }),
+        ),
+      ),
+    ),
+  );
+}
+
+describe("Domain() — the real wiring: booksFreshness() must actually reach the rendered figure grid", () => {
+  it("downgrades the ✓ when the live /api/health/connections payload is stale", () => {
+    // THE mutation this guards, that the FigureGrid-only tests above cannot: if Domain()/
+    // DomainBody stops passing the real `stale` through to FigureGrid, this figure keeps reading
+    // ✓ though the live health check says its source is stale.
+    const html = renderDomain(health({ stale: ["gst_filings"] }));
+    expect(html).toContain("Downgraded from ✓");
+  });
+
+  it("keeps a plain ✓ when the live health payload says every source is current", () => {
+    const html = renderDomain(health());
+    expect(html).toContain("recomputed"); // the ✓ chip label
+    expect(html).not.toContain("Downgraded from ✓");
   });
 });

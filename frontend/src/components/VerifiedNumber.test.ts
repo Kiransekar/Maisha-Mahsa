@@ -38,3 +38,44 @@ describe("money rendering", () => {
     expect(inrOrPending(0)).toBe("₹0");
   });
 });
+
+// ── T11 field-level RBAC: the lock chip and its guard ────────────────────────
+// The server strips a sensitive value and sends {restricted: true, reason} instead
+// (app/core/landing.mask_field). The chip must make that VISIBLE — a blank or missing cell
+// is the hidden-not-absent failure the WS7 contract forbids. renderToStaticMarkup is a real
+// React render with no jsdom (same pattern as BankCsvImport.test.tsx; no new dependency).
+
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { isRestricted, LockChip } from "./VerifiedNumber";
+
+describe("LockChip — a restricted field is stated, with its reason, never blank", () => {
+  it("renders 'restricted' and the server's reason verbatim", () => {
+    const html = renderToStaticMarkup(
+      createElement(LockChip, { reason: "requires salary_detail clearance" }),
+    );
+    expect(html).toContain("restricted");
+    expect(html).toContain("requires salary_detail clearance");
+  });
+
+  it("never renders a ₹ or a verification glyph — a lock is not a badge state", () => {
+    // Kills: routing a restricted field through VerifiedNumber (which would show ✕/◐ and an
+    // amount slot) instead of the lock chip.
+    const html = renderToStaticMarkup(createElement(LockChip, { reason: "r" }));
+    expect(html).not.toContain("₹");
+    expect(html).not.toContain("✓");
+    expect(html).not.toContain("◐");
+    expect(html).not.toContain("✕");
+  });
+});
+
+describe("isRestricted — guards the exact server shape, nothing else", () => {
+  it("accepts only restricted === true objects", () => {
+    expect(isRestricted({ restricted: true, reason: "x" })).toBe(true);
+    expect(isRestricted({ restricted: false, reason: "x" })).toBe(false);
+    expect(isRestricted({ restricted: "true", reason: "x" })).toBe(false);
+    expect(isRestricted(1234567)).toBe(false);
+    expect(isRestricted(null)).toBe(false);
+    expect(isRestricted(undefined)).toBe(false);
+  });
+});

@@ -88,3 +88,46 @@ describe("defaultMonth — YYYY-MM of the given date", () => {
     expect(defaultMonth(new Date(2026, 11, 31))).toBe("2026-12");
   });
 });
+
+// ── T11: a masked per-employee figure renders as a lock, and its value cannot leak ──────────
+// (it can't leak — the server never sent it — but this locks the RENDER: a restricted figure
+// must show the lock chip with the reason, not a blank card and not a badge.)
+
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { FigureCard } from "./PayrollRun";
+import type { RestrictedField } from "../components/VerifiedNumber";
+
+describe("FigureCard — T11 restricted figures are visible locks, never blanks", () => {
+  const masked: RestrictedField = {
+    restricted: true,
+    reason: "requires salary_detail clearance",
+    target: "emp1.net_pay",
+    label: "Net pay",
+  };
+
+  it("renders the label, 'restricted', and the reason for a masked figure", () => {
+    const html = renderToStaticMarkup(createElement(FigureCard, { f: masked, stale: false }));
+    expect(html).toContain("Net pay");
+    expect(html).toContain("restricted");
+    expect(html).toContain("requires salary_detail clearance");
+    // no amount slot, no badge — a lock is not a verification state
+    expect(html).not.toContain("₹");
+    expect(html).not.toContain("recomputed");
+  });
+
+  it("still renders a normal server figure as the badged VerifiedNumber", () => {
+    const html = renderToStaticMarkup(createElement(FigureCard, { f: fig(), stale: false }));
+    expect(html).toContain(inr(1_800_00));
+    expect(html).toContain("recomputed"); // the ✓ chip label
+    expect(html).not.toContain("restricted");
+  });
+
+  it("labels a masked figure without a label honestly, never an empty heading", () => {
+    const { label: _drop, ...noLabel } = masked;
+    const html = renderToStaticMarkup(
+      createElement(FigureCard, { f: noLabel as RestrictedField, stale: false }),
+    );
+    expect(html).toContain("Restricted figure");
+  });
+});

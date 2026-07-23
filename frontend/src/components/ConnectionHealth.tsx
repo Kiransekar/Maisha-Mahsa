@@ -107,8 +107,100 @@ function age(s: SourceFreshness): string {
   return `${s.age_days} day(s) old`;
 }
 
-export function ConnectionHealth() {
+/**
+ * P1-6 — the Shell-level strip. Mounted once in Shell.tsx so it is visible on every screen,
+ * reusing the SAME useConnectionHealth() hook Approvals already wires (react-query dedupes by
+ * FRESHNESS_QUERY_KEY, so this costs no second request on screens that also read health
+ * themselves). Quiet — renders nothing — while every source is healthy; that silence is
+ * deliberate, not a gap: chrome with nothing to say is its own kind of noise (T2).
+ */
+export function ConnectionHealthStrip() {
   const { data, isLoading, error, refetch } = useConnectionHealth();
+  if (healthStripQuiet(data, error, isLoading)) return null;
+  return <HealthStripBody data={data} error={error} refetch={refetch} />;
+}
+
+/** Pure gate, tested directly: quiet only once we have a payload and it says healthy, or we are
+ *  still on the very first load and have not learned anything yet. A failed health check is
+ *  NEVER quiet — "we could not check" must not read as "all clear" (anti-pattern #14). */
+export function healthStripQuiet(
+  data: FreshnessData | undefined,
+  error: unknown,
+  isLoading: boolean,
+): boolean {
+  if (error) return false;
+  if (!data) return isLoading;
+  return data.overall.healthy;
+}
+
+/** The strip's own content, shown only once `healthStripQuiet` says it should be. A native
+ *  <details> is the "detail popover" (ladder rung 4 — no dialog/portal dependency for this),
+ *  and it holds the SAME `ConnectionHealthPanel` rendered standalone by `ConnectionHealth()`
+ *  below, fed the data already fetched by the strip's own hook call — no second query, and no
+ *  react-query context required to render this in isolation (see ConnectionHealth.test.ts). */
+export function HealthStripBody({
+  data,
+  error,
+  refetch,
+}: {
+  data?: FreshnessData;
+  error: unknown;
+  refetch: () => void;
+}) {
+  const broken = !data;
+  const headline = broken
+    ? "We could not check whether your data sources are up to date."
+    : (data.overall.headline ?? "Some data sources need attention.");
+  const hue = broken ? "var(--color-verify-unbacked)" : "var(--color-verify-pending)";
+
+  return (
+    <details
+      style={{
+        border: `1px solid ${hue}`,
+        background: "var(--color-surface-sunk)",
+        borderRadius: 8,
+        padding: "8px 12px",
+        marginBottom: 16,
+        fontSize: 12,
+      }}
+    >
+      <summary
+        style={{
+          cursor: "pointer",
+          color: "var(--color-ink)",
+          listStyle: "none",
+          display: "flex",
+          gap: 8,
+          alignItems: "baseline",
+        }}
+      >
+        <span aria-hidden="true" style={{ color: hue }}>
+          {broken ? "✕" : "◐"}
+        </span>
+        <span>{headline}</span>
+        <span style={{ color: "var(--color-ink-faint)", marginLeft: "auto" }}>details</span>
+      </summary>
+      <div style={{ marginTop: 10 }}>
+        <ConnectionHealthPanel data={data} isLoading={false} error={error} refetch={refetch} />
+      </div>
+    </details>
+  );
+}
+
+/** The full detail panel, presentational — takes the query result as props instead of fetching
+ *  it, so it can be mounted either standalone (`ConnectionHealth()` below, wired to its own live
+ *  query) or fed data another caller already has (the Shell strip's popover, above). */
+export function ConnectionHealthPanel({
+  data,
+  isLoading,
+  error,
+  refetch,
+}: {
+  data?: FreshnessData;
+  isLoading: boolean;
+  error: unknown;
+  refetch: () => void;
+}) {
   const traceId = useTraceId("health");
 
   if (isLoading && !data)
@@ -171,6 +263,16 @@ export function ConnectionHealth() {
       <Note>{data.overall.headline}</Note>
       <Strip data={data} />
     </Panel>
+  );
+}
+
+/** Standalone wiring — a live query feeding `ConnectionHealthPanel`. Kept for any screen that
+ *  wants the full panel on its own (nothing currently does; the Shell strip's popover uses
+ *  `ConnectionHealthPanel` directly instead, fed the data it already fetched). */
+export function ConnectionHealth() {
+  const { data, isLoading, error, refetch } = useConnectionHealth();
+  return (
+    <ConnectionHealthPanel data={data} isLoading={isLoading} error={error} refetch={refetch} />
   );
 }
 

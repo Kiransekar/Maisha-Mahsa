@@ -3,8 +3,12 @@
 // the input that drives it, including the two cases that fail OPEN if written naively —
 // a never-synced source, and a missing/failed freshness payload.
 
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import {
+  HealthStripBody,
+  healthStripQuiet,
   isSourceStale,
   sourceState,
   stateForSource,
@@ -113,5 +117,54 @@ describe("stateForSource — the freshness-driven downgrade", () => {
     const d = data([source({ key: "bank_feeds" })]);
     expect(stateForSource("unbacked", d, "bank_feeds")).toBe("unbacked");
     expect(stateForSource("unbacked", undefined, "bank_feeds")).toBe("unbacked");
+  });
+});
+
+// ── P1-6: the Shell-level strip ──────────────────────────────────────────────
+
+describe("healthStripQuiet — the strip stays out of the way exactly when it should", () => {
+  it("is quiet once we have a payload and the server says everything is healthy", () => {
+    const d = data([source({ key: "bank_feeds" })]);
+    d.overall.healthy = true;
+    expect(healthStripQuiet(d, null, false)).toBe(true);
+  });
+
+  it("is NOT quiet when the server's own roll-up says unhealthy", () => {
+    const d = data([source({ key: "bank_feeds", stale: true })]);
+    d.overall.healthy = false;
+    expect(healthStripQuiet(d, null, false)).toBe(false);
+  });
+
+  it("is NOT quiet when the health check itself failed — broken must not read as fine", () => {
+    expect(healthStripQuiet(undefined, new Error("network"), false)).toBe(false);
+  });
+
+  it("stays quiet on the very first load, before anything is known either way", () => {
+    expect(healthStripQuiet(undefined, null, true)).toBe(true);
+  });
+
+  it("is NOT quiet once loading settles with no payload and no error either", () => {
+    // The query settled but sent nothing back — that is not a clean bill of health.
+    expect(healthStripQuiet(undefined, null, false)).toBe(false);
+  });
+});
+
+describe("HealthStripBody — the strip's content, once it decides to show", () => {
+  it("states the server's own headline for a stale/unhealthy payload", () => {
+    const d = data([source({ key: "bank_feeds", stale: true, age_days: 9 })]);
+    d.overall.healthy = false;
+    d.overall.headline = "Bank feeds is 9 days old.";
+    const html = renderToStaticMarkup(
+      createElement(HealthStripBody, { data: d, error: null, refetch: () => {} }),
+    );
+    expect(html).toContain("Bank feeds is 9 days old.");
+  });
+
+  it("states the check itself failed, distinctly, when there is no payload at all", () => {
+    const html = renderToStaticMarkup(
+      createElement(HealthStripBody, { data: undefined, error: new Error("x"), refetch: () => {} }),
+    );
+    expect(html).toContain("could not check");
+    expect(html).not.toContain("undefined");
   });
 });

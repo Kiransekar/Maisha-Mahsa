@@ -142,6 +142,27 @@ def invite_ca(
     return membership
 
 
+def list_pending(session: Session, *, org_id: str) -> list[dict[str, Any]]:
+    """Pending CA invites for this org (owner-facing settings surface, P1-3). No capability
+    check here — the router gates the route itself (manage_users), same split as ``invite_ca``
+    gating in-function: this helper is a plain query, reused freely once a caller is already
+    past the gate."""
+    rows = session.execute(
+        select(Membership.id, Membership.created_at, AppUser.email)
+        .join(AppUser, AppUser.id == Membership.user_id)
+        .where(
+            Membership.org_id == org_id,
+            Membership.role == "ca",
+            Membership.status == "pending",
+        )
+        .order_by(Membership.created_at)
+    ).all()
+    return [
+        {"membership_id": r.id, "email": r.email, "invited_at": r.created_at.isoformat()}
+        for r in rows
+    ]
+
+
 def accept_ca(
     session: Session, *, principal: Principal, timestamp: str
 ) -> tuple[Membership, bool]:

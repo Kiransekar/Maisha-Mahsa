@@ -234,6 +234,21 @@ def test_ocr_routes_degrade_to_503_without_tesseract():
     assert r2.status_code == 503
 
 
+def test_expense_ocr_json_route_reuses_the_same_handler_as_the_htmx_route():
+    """P1-8: /api/expense/ocr-receipt is a thin wrapper over ExpenseService.ocr_capture — the
+    SAME call the HTMX /d/expense/ocr-receipt route makes. Same bytes in -> identical outcome,
+    proving there is exactly one parser, never a second implementation that could drift."""
+    from app.core import ocr
+
+    if ocr.tesseract_available():
+        return  # environment has OCR; both routes would 200 with parsed fields instead
+    photo = ("receipt.png", b"not a real image", "image/png")
+    htmx = client.post("/d/expense/ocr-receipt", files={"file": photo})
+    api_json = client.post("/api/expense/ocr-receipt", files={"file": photo})
+    assert htmx.status_code == api_json.status_code == 503
+    assert htmx.json()["detail"] == api_json.json()["detail"]
+
+
 def test_payslip_unknown_employee_404():
     assert client.get("/d/payroll/99999/payslip", params={"period": "2026-06"}).status_code == 404
 

@@ -197,11 +197,13 @@ describe("booksFreshness — a ✓ only survives on inputs we can confirm are cu
     expect(f.why).toBeNull();
   });
 
-  it("treats a MISSING health payload as stale, never as all-clear", () => {
-    // Invariant 1: unknown => not verified. One failed health request must not silently restore ✓
-    // on the screen where money gets committed.
+  it("treats a MISSING health payload as unknown, never as all-clear and never as a false 'stale' claim", () => {
+    // Invariant 1: unknown => not verified — but invariant 3 (never state a cause you don't know)
+    // means the check-failed case must say "unknown", not "stale". One failed health request must
+    // not silently restore ✓ on the screen where money gets committed, but it also must not tell
+    // the user a fact ("stale") we cannot back.
     const f = booksFreshness(undefined, 0);
-    expect(f.stale).toBe(true);
+    expect(f.stale).toBe("unknown");
     expect(f.why).toBeTruthy();
   });
 
@@ -228,7 +230,9 @@ describe("booksFreshness — a ✓ only survives on inputs we can confirm are cu
   it("actually downgrades a verified chip — the wiring, not just the boolean", () => {
     // Guards the composition the screen relies on: if booksFreshness ever returned stale=false
     // for an unknown payload, this ✓ would survive and the whole fix would be decorative.
+    // "unknown" must downgrade exactly as hard as a known `true` does — only the copy differs.
     const stale = booksFreshness(undefined, 0).stale;
+    expect(stale).toBe("unknown");
     expect(effectiveState("verified", stale)).toBe("honest_pending");
     expect(effectiveState("verified", booksFreshness(health(), 0).stale)).toBe("verified");
   });

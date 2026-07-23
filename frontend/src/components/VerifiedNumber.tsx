@@ -183,6 +183,48 @@ function Block({ title, children }: { title: string; children: React.ReactNode }
   );
 }
 
+// ── T11 field-level RBAC: restricted fields ──────────────────────────────────
+// The server strips a sensitive value at its serialization boundary and sends this shape
+// instead (app/core/landing.mask_field). The value never reached the browser; this component
+// makes the restriction VISIBLE — hidden-not-absent violates the WS7 contract.
+
+export type RestrictedField = {
+  restricted: true;
+  reason: string;
+  target?: string;
+  key?: string;
+  label?: string;
+};
+
+/** Type guard for the exact server shape — anything else renders as a normal payload. */
+export function isRestricted(x: unknown): x is RestrictedField {
+  return (
+    typeof x === "object" && x !== null && (x as { restricted?: unknown }).restricted === true
+  );
+}
+
+/** The lock chip: states that a field exists and why this role cannot see it. Never blank. */
+export function LockChip({ reason }: { reason: string }) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 6,
+        border: "1px solid var(--color-border-strong)",
+        borderRadius: 4,
+        padding: "2px 8px",
+        fontSize: 12,
+        color: "var(--color-ink-muted)",
+        whiteSpace: "nowrap",
+      }}
+      title="This field is restricted for your role. The value was removed on the server — it was never sent to this browser."
+    >
+      <span aria-hidden="true">🔒</span> restricted — {reason}
+    </span>
+  );
+}
+
 /** A labelled figure, its verification state, and its full working. */
 export function VerifiedNumber({
   label,

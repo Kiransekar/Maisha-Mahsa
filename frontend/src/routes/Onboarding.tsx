@@ -24,7 +24,12 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { useTraceId } from "../lib/trace";
-import { VerifiedNumber, type VerifyState } from "../components/VerifiedNumber";
+import {
+  VerifiedNumber,
+  isRestricted,
+  type RestrictedField,
+  type VerifyState,
+} from "../components/VerifiedNumber";
 import { ErrorState } from "../components/ErrorState";
 import { BankCsvImport } from "../components/BankCsvImport";
 import { Header, H2, Empty, MahsaDownBanner } from "./Today";
@@ -65,11 +70,16 @@ export function rupeesToPaise(raw: string): number | null {
 }
 
 /** The payoff figure: the first one Mahsa has actually recomputed, else the first honest one —
- * never an arbitrary pick that happens to look verified. */
-export function pickFirstFigure(figures: Figure[], mahsaUp: boolean): Figure | null {
-  if (figures.length === 0) return null;
-  const verified = figures.find((f) => honestState(f.state, mahsaUp) === "verified");
-  return verified ?? figures[0];
+ * never an arbitrary pick that happens to look verified. T11: a RestrictedField has no value —
+ * it can never be the payoff figure, so restricted entries are skipped, not rendered blank. */
+export function pickFirstFigure(
+  figures: (Figure | RestrictedField)[],
+  mahsaUp: boolean,
+): Figure | null {
+  const visible = figures.filter((f): f is Figure => !isRestricted(f));
+  if (visible.length === 0) return null;
+  const verified = visible.find((f) => honestState(f.state, mahsaUp) === "verified");
+  return verified ?? visible[0];
 }
 
 /** Step 3's heading must describe the figure that is ACTUALLY on screen. `pickFirstFigure` falls

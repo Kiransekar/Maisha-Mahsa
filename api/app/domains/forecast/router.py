@@ -7,10 +7,12 @@ from datetime import UTC, date, datetime
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.core.landing import mask_field
 from app.core.loop import run_loop
 from app.core.mahsa_client import MahsaClient
+from app.core.principal import Principal
 from app.core.rbac import Capability
-from app.core.rbac_deps import require
+from app.core.rbac_deps import require, resolve_principal
 from app.db.session import get_session
 from app.deps import get_mahsa
 from app.domains.forecast.schemas import (
@@ -49,8 +51,15 @@ def scenario(body: ScenarioInput) -> dict:
 
 
 @router.post("/unit-economics")
-def unit_economics(body: UnitEconomicsInput) -> dict:
-    return _service.unit_economics(**body.model_dump())
+def unit_economics(
+    body: UnitEconomicsInput, principal: Principal = Depends(resolve_principal)
+) -> dict:
+    # T11: margin/unit-economics fields (cac/ltv/payback/ratio) are confidential — masked at
+    # the serialization boundary for any role below that clearance (today: Investor, whose
+    # report links must never carry unit economics; the read gate already 403s them wholesale,
+    # so this is the field-level backstop the WS7 contract's T11 row requires).
+    result = _service.unit_economics(**body.model_dump())
+    return {k: mask_field(principal.role, k, v) for k, v in result.items()}
 
 
 @router.post("/forecasts", dependencies=[Depends(require(Capability.WRITE))])

@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom";
 import type { ReactNode } from "react";
+import { ConnectionHealthStrip } from "./ConnectionHealth";
 
 // Ordered by the roles in app/core/landing.py: Owner lands on Today, Accountant on the Exception
 // Inbox, CA on the Audit Room. Stable ordering is part of the trust contract (UX research T2 —
@@ -14,6 +15,10 @@ const NAV = [
   // T2: appended, never reshuffled.
   { to: "/file", label: "File returns" },
   { to: "/payroll-run", label: "Payroll run" },
+  { to: "/ask", label: "Ask Maisha" },
+  { to: "/statements", label: "Statements" },
+  { to: "/settings", label: "Settings" },
+  { to: "/cfo", label: "CFO strategy" },
 ];
 
 // The app shell on the brand system (docs/BRAND_THEME.md): warm paper ground, hairline borders
@@ -59,7 +64,12 @@ export function Shell({ children }: { children: ReactNode }) {
           aren't say so.
         </div>
       </aside>
-      <main className="shell-main">{children}</main>
+      <main className="shell-main">
+        {/* P1-6: visible on every screen once a source goes stale/broken, quiet otherwise —
+            reuses the same hook Approvals wires, never a second staleness rule. */}
+        <ConnectionHealthStrip />
+        {children}
+      </main>
     </div>
   );
 }

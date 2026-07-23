@@ -65,8 +65,10 @@ from app.web.api_bulk import router as bulk_api_router
 from app.web.api_domains import router as domains_api_router
 from app.web.api_filings import router as filings_api_router
 from app.web.api_health import router as health_api_router
+from app.web.api_investor import router as investor_api_router
 from app.web.api_payroll import router as payroll_api_router
 from app.web.api_router import router as spa_api_router
+from app.web.api_statements import router as statements_api_router
 from app.web.charts import sparkline
 from app.web.exceptions_router import router as inbox_router
 from app.web.format import fact_rows, humanize
@@ -263,6 +265,8 @@ def create_app() -> FastAPI:
     app.include_router(health_api_router)
     app.include_router(domains_api_router)
     app.include_router(actions_api_router)
+    app.include_router(statements_api_router)
+    app.include_router(investor_api_router)
 
     registry = build_registry()
 

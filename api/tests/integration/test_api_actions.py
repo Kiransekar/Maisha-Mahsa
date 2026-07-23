@@ -165,6 +165,40 @@ def test_money_field_previews_exact_paise_and_is_never_hardcoded_verified(sessio
     assert paise["state"] == "honest_pending"
 
 
+def test_expense_preview_surfaces_the_policy_limit_warning(session):
+    """P1-8: the ActionDrawer's preview panel renders `will_create` verbatim — so the existing
+    per-category policy check (``expense_calc.check_policy``, already enforced by EXPENSE-001 on
+    the snapshot) must show up as text IN THE PREVIEW, not just silently on the committed row."""
+    client = _client(session)
+    over_limit = client.post(
+        "/api/domains/expense/actions/submit-claim/preview",
+        json={
+            "values": {
+                "claim_date": "2026-07-01",
+                "expense_date": "2026-06-28",
+                "category": "meals",
+                "amount": "3000",  # DEFAULT_POLICY["meals"] == 2000 -> ₹1,000 over
+            }
+        },
+    ).json()
+    assert "WARNING" in over_limit["will_create"]
+    assert "policy limit" in over_limit["will_create"]
+    assert "₹1,000" in over_limit["will_create"]  # the exact excess, not just a flag
+
+    within_limit = client.post(
+        "/api/domains/expense/actions/submit-claim/preview",
+        json={
+            "values": {
+                "claim_date": "2026-07-01",
+                "expense_date": "2026-06-28",
+                "category": "meals",
+                "amount": "1500",
+            }
+        },
+    ).json()
+    assert "WARNING" not in within_limit["will_create"]
+
+
 def test_validation_errors_are_named_and_mutate_nothing(session):
     client = _client(session)
     # missing required field

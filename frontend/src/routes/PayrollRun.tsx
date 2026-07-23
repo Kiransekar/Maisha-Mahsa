@@ -17,7 +17,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, apiBlob, ApiError } from "../lib/api";
 import {
   effectiveState,
+  isRestricted,
+  LockChip,
   VerifiedNumber,
+  type RestrictedField,
   type VerifyState,
   type Working,
 } from "../components/VerifiedNumber";
@@ -35,7 +38,8 @@ export type OverviewEmployee = {
   name: string;
   state_code: string | null;
   date_of_joining: string;
-  monthly_net_paise: number | null;
+  // T11: masked server-side to a RestrictedField for roles without salary_detail clearance.
+  monthly_net_paise: number | null | RestrictedField;
   has_salary_structure: boolean;
 };
 
@@ -66,7 +70,8 @@ export type RunEmployee = {
   employee_id: number;
   employee_code: string;
   name: string;
-  figures: ServerFigure[];
+  // T11: each per-employee figure may arrive masked (the value never left the server).
+  figures: (ServerFigure | RestrictedField)[];
 };
 
 export type RunPreview = {
@@ -137,6 +142,48 @@ export function runConfirmDisabledReason(
 /** "YYYY-MM" for the month `now` sits in — the default a payroll run is prepared for. */
 export function defaultMonth(now: Date): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** One figure slot: a T11-masked figure renders as an explicit lock chip (label + reason —
+ *  never blank, never absent), everything else as the badged VerifiedNumber. */
+export function FigureCard({
+  f,
+  stale,
+}: {
+  f: ServerFigure | RestrictedField;
+  stale: boolean;
+}) {
+  if (isRestricted(f)) {
+    return (
+      <div
+        style={{
+          background: "var(--color-surface)",
+          border: "1px solid var(--color-border)",
+          borderRadius: 8,
+          padding: "14px 16px",
+          minWidth: 220,
+          flex: "1 1 220px",
+        }}
+      >
+        <div style={{ color: "var(--color-ink-muted)", fontSize: 12 }}>
+          {f.label ?? "Restricted figure"}
+        </div>
+        <div style={{ marginTop: 8 }}>
+          <LockChip reason={f.reason} />
+        </div>
+      </div>
+    );
+  }
+  const p = figureProps(f, stale);
+  return (
+    <VerifiedNumber
+      label={p.label}
+      value={p.value}
+      state={p.state}
+      note={p.note}
+      working={p.working}
+    />
+  );
 }
 
 // ── screen ───────────────────────────────────────────────────────────────────
@@ -233,8 +280,13 @@ export function PayrollRun() {
                   <span className="tnum">{e.date_of_joining}</span>
                 </td>
                 <td style={{ ...td(), textAlign: "right" }}>
-                  {/* Invariant 2: no structure means UNKNOWN — never ₹0. */}
-                  <span className="tnum">{amountText(e.monthly_net_paise)}</span>
+                  {/* T11: a masked salary is a visible lock, never a blank cell.
+                      Invariant 2: no structure means UNKNOWN — never ₹0. */}
+                  {isRestricted(e.monthly_net_paise) ? (
+                    <LockChip reason={e.monthly_net_paise.reason} />
+                  ) : (
+                    <span className="tnum">{amountText(e.monthly_net_paise)}</span>
+                  )}
                 </td>
               </tr>
             ))}
@@ -265,19 +317,9 @@ function LastRunCard({ run }: { run: LastRun }) {
         )}
       </div>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 10 }}>
-        {run.figures.map((f) => {
-          const p = figureProps(f, false);
-          return (
-            <VerifiedNumber
-              key={f.target}
-              label={p.label}
-              value={p.value}
-              state={p.state}
-              note={p.note}
-              working={p.working}
-            />
-          );
-        })}
+        {run.figures.map((f) => (
+          <FigureCard key={f.target} f={f} stale={false} />
+        ))}
       </div>
       {/* Statutory artifacts only once the run exists; drafts still print (a payslip is not a
           disbursement), and the status line above says plainly whether it was released. */}
@@ -457,19 +499,9 @@ function PreviewBlock({
             {e.name} <span className="ident" style={{ fontWeight: 400 }}>{e.employee_code}</span>
           </div>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            {e.figures.map((f) => {
-              const p = figureProps(f, stale);
-              return (
-                <VerifiedNumber
-                  key={f.target}
-                  label={p.label}
-                  value={p.value}
-                  state={p.state}
-                  note={p.note}
-                  working={p.working}
-                />
-              );
-            })}
+            {e.figures.map((f, i) => (
+              <FigureCard key={f.target ?? `${e.employee_id}-${i}`} f={f} stale={stale} />
+            ))}
           </div>
         </div>
       ))}
@@ -478,19 +510,9 @@ function PreviewBlock({
         <>
           <H2>Totals</H2>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            {preview.totals.map((f) => {
-              const p = figureProps(f, stale);
-              return (
-                <VerifiedNumber
-                  key={f.target}
-                  label={p.label}
-                  value={p.value}
-                  state={p.state}
-                  note={p.note}
-                  working={p.working}
-                />
-              );
-            })}
+            {preview.totals.map((f) => (
+              <FigureCard key={f.target} f={f} stale={stale} />
+            ))}
           </div>
         </>
       )}

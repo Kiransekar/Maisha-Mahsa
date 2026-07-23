@@ -88,6 +88,14 @@ body {
 .shell-nav { display: flex; flex-direction: column; gap: 2px; }
 .shell-main { padding: 28px 32px; max-width: 1080px; min-width: 0; }
 
+/* P1-5: statements (and any screen) print as plain paper — the nav rail and on-screen
+   controls (tab bars, pickers, retry buttons) are screen chrome, not part of the record. */
+@media print {
+  .shell-aside, .no-print { display: none !important; }
+  .shell { grid-template-columns: 1fr; }
+  .shell-main { max-width: none; padding: 0; }
+}
+
 /* 360px pass (WS7.9): a fixed 220px rail plus 1fr content is the actual overflow source at
    phone widths — everything else in Today/Inbox/Approvals already wraps. Stack instead of
    shrinking a sidebar that has nowhere left to shrink to. */

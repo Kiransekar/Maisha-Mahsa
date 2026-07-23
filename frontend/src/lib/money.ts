@@ -17,3 +17,12 @@ export function inr(paise: number): string {
 export function inrOrPending(paise: number | null | undefined): string {
   return paise === null || paise === undefined ? "—" : inr(paise);
 }
+
+// Indian-grouped plain counts (share counts, headcounts) — NOT money, no ₹. Lives here so the
+// money-format grep-gate's invariant holds: every en-IN grouping in the SPA has one home.
+const COUNT_FMT = new Intl.NumberFormat("en-IN");
+
+/** Integer count -> "12,34,567" (Indian grouping, no currency symbol). */
+export function countIn(n: number): string {
+  return COUNT_FMT.format(n);
+}

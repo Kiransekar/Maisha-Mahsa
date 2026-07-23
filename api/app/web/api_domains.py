@@ -25,19 +25,23 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.core import ca_seat, ca_threads
+from app.core.ask import answer_query
 from app.core.audit import verify_chain
 from app.core.audit_pack import build_audit_pack, pack_to_csv_zip
 from app.core.audit_store import load_chain
 from app.core.cfo import DomainHealth, collect_health
 from app.core.entitlement_deps import SessionContext, get_session_context
+from app.core.landing import mask_figures
 from app.core.mahsa_client import MahsaClient, MahsaError
 from app.core.mahsa_coverage import badge_state
 from app.core.overview import collect_kpis, upcoming_deadlines
 from app.core.pdf import audit_pack_pdf
 from app.core.principal import Principal
-from app.core.rbac import Capability
+from app.core.rbac import Capability, Role, can
 from app.core.rbac_deps import require, resolve_principal
+from app.core.verify import FigureVerdict
 from app.db.session import get_session
 from app.deps import get_mahsa
 from app.domains import build_registry
@@ -75,13 +79,16 @@ def _figure(key: str, value: Any) -> dict[str, Any]:
     }
 
 
-def _figures_for(session: Session, domain: str) -> list[dict[str, Any]]:
+def _figures_for(session: Session, domain: str, role: Role) -> list[dict[str, Any]]:
+    """Every figure list this module (and api_actions' after_figures) serializes leaves through
+    T11's ``mask_figures`` — ``role`` is a required positional so a call site that forgets it is
+    a loud TypeError, never a silently unmasked payload."""
     service = _registry.get(domain)
     if service is None:
         return []
     snapshot = _snapshot(service, session, _today())
     facts = enrich(snapshot)
-    return [_figure(k, v) for k, v in sorted(facts.items()) if k != "as_of"]
+    return mask_figures(role, [_figure(k, v) for k, v in sorted(facts.items()) if k != "as_of"])
 
 
 def _field_json(f: ActionField) -> dict[str, Any]:
@@ -114,6 +121,7 @@ def _health_row(domain: str, h: DomainHealth | None) -> dict[str, Any]:
 async def domains_json(
     db: Session = Depends(get_session),
     mahsa: MahsaClient = Depends(get_mahsa),
+    principal: Principal = Depends(resolve_principal),
 ) -> dict[str, Any]:
     """The five-hub overview: every domain's live health + honest coverage + the shared
     KPI strip and compliance calendar (direct DB reads, so they render even if Mahsa is down)."""
@@ -128,8 +136,9 @@ async def domains_json(
 
     domains = []
     for d in _registry.domains():
-        figures = _figures_for(db, d)
-        verified = sum(1 for f in figures if f["state"] == "verified")
+        figures = _figures_for(db, d, principal.role)
+        # a T11-masked figure has no "state" — it counts in total, never as verified
+        verified = sum(1 for f in figures if f.get("state") == "verified")
         domains.append(
             {
                 **_health_row(d, health_by_domain.get(d)),
@@ -152,6 +161,7 @@ async def domain_json(
     domain: str,
     db: Session = Depends(get_session),
     mahsa: MahsaClient = Depends(get_mahsa),
+    principal: Principal = Depends(resolve_principal),
 ) -> dict[str, Any]:
     """One domain's snapshot figures (each badged), its deadlines, and its available actions."""
     service = _registry.get(domain)
@@ -189,9 +199,64 @@ async def domain_json(
         "mahsa_up": mahsa_up,
         "mahsa_down_message": None if mahsa_up else MAHSA_DOWN,
         "health": health,
-        "figures": _figures_for(db, domain),
+        "figures": _figures_for(db, domain, principal.role),
         "deadlines": [e for e in upcoming_deadlines(db, as_of) if e.get("domain") == domain],
         "actions": actions,
+    }
+
+
+# --- P1-1 Ask Maisha (SPA twin of the HTMX /ask page) ----------------------------------------
+
+
+class AskBody(BaseModel):
+    q: str = Field(min_length=1)
+
+
+def _tri_state(verdict: FigureVerdict) -> str:
+    """Project a figure's FigureVerdict (the SAME object app.core.ask threads per figure) to
+    the SPA's tri-state string. Fail CLOSED (§0.4): only an explicit ``verified`` renders ✓;
+    ``honest_pending`` renders ◐; anything else — blocked, or a future state — is unbacked."""
+    if verdict.verified:
+        return "verified"
+    if verdict.honest_pending:
+        return "honest_pending"
+    return "unbacked"
+
+
+@router.post("/ask")
+async def ask_json(
+    body: AskBody,
+    db: Session = Depends(get_session),
+    mahsa: MahsaClient = Depends(get_mahsa),
+) -> dict[str, Any]:
+    """The Ask.tsx backend: the SAME ``app.core.ask.answer_query`` pipeline the HTMX /ask page
+    calls, verbatim — no forked logic, so a figure's verdict can never drift between the two
+    surfaces. This wrapper only projects the Answer view-model to JSON."""
+    answer = await answer_query(
+        db,
+        query=body.q,
+        registry=_registry,
+        settings=get_settings(),
+        as_of=_today(),
+        mahsa=mahsa,
+    )
+    return {
+        "query": answer.query,
+        "domain": answer.domain,
+        "narrative": answer.narrative,
+        "figures": [
+            {"label": f.label, "value": f.value, "state": _tri_state(f.verdict)}
+            for f in answer.figures
+        ],
+        "citations": [
+            {"rule_id": c.rule_id, "text": c.text, "citation": c.citation, "domain": c.domain}
+            for c in answer.citations
+        ],
+        "status": answer.status,
+        "requires_approval": answer.requires_approval,
+        "abstained": answer.abstained,
+        "mahsa_up": answer.mahsa_up,
+        "provenance": answer.provenance,
     }
 
 
@@ -283,10 +348,25 @@ def _known_domain(domain: str) -> str:
     return domain
 
 
-@router.get("/audit/threads", dependencies=[Depends(require(Capability.VIEW_AUDIT))])
-async def threads_json(db: Session = Depends(get_session)) -> dict[str, Any]:
-    """All CA query threads, newest first, each with its full sealed event history."""
-    return {"threads": [_thread_json(db, t) for t in ca_threads.list_threads(db)]}
+@router.get("/audit/threads")
+async def threads_json(
+    db: Session = Depends(get_session),
+    principal: Principal = Depends(require(Capability.VIEW_AUDIT)),
+) -> dict[str, Any]:
+    """All CA query threads, newest first, each with its full sealed event history — plus the
+    caller's OWN action capabilities, so the SPA renders enabled/disabled-with-reason from the
+    server's verdict, never from a client-side role guess (same `can_confirm` convention as
+    api_payroll/api_filings)."""
+    can_respond = can(principal.role, Capability.WRITE)
+    return {
+        "threads": [_thread_json(db, t) for t in ca_threads.list_threads(db)],
+        "can_respond": can_respond,
+        "respond_denied_reason": None if can_respond else (
+            "missing capability: write — responding attaches books-side evidence; "
+            "an Accountant or the Owner answers this query"
+        ),
+        "can_export": can(principal.role, Capability.EXPORT),
+    }
 
 
 @router.get("/audit/threads/{thread_id}", dependencies=[Depends(require(Capability.VIEW_AUDIT))])
@@ -411,6 +491,16 @@ async def ca_invite(
         "status": membership.status,
         "seat": "free_unlimited",
     }
+
+
+@router.get("/ca/pending")
+async def ca_pending(
+    db: Session = Depends(get_session),
+    principal: Principal = Depends(require(Capability.MANAGE_USERS)),
+) -> dict[str, Any]:
+    """Pending CA invites for the caller's org (Owner/Admin — same gate as the invite itself,
+    P1-3 settings surface)."""
+    return {"invites": ca_seat.list_pending(db, org_id=principal.org_id)}
 
 
 @router.post("/ca/accept")

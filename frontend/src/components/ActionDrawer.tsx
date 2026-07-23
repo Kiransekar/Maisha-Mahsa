@@ -65,6 +65,24 @@ export function initialValues(a: ActionSpec): Record<string, string> {
   );
 }
 
+/** P1-8 (receipt OCR) — a prefill overlaid on the blank form. Only schema-declared field names
+ *  survive the overlay, so a parsed field the action doesn't have (or a stray key) can never
+ *  reach the server: it is silently absent from the form, not silently written. Prefilled
+ *  values land in the SAME editable inputs as manual entry — nothing about the preview/commit
+ *  gate below changes for them. */
+export function mergedInitialValues(
+  a: ActionSpec,
+  prefill?: Record<string, string>,
+): Record<string, string> {
+  const base = initialValues(a);
+  if (!prefill) return base;
+  const merged = { ...base };
+  for (const f of a.fields) {
+    if (prefill[f.name]) merged[f.name] = prefill[f.name];
+  }
+  return merged;
+}
+
 /** Backend field type → native control. Unknown types fall to a plain text input, never a
  *  crash and never a guessed richer control. */
 export function controlType(type: string): "text" | "number" | "date" | "select" {
@@ -165,6 +183,7 @@ export function ActionDrawer({
   a,
   badge,
   onCommitted,
+  prefill,
 }: {
   domain: string;
   a: ActionSpec;
@@ -172,8 +191,15 @@ export function ActionDrawer({
    *  component cannot invent its own path to a ✓. */
   badge: (state: string) => VerifyState;
   onCommitted: () => void;
+  /** P1-8 — e.g. receipt-OCR output. Prefills matching fields but changes nothing about the
+   *  editable-form / preview-then-confirm contract; a caveat renders while any prefilled value
+   *  is still on screen unconfirmed. */
+  prefill?: Record<string, string>;
 }) {
-  const [phase, setPhase] = useState<DrawerPhase>({ step: "editing", values: initialValues(a) });
+  const [phase, setPhase] = useState<DrawerPhase>({
+    step: "editing",
+    values: mergedInitialValues(a, prefill),
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const traceId = useTraceId(`action-${domain}-${a.key}`);
@@ -279,6 +305,26 @@ export function ActionDrawer({
         </div>
       ) : (
         <div style={{ marginTop: 8, display: "grid", gap: 6 }}>
+          {phase.step === "editing" && prefill && Object.keys(prefill).length > 0 && (
+            <p
+              style={{
+                margin: "0 0 4px",
+                fontSize: 11,
+                color: "var(--color-accent)",
+                background: "var(--color-accent-sunk)",
+                border: "1px solid var(--color-border-strong)",
+                borderRadius: 4,
+                padding: "5px 8px",
+              }}
+            >
+              Parsed from receipt — check before submitting:{" "}
+              {a.fields
+                .filter((f) => prefill[f.name])
+                .map((f) => f.label)
+                .join(", ")}
+              . OCR is never authoritative — edit anything that looks wrong.
+            </p>
+          )}
           {a.fields.map((f, i) => (
             <label key={f.name} style={{ fontSize: 12, color: "var(--color-ink-muted)" }}>
               {f.label}
