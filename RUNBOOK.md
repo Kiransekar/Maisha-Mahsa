@@ -26,7 +26,10 @@ Bring up: `make dev` (local) or `docker compose -f infra/docker-compose.yml up -
    tokens), real `MAISHA_SMTP_*`, and `MAISHA_COMPANY_GSTIN`. The app **refuses to boot** in
    production without Better Auth or with the default session secret.
 2. Apply schema: `make migrate` (`alembic upgrade head`). Do **not** rely on auto-create in prod.
-3. (Optional) `make seed` only on a demo box — never on the real company DB.
+3. (Optional) `make seed` only on a demo box — never on the real company DB. Set
+   `MAISHA_SEED_ORG_ID` to the demo tenant's Better Auth organisation id first (default
+   `demo-org`): the seeded memory/audit-chain rows are org-scoped and render only for users
+   whose JWT `activeOrganizationId` matches.
 4. Start the stack; confirm `GET /health` shows `db: ok`, `mahsa: ok`.
 
 ## 2b. Deploy to a VPS (P7)

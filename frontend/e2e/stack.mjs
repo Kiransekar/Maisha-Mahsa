@@ -195,6 +195,9 @@ const apiEnv = {
   MAISHA_MAHSA_URL: `http://127.0.0.1:${MAHSA_PORT}`,
   MAISHA_BETTER_AUTH_URL: AUTH_BASE,
   MAISHA_ENVIRONMENT: "development",
+  // Must match the JWT's activeOrganizationId ("org-e2e"): the seed's memory/audit-chain rows
+  // are org-scoped and would be invisible to the signed-in E2E user under the default demo-org.
+  MAISHA_SEED_ORG_ID: "org-e2e",
 };
 
 authServer.listen(AUTH_PORT, "127.0.0.1");

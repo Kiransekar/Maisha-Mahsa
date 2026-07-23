@@ -71,7 +71,7 @@ Published, lookupable values. This is the bulk of the 300.
 - Interest and late-fee provisions: 234A/B/C, 234E, GST s.50 interest, GSTR-3B/1 late-fee and caps
 - GST rates, RCM list, ITC set-off order, QRMP/PMT-06 mechanics, composition rates
 - PF/EPS/ESI contribution rates, wage ceilings, admin charges
-- Gratuity 15/26 formula and statutory ceiling; bonus 8.33%/20% and eligibility limits
+- Gratuity 15/26 formula and statutory ceiling; bonus 8⅓% (exactly 1/12) / 20% and eligibility limits
 - Statutory due dates for every return and challan
 - Form numbers under both the 1961 and 2025 regimes
 - Vault retention periods (8y from FY-end)

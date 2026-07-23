@@ -515,7 +515,9 @@ def playbook_moves(
                 "saving_paise": late_fee_3b(days),  # the ONE cited engine, cap included
                 "note": (
                     f"{days} days late — late fee is accruing daily (plus 18% p.a. interest "
-                    "on tax, s.50). Filing today caps it."
+                    "on tax, s.50). Filing today caps it. Fee shown at the s.47(1) statutory-"
+                    "maximum cap (AATO unknown here — Notf 19/2021 lower caps for AATO ≤ ₹5 "
+                    "crore not assumed)."
                 ),
                 "feedback": feedback.get(GST_LATEFEE),
             }

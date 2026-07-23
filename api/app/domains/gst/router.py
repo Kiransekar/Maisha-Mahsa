@@ -42,6 +42,7 @@ def file_gstr3b(body: Gstr3bInput, db: Session = Depends(get_session)) -> Gstr3b
         itc_available=body.itc_available.model_dump(),
         filed_date=body.filed_date,
         is_nil=body.is_nil,
+        aato=body.aato,
     )
     db.commit()
     return Gstr3bResult(**result)

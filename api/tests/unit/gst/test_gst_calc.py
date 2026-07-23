@@ -146,3 +146,23 @@ def test_build_gstr1_flags_invalid_gstin():
     lines = [{"invoice_no": "X", "taxable": 100, "hsn": "9983", "gstin": "27AAPFU0939F1ZA"}]
     summary = g.build_gstr1(lines, filing_period="2026-05")
     assert any("invalid GSTIN" in e for e in summary["errors"])
+
+
+def test_gstr3b_route_threads_aato_to_service(session):
+    """FINAL-AUDIT pin: POST /api/gst/gstr3b must pass ``body.aato`` through to the service.
+    The route silently dropped it after the D4 fix (schema + service took aato, the route
+    call didn't), so a small taxpayer's supplied turnover was ignored and the s.47(1)
+    ₹10,000 max cap was persisted instead of the Notf 19/2021 ₹2,000 cap."""
+    from app.domains.gst.router import file_gstr3b as route
+    from app.domains.gst.schemas import Gstr3bInput
+
+    body = Gstr3bInput(
+        filing_period="2026-05",
+        due_date="2026-01-01",
+        filed_date="2026-07-20",  # 200 days late — deep past every cap
+        aato=1_500_000_000,  # ₹1.5 crore -> ₹2,000 combined cap
+        output={"igst": 0, "cgst": 0, "sgst": 0},
+        itc_available={"igst": 0, "cgst": 0, "sgst": 0},
+    )
+    result = route(body, db=session)
+    assert result.late_fee == Paise.from_rupees(2000)  # not the ₹10,000 unknown-AATO max

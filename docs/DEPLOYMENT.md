@@ -88,11 +88,11 @@ alembic upgrade head
 ```
 
 Verified relationship between the two schema sources (read both before writing this):
-`infra/db/multitenant/*.sql` (001–007) are the **reviewable source** and the input to the CI
+`infra/db/multitenant/*.sql` (001–009) are the **reviewable source** and the input to the CI
 gates (`scripts/check_rls_coverage.sh`, `scripts/rls_redteam.sh`). The Alembic revisions inline
 that SQL **verbatim** as immutable snapshots (`0002` = 001_tenancy + 002_domain_rls +
 003_identity; `0004` = 004_legal; `0006` = 005_ca_threads; `0007` = 006_ca_seat; `0008` =
-007_job_runs — each states this in its docstring). **Never apply the `.sql` files directly to
+007_job_runs; `0010` = 008_dpdp; `0011` = 009_org_memory — each states this in its docstring). **Never apply the `.sql` files directly to
 production**; `alembic upgrade head` is the one path, and it also stamps the version table so
 future upgrades work.
 
@@ -150,7 +150,9 @@ cd dif && cargo build --release            # → dif/target/release/mahsa
 Contract (verified in `dif/src/main.rs` + `api/tests/conftest.py`):
 - Listens on `MAHSA_ADDR` (default `0.0.0.0:8088`); endpoints `GET /health`, `POST /fold`.
 - Rules are **embedded in the binary** (tested set). `MAHSA_RULES=/path/rules.yaml` overrides —
-  leave unset unless you know why.
+  leave unset unless you know why. Setting it also **requires** `MAHSA_RULES_MANIFEST=/path/
+  MANIFEST.yaml` (version + sha256): a file pack loads only with a verified manifest, else Mahsa
+  refuses to boot (WS1.E3 — see `docs/RULE_PACK_SLA.md`).
 - The API reaches it at `MAISHA_MAHSA_URL` (default `http://127.0.0.1:8088`; in docker
   `http://dif:8088` — compose sets this).
 - The test suite expects the binary at `dif/target/{debug,release}/mahsa` (conftest skips
