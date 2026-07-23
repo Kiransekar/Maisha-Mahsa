@@ -1,0 +1,140 @@
+# WS1.E2 — ITC set-off boundary cases: the s.49(5)(e)/(f) CGST<->SGST cross-utilisation bar and
+# Rule 88A mandatory IGST exhaustion. Extends ws1d_itc_setoff.yaml (which owns the
+# cash-minimising Rule 88A allocation interpretation). Amounts integer paise.
+#
+# PRIMARY SOURCES (CGST Act PDF fetched 2026-07-23, provisions read verbatim;
+# https://cbic-gst.gov.in/pdf/CGST-Act-Updated-30092020.pdf):
+#  * s.49(5)(e): "the central tax shall not be utilised towards payment of State tax or Union
+#    territory tax";
+#  * s.49(5)(f): "the State tax or Union territory tax shall not be utilised towards payment of
+#    central tax";
+#  * Rule 88A (CGST Rules, already cited in ws1d_itc_setoff.yaml): IGST credit "shall first be
+#    utilised towards payment of integrated tax", remainder toward central/State tax "in any
+#    order and in any proportion", and IGST credit must be completely exhausted before CGST/SGST
+#    credit is used.
+
+- id: itc_cgst_credit_cannot_pay_sgst
+  statute: CGST Act 2017
+  section: "49(5)(e)"
+  provenance: primary
+  citation_url: "https://cbic-gst.gov.in/pdf/CGST-Act-Updated-30092020.pdf"
+  citation_locator: >-
+    s.49(5)(e): "the central tax shall not be utilised towards payment of State tax or Union
+    territory tax".
+  source: >-
+    Only SGST liability (₹100) and only CGST credit (₹100): the credit is barred from crossing
+    -> the full ₹100 SGST stays payable in cash and the CGST credit carries forward untouched.
+  ca_initials: PENDING
+  ca_date: null
+  target: itc_setoff
+  inputs:
+    output: {igst: 0, cgst: 0, sgst: 10000}
+    credit: {igst: 0, cgst: 10000, sgst: 0}
+  expected:
+    cash_igst: 0
+    cash_cgst: 0
+    cash_sgst: 10000
+    credit_igst: 0
+    credit_cgst: 10000
+    credit_sgst: 0
+
+- id: itc_sgst_credit_cannot_pay_cgst
+  statute: CGST Act 2017
+  section: "49(5)(f)"
+  provenance: primary
+  citation_url: "https://cbic-gst.gov.in/pdf/CGST-Act-Updated-30092020.pdf"
+  citation_locator: >-
+    s.49(5)(f): "the State tax or Union territory tax shall not be utilised towards payment of
+    central tax".
+  source: >-
+    Mirror of the (e)-bar: CGST liability ₹100, SGST credit ₹100 -> cash CGST ₹100, SGST credit
+    ₹100 carries forward.
+  ca_initials: PENDING
+  ca_date: null
+  target: itc_setoff
+  inputs:
+    output: {igst: 0, cgst: 10000, sgst: 0}
+    credit: {igst: 0, cgst: 0, sgst: 10000}
+  expected:
+    cash_igst: 0
+    cash_cgst: 10000
+    cash_sgst: 0
+    credit_igst: 0
+    credit_cgst: 0
+    credit_sgst: 10000
+
+- id: itc_igst_exhausted_before_own_head_credit
+  statute: CGST Act 2017
+  section: "49A; rule 88A"
+  provenance: primary
+  citation_url: "https://cbic-gst.gov.in/pdf/24092021-CGST-Rules-2017-Part-A-Rules.pdf"
+  citation_locator: >-
+    Rule 88A: IGST credit "shall first be utilised towards payment of integrated tax, and the
+    amount remaining, if any, may be utilised towards the payment of central tax and State
+    tax ... in any order", read with Circular 98/17/2019-GST (IGST credit to be completely
+    exhausted before CGST/SGST credit is used) — both already on record in ws1d_itc_setoff.yaml.
+  source: >-
+    Output IGST ₹50 + CGST ₹50; credit IGST ₹80 + CGST ₹20. IGST credit covers IGST ₹50 first,
+    the remaining ₹30 then covers CGST's uncovered need (₹50 − ₹20 own credit), and the CGST
+    credit clears the rest. Everything nets to zero cash with zero credit left — 5,000+3,000 =
+    IGST credit fully exhausted before the own-head CGST credit is touched.
+  ca_initials: PENDING
+  ca_date: null
+  target: itc_setoff
+  inputs:
+    output: {igst: 5000, cgst: 5000, sgst: 0}
+    credit: {igst: 8000, cgst: 2000, sgst: 0}
+  expected:
+    cash_igst: 0
+    cash_cgst: 0
+    cash_sgst: 0
+    credit_igst: 0
+    credit_cgst: 0
+    credit_sgst: 0
+
+- id: itc_surplus_sgst_credit_carries_forward
+  statute: CGST Act 2017
+  section: "49(5)(d)/(f)"
+  provenance: primary
+  citation_url: "https://cbic-gst.gov.in/pdf/CGST-Act-Updated-30092020.pdf"
+  citation_locator: >-
+    s.49(5)(d): State tax credit utilised toward State tax, remainder toward integrated tax;
+    s.49(5)(f): never toward central tax.
+  source: >-
+    Output CGST ₹10 + SGST ₹10; credit SGST ₹50 only. SGST credit clears SGST ₹10; with no IGST
+    liability the surplus ₹40 has nowhere lawful to go (the (f)-bar blocks CGST) -> cash CGST
+    ₹10, SGST credit ₹40 carries forward.
+  ca_initials: PENDING
+  ca_date: null
+  target: itc_setoff
+  inputs:
+    output: {igst: 0, cgst: 1000, sgst: 1000}
+    credit: {igst: 0, cgst: 0, sgst: 5000}
+  expected:
+    cash_igst: 0
+    cash_cgst: 1000
+    cash_sgst: 0
+    credit_igst: 0
+    credit_cgst: 0
+    credit_sgst: 4000
+
+- id: itc_setoff_all_zero_degenerate
+  statute: CGST Act 2017
+  section: "49"
+  provenance: derived
+  source: >-
+    DERIVED — zero liability and zero credit map to zero cash and zero carry-forward by
+    arithmetic; the vector guards the degenerate path against accidental non-zero output.
+  ca_initials: PENDING
+  ca_date: null
+  target: itc_setoff
+  inputs:
+    output: {igst: 0, cgst: 0, sgst: 0}
+    credit: {igst: 0, cgst: 0, sgst: 0}
+  expected:
+    cash_igst: 0
+    cash_cgst: 0
+    cash_sgst: 0
+    credit_igst: 0
+    credit_cgst: 0
+    credit_sgst: 0

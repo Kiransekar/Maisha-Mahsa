@@ -1,0 +1,86 @@
+# WS2.2 state pack — Tamil Nadu. Data, not code (§WS2). Amounts are integer paise.
+#
+# TN profession tax is HALF-YEARLY and levied by the LOCAL BODY (corporation/municipality/
+# panchayat), so slabs are jurisdiction-wise, not state-uniform. The monthly payslip line is
+# therefore NOT a monthly levy here — the loader reports periodicity half_yearly and the
+# half-yearly computation runs per jurisdiction. Madurai Corporation (the owner's own base)
+# has no officially fetched slab table yet and is BLOCKED-CA: computing it REFUSES.
+code: TN
+name: Tamil Nadu
+pack_version: "2026.07.1"
+
+pt:
+  status: sourced
+  statute: "Tamil Nadu municipal-law profession tax (levied half-yearly by the local body)"
+  section: "Profession Tax Slabs — Government of Tamil Nadu Single Window Portal guidance document"
+  citation_url: "https://tnswp.com/DIGIGOV/StaticAttachment?AttachmentFileName=%2Fpdf%2FTax_rules%2FProfession_Tax_Updated.pdf"
+  citation_locator: >-
+    Government of Tamil Nadu Single Window Portal (tnswp.com), "Profession Tax Slabs" PDF,
+    fetched 2026-07-23 and read verbatim. Greater Chennai Corporation table: "Upto
+    Rs.21,000 — NIL; Rs.21,001 to Rs.30,000 — Rs.100; Rs.30,001 to Rs.45,000 — Rs.235;
+    Rs.45,001 to Rs.60,000 — Rs.510; Rs.60,001 to Rs.75,000 — Rs.760; Rs.75,001 and above —
+    Rs.1095" (half-yearly, on average half-yearly income). Village Panchayaths table:
+    "NIL; Rs.296; Rs.740; Rs.1476; Rs.2216; Rs.2500" over the same income slabs.
+  registration_types: [employer-registration-with-local-body]
+  periodicity: half_yearly
+  slabs_half_yearly:
+    # Corporation-wise (jurisdiction-wise) tables. Income bounds are AVERAGE HALF-YEARLY
+    # income in rupees; amounts are the HALF-YEARLY tax in paise.
+    chennai_corporation:
+      - { upto_rupees: 21000, tax_paise: 0 }
+      - { upto_rupees: 30000, tax_paise: 10000 }
+      - { upto_rupees: 45000, tax_paise: 23500 }
+      - { upto_rupees: 60000, tax_paise: 51000 }
+      - { upto_rupees: 75000, tax_paise: 76000 }
+      - { upto_rupees: null, tax_paise: 109500 }
+    village_panchayat:
+      - { upto_rupees: 21000, tax_paise: 0 }
+      - { upto_rupees: 30000, tax_paise: 29600 }
+      - { upto_rupees: 45000, tax_paise: 74000 }
+      - { upto_rupees: 60000, tax_paise: 147600 }
+      - { upto_rupees: 75000, tax_paise: 221600 }
+      - { upto_rupees: null, tax_paise: 250000 }
+    madurai_corporation:
+      status: blocked_ca
+      reason: >-
+        BLOCKED-CA: Madurai City Municipal Corporation's current half-yearly profession-tax
+        slab table could not be sourced from an official Madurai Corporation / TN government
+        publication (only secondary aggregator restatements exist). Computing Madurai PT
+        refuses until the corporation's own notified table is cited or a CA initials it.
+
+lwf:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: Tamil Nadu Labour Welfare Fund amounts/due months not yet sourced from the
+    TN Labour Welfare Board's official notification. The engine's legacy table (Rs.20/40,
+    Dec) is uncited and cannot be promoted into pack data (§0.6).
+
+shops_establishments:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: Tamil Nadu Shops and Establishments Act 1947 registration/renewal and leave
+    defaults not yet sourced from the official instrument.
+
+minimum_wages:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: minimum-wage tables require the current TN labour-department VDA
+    notification; no official notification sourced.
+
+stamp_duty_share_certificates:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: share-certificate stamp duty for Tamil Nadu (Indian Stamp Act as applied)
+    not yet sourced from the official schedule text.
+
+eway_intra_state_threshold:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: Tamil Nadu intra-state e-way-bill threshold requires the state rule-138(1)
+    notification; not yet sourced from an official notification.
+
+labour_code_rules:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: status of Tamil Nadu's rules under the four Labour Codes requires
+    verification against the state gazette; tracked by the compliance-calendar watch item.

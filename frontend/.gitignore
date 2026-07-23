@@ -23,3 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 playwright-report
+
+# lighthouse (npm run lighthouse) drops its HTML report in cwd
+*.report.html

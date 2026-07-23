@@ -440,6 +440,8 @@ API_ROUTE_GATES: dict[str, tuple[str, ...]] = {
     "GET /api/payroll/employees/{employee_id}/payslip.pdf": ("read", "export"),
     "GET /api/payroll/employees/{employee_id}/form16.pdf": ("read", "export"),
     "GET /api/payroll/ecr.txt": ("read", "export"),
+    # WS2.3 — state-pack PT provenance + pack-path computation (read-only, no export/write).
+    "GET /api/payroll/state-pack/{state}": ("read",),
     # gst — filing a GSTR-3B is a statutory filing: WS5.2 hard gate, not a capability check
     "GET /api/gst/validate-gstin": ("read",),
     "POST /api/gst/gstr3b": ("read", "filing"),

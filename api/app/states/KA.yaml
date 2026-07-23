@@ -1,0 +1,62 @@
+# WS2.2 state pack — Karnataka. Data, not code (§WS2). Amounts are integer paise.
+code: KA
+name: Karnataka
+pack_version: "2026.07.1"
+
+pt:
+  status: sourced
+  statute: "Karnataka Tax on Professions, Trades, Callings and Employments Act, 1976 (Karnataka Act 35 of 1976)"
+  section: "Schedule [See section 3(2)], Sl. No. 1 — substituted by Act 14 of 2023 w.e.f. 01.04.2023; rate amended by Act 33 of 2025 w.e.f. 01.04.2025"
+  citation_url: "https://www.indiacode.nic.in/bitstream/123456789/6864/1/22_of_2026_%28e%29.pdf"
+  citation_locator: >-
+    India Code consolidated PDF of the Act (as amended), SCHEDULE [See section 3(2)],
+    Sl. No. 1: "Salary or wage earners whose salary or wage or both, as the case may be, for
+    a month is Rs. 25,000-00 and above — (i) Rs.200-00 per month (except for the month of
+    February); (ii) Rs.300-00 for the month of February". Schedule footnote list: "7.
+    Substituted by Act 14 of 2023 w.e.f. 01.04.2023. 8. Substituted by Act 33 of 2025
+    w.e.f. 01.04.2025." Fetched 2026-07-23 and read verbatim. NOTE: the pre-pack engine
+    table charged a flat Rs.200 with no February special — stale vs Act 33 of 2025; the
+    pack is the corrected, cited value.
+  registration_types: [employer-RC, enrolment-EC]
+  periodicity: monthly
+  slabs_monthly:
+    all:
+      - { upto_rupees: 24999, tax_paise: 0 }
+      - { upto_rupees: null, tax_paise: 20000, february_tax_paise: 30000 }
+
+lwf:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: Karnataka Labour Welfare Fund amounts/due months not yet sourced from the
+    Karnataka Labour Welfare Board's official notification. The engine's legacy table
+    (Rs.20/40, Dec) is uncited and cannot be promoted into pack data (§0.6).
+
+shops_establishments:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: Karnataka Shops and Commercial Establishments Act 1961 registration/renewal
+    and leave defaults not yet sourced from the official instrument.
+
+minimum_wages:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: minimum-wage tables require the current Karnataka labour-department VDA
+    notification; no official notification sourced.
+
+stamp_duty_share_certificates:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: share-certificate stamp duty under the Karnataka Stamp Act Schedule not yet
+    sourced from the official schedule text.
+
+eway_intra_state_threshold:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: Karnataka intra-state e-way-bill threshold requires the state notification
+    under rule 138(1); not yet sourced from an official notification.
+
+labour_code_rules:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: status of Karnataka's rules under the four Labour Codes requires verification
+    against the state gazette; tracked by the compliance-calendar watch item.

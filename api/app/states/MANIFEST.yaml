@@ -1,0 +1,21 @@
+# State-pack manifest (WS2.1) — the WS1.E3 rule-pack mechanism (dif/rules/MANIFEST.yaml)
+# extended per-state: one sha256 per pack file, bound to a pack-set version. The loader
+# (app/core/state_packs.py) refuses to serve a pack whose bytes, version, or manifest entry
+# do not match — fail loud at load, never silently drift. On every pack change: bump the
+# pack_version in the file AND `version` here, recompute that file's sha256
+# (sha256sum api/app/states/<code>.yaml), and add a CHANGELOG.md entry. When WS3 ports a
+# state-varying path to Rust, Mahsa loads these same YAMLs as data — packs never become code.
+pack_set: states
+version: "2026.07.1"
+channel: stable
+files:
+  AP.yaml: "f70b9c3459ba9e2f22a59c21d02ed2a9c99051b43d1e7be5c4e1e456bb6d8e69"
+  DL.yaml: "8b923d33b2bc594e81981e69e3089cbf690c8e3e92b2529729afd3377a7455f4"
+  GJ.yaml: "87332be300cf634977920a7090a40ec6e5935d1734917183948e2bebccb01381"
+  HR.yaml: "c52c2acb4453d47613bcea52d19c286b04a54da62d6a4b3c481d7c5b82e2a43b"
+  KA.yaml: "90ddb3992ef38c16545d7fa294f6835c0dec57ba70e90352ff181663254dcc3e"
+  MH.yaml: "1082f0a77783ce9a6d04f85d8276cc01c4d7daacc85b913784f69522c62ddc8a"
+  TN.yaml: "a074d7e16107a51d9cf37861c4bbd58dc95287b2990b28e7eb27a9e8fdb401b5"
+  TS.yaml: "83ac6a728b3d00067812b42e781fe7f8af2ff17103b7634a908aaeb1616911b8"
+  UP.yaml: "344d8c8ff1664e98bc835c4c32db64a29e84c4827cfc56a5dba078849c729aca"
+  WB.yaml: "8fdf1aae39e6c2bf2aca463a155d0ea077b7f650923cf9b8294afb9c70b3719e"

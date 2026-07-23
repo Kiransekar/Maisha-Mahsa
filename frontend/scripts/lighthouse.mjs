@@ -11,8 +11,9 @@ import { spawn, spawnSync } from "node:child_process";
 const PORT = 4173;
 const URL = `http://localhost:${PORT}/today`;
 
-const which = process.platform === "win32" ? "where" : "which";
-const hasLighthouse = spawnSync(which, ["lighthouse"]).status === 0;
+// `npx --no-install` finds a PATH-installed lighthouse AND the npx cache (how this machine has
+// it) without ever downloading one inside a "check" — the download decision stays with a human.
+const hasLighthouse = spawnSync("npx", ["--no-install", "lighthouse", "--version"]).status === 0;
 
 if (!hasLighthouse) {
   console.log(
@@ -55,7 +56,18 @@ try {
   await waitForServer(`http://localhost:${PORT}/`);
   const result = spawnSync(
     "npx",
-    ["--no-install", "lighthouse", URL, "--budget-path=budget.json", "--preset=perf", "--quiet"],
+    [
+      "--no-install",
+      "lighthouse",
+      URL,
+      // Lighthouse ≥ 12 ignores --budget-path (kept for older CLIs); compare the printed
+      // resource/LCP numbers against budget.json yourself — see frontend/README.md.
+      "--budget-path=budget.json",
+      "--preset=perf",
+      "--quiet",
+      // headless so the check runs on CI boxes and over ssh, not only at a desktop session
+      "--chrome-flags=--headless=new",
+    ],
     { stdio: "inherit" },
   );
   process.exitCode = result.status ?? 1;

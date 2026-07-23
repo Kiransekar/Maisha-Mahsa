@@ -1,0 +1,373 @@
+# WS1.E2 — Labour Codes: PF wage-ceiling paths (EPF/EPS split), ESI ceiling boundary, statutory
+# minimum bonus bounds, gratuity accrual formula + ceiling. Amounts are integer paise.
+# Extends ws1b_wiring_gratuity.yaml (which owns the s.2(y)-base wiring and exit-gratuity floors).
+#
+# PRIMARY SOURCES (fetched 2026-07-23, read verbatim):
+#  * EPFO, "PRESENT RATES OF CONTRIBUTION"
+#    (https://www.epfindia.gov.in/site_docs/PDFs/MiscPDFs/ContributionRate.pdf):
+#    EMPLOYEE EPF "12% /10% ##"; EMPLOYER EPS "8.33% ##", EPF "Difference of EE share and
+#    Pension Contribution"; "## Contribution is rounded to the nearest rupee for each employee,
+#    for the employee share, pension contribution and EDLI contribution. The Employer Share is
+#    difference of the EE Share (payable as per statute) and Pension Contribution."; "The
+#    contributions are payable on maximum wage ceiling of Rs. 15000/-". (Same instrument the
+#    initialled-pending ws1b wiring vector already relies on.)
+#  * ESI (Central) Rules 1950, edition "As on 01.04.2021"
+#    (https://www.esic.nic.in/attachments/actfile/b3f0e6aa6e4c00f697ae17292c7e3448.pdf):
+#    rule 50 — "The wage limit for coverage of an employee under sub-clause (b) of clause (9) of
+#    Section 2 of the Act shall be twenty one thousand rupees a month"; rule 51 — employer's
+#    contribution "a sum (rounded to the next higher rupee) equal to three and one-fourth per
+#    cent."; employee's "a sum (rounded to the next higher rupee) equal to three-fourth per
+#    cent. of the wages".
+#  * Code on Wages 2019 (Act 29 of 2019) s.26
+#    (https://www.indiacode.nic.in/bitstream/123456789/15793/1/aA2019-29.pdf): s.26(1) — "an
+#    annual minimum bonus calculated at the rate of eight and one-third per cent. of the wages
+#    earned by the employee or one hundred rupees, whichever is higher"; s.26(3) — maximum
+#    "twenty per cent. of such wages"; s.26(2) — calculation wage where wages exceed the
+#    notified amount: "as if his wage were such amount ... or the minimum wage fixed by the
+#    appropriate Government, whichever is higher".
+#  * Payment of Bonus (Amendment) Act, 2015 (No. 6 of 2016)
+#    (https://www.labour.gov.in/static/uploads/2025/06/c47b3b4a1390d211cf63f144f8aa6e7f.pdf):
+#    s.2 — PoB Act s.2(13) "twenty-one thousand rupees" (eligibility); s.3 — PoB Act s.12
+#    "seven thousand rupees or the minimum wage for the scheduled employment ... whichever is
+#    higher" (calculation ceiling).
+#  * Code on Social Security 2020 s.53(2)+Explanation 3 and s.53(3)+s.164(2)(a): already
+#    sourced verbatim in ws1b_wiring_gratuity.yaml (aA2020-36.pdf).
+#
+# ENGINE DEFECTS/GAPS FOUND WHILE DERIVING (reported loudly in PROGRESS [WS1.E2-expand]; the
+# vectors below deliberately sit only where every candidate reading agrees, so no defect is
+# locked in):
+#  * BONUS RATE: the engine uses Decimal("0.0833"); CoW s.26(1) says "eight and one-third per
+#    cent." (= 8.3333...%). On the ₹7,000 cap the divergence is ≤ ₹0.24 pre-rounding, but at
+#    e.g. Basic ₹6,006 the statute yields ₹500.50 -> ₹501 and the engine ₹500.30 -> ₹500 — a
+#    real ₹1-class defect. Vectors below use only inputs where both rates round identically.
+#  * BONUS FLOOR: s.26(1)'s "or one hundred rupees, whichever is higher" floor is NOT
+#    implemented. Below Basic ₹1,200 the engine under-provisions. No vector below ₹6,000.
+#  * BONUS CALC WAGE: s.26(2)'s "or the minimum wage ... whichever is higher" leg of the ₹7,000
+#    calculation ceiling is not modelled (no min-wage input exists).
+#  * ESI CONTINUATION: rule 50 proviso (employee crossing ₹21,000 mid-contribution-period stays
+#    covered until period end) is not modelled — the input is the employee's coverage-relevant
+#    gross, the caller owns period semantics.
+
+# ---- PF: EPF/EPS split around the ₹15,000 ceiling ----------------------------------------------
+- id: pf_split_below_ceiling_14999
+  statute: EPF & MP / Code on Social Security
+  section: "EPFO contribution rates; ₹15,000 ceiling"
+  provenance: primary
+  citation_url: "https://www.epfindia.gov.in/site_docs/PDFs/MiscPDFs/ContributionRate.pdf"
+  citation_locator: >-
+    EPFO "PRESENT RATES OF CONTRIBUTION": EMPLOYEE EPF 12%; EMPLOYER EPS 8.33%, employer EPF =
+    difference of employee share and pension contribution; contributions "rounded to the
+    nearest rupee"; "payable on maximum wage ceiling of Rs. 15000/-".
+  source: >-
+    Basic ₹14,999 (one rupee below the ceiling, uncapped): employee PF 12% = ₹1,799.88 ->
+    ₹1,800; employer total 12% = ₹1,800; EPS 8.33% = ₹1,249.4167 -> ₹1,249; employer EPF
+    difference = 1,800 − 1,249 = ₹551.
+  ca_initials: PENDING
+  ca_date: null
+  target: pf_breakdown
+  inputs: {basic_monthly: 1499900}
+  expected:
+    pf_wage: 1499900
+    employee_pf: 180000
+    employer_pf: 180000
+    eps_employer: 124900
+    epf_employer_diff: 55100
+
+- id: pf_split_at_ceiling_15000
+  statute: EPF & MP / Code on Social Security
+  section: "EPFO contribution rates; ₹15,000 ceiling"
+  provenance: primary
+  citation_url: "https://www.epfindia.gov.in/site_docs/PDFs/MiscPDFs/ContributionRate.pdf"
+  citation_locator: >-
+    EPFO "PRESENT RATES OF CONTRIBUTION" (EPF 12% / EPS 8.33% / ceiling ₹15,000 / nearest-rupee
+    rounding).
+  source: >-
+    Basic exactly ₹15,000: employee PF ₹1,800; EPS 8.33% = ₹1,249.50 -> half-up ₹1,250 (the
+    familiar EPS maximum); employer EPF difference ₹550.
+  ca_initials: PENDING
+  ca_date: null
+  target: pf_breakdown
+  inputs: {basic_monthly: 1500000}
+  expected:
+    pf_wage: 1500000
+    employee_pf: 180000
+    employer_pf: 180000
+    eps_employer: 125000
+    epf_employer_diff: 55000
+
+- id: pf_split_one_rupee_above_ceiling_capped
+  statute: EPF & MP / Code on Social Security
+  section: "EPFO ₹15,000 wage ceiling"
+  provenance: primary
+  citation_url: "https://www.epfindia.gov.in/site_docs/PDFs/MiscPDFs/ContributionRate.pdf"
+  citation_locator: >-
+    EPFO "PRESENT RATES OF CONTRIBUTION": "The contributions are payable on maximum wage
+    ceiling of Rs. 15000/-".
+  source: >-
+    Basic ₹15,001: the PF wage caps at ₹15,000, so every figure equals the at-ceiling vector —
+    ₹1,800 / ₹1,800 / ₹1,250 / ₹550. Boundary triple with the two vectors above.
+  ca_initials: PENDING
+  ca_date: null
+  target: pf_breakdown
+  inputs: {basic_monthly: 1500100}
+  expected:
+    pf_wage: 1500000
+    employee_pf: 180000
+    employer_pf: 180000
+    eps_employer: 125000
+    epf_employer_diff: 55000
+
+- id: pf_split_high_earner_capped
+  statute: EPF & MP / Code on Social Security
+  section: "EPFO ₹15,000 wage ceiling"
+  provenance: primary
+  citation_url: "https://www.epfindia.gov.in/site_docs/PDFs/MiscPDFs/ContributionRate.pdf"
+  citation_locator: >-
+    EPFO "PRESENT RATES OF CONTRIBUTION" (ceiling ₹15,000; statutory-rate contribution above it
+    is voluntary and not modelled).
+  source: >-
+    Basic ₹50,000 caps to the ₹15,000 statutory wage: ₹1,800 / ₹1,800 / ₹1,250 / ₹550 — the
+    same statutory maxima however high the salary.
+  ca_initials: PENDING
+  ca_date: null
+  target: pf_breakdown
+  inputs: {basic_monthly: 5000000}
+  expected:
+    pf_wage: 1500000
+    employee_pf: 180000
+    employer_pf: 180000
+    eps_employer: 125000
+    epf_employer_diff: 55000
+
+- id: pf_split_10000_exact_rates
+  statute: EPF & MP / Code on Social Security
+  section: "EPFO contribution rates"
+  provenance: primary
+  citation_url: "https://www.epfindia.gov.in/site_docs/PDFs/MiscPDFs/ContributionRate.pdf"
+  citation_locator: >-
+    EPFO "PRESENT RATES OF CONTRIBUTION" (EPF 12%, EPS 8.33%, employer EPF = difference).
+  source: >-
+    Basic ₹10,000: 12% = ₹1,200 exact; EPS 8.33% = ₹833.00 exact; difference ₹367. A no-rounding
+    checkpoint between the boundary vectors.
+  ca_initials: PENDING
+  ca_date: null
+  target: pf_breakdown
+  inputs: {basic_monthly: 1000000}
+  expected:
+    pf_wage: 1000000
+    employee_pf: 120000
+    employer_pf: 120000
+    eps_employer: 83300
+    epf_employer_diff: 36700
+
+# ---- ESI: ₹21,000 coverage boundary (rule 50) + ceil rounding (rule 51) ------------------------
+- id: esi_at_ceiling_21000_covered
+  statute: ESI Act 1948
+  section: "ESI (Central) Rules rule 50, rule 51"
+  provenance: primary
+  citation_url: "https://www.esic.nic.in/attachments/actfile/b3f0e6aa6e4c00f697ae17292c7e3448.pdf"
+  citation_locator: >-
+    Rule 50: "The wage limit for coverage ... shall be twenty one thousand rupees a month" —
+    at exactly ₹21,000 the employee is within the limit. Rule 51: employee three-fourth per
+    cent., employer three and one-fourth per cent., each "rounded to the next higher rupee".
+  source: >-
+    Gross exactly ₹21,000: employee 0.75% = ₹157.50 -> next higher rupee ₹158; employer 3.25% =
+    ₹682.50 -> ₹683. Paired with the one-rupee-above vector.
+  ca_initials: PENDING
+  ca_date: null
+  target: esi
+  inputs: {gross_monthly: 2100000}
+  expected: [15800, 68300]
+
+- id: esi_one_rupee_above_ceiling_nil
+  statute: ESI Act 1948
+  section: "ESI (Central) Rules rule 50"
+  provenance: primary
+  citation_url: "https://www.esic.nic.in/attachments/actfile/b3f0e6aa6e4c00f697ae17292c7e3448.pdf"
+  citation_locator: >-
+    Rule 50 ("wage limit for coverage ... twenty one thousand rupees a month") read with ESI
+    Act s.2(9)(b): wages above the limit take the person outside the "employee" definition.
+    (Rule 50's contribution-period continuation proviso is a caller-owned semantic — header
+    note.)
+  source: >-
+    Gross ₹21,001 exceeds the coverage limit -> no ESI contributions on either side.
+  ca_initials: PENDING
+  ca_date: null
+  target: esi
+  inputs: {gross_monthly: 2100100}
+  expected: [0, 0]
+
+- id: esi_20999_ceil_rounding
+  statute: ESI Act 1948
+  section: "ESI (Central) Rules rule 51"
+  provenance: primary
+  citation_url: "https://www.esic.nic.in/attachments/actfile/b3f0e6aa6e4c00f697ae17292c7e3448.pdf"
+  citation_locator: >-
+    Rule 51: "(a) employer's contribution, a sum (rounded to the next higher rupee) equal to
+    three and one-fourth per cent. ...; (b) employee's contribution, a sum (rounded to the next
+    higher rupee) equal to three-fourth per cent. of the wages".
+  source: >-
+    Gross ₹20,999: employee 0.75% = ₹157.4925 -> next higher rupee ₹158; employer 3.25% =
+    ₹682.4675 -> ₹683. The statutory ceil is applied to the exact product (a
+    truncate-before-rounding defect — the class WS1.C fixed elsewhere — would give ₹157/₹682;
+    this vector pins it out).
+  ca_initials: PENDING
+  ca_date: null
+  target: esi
+  inputs: {gross_monthly: 2099900}
+  expected: [15800, 68300]
+
+# ---- Bonus: 8⅓% minimum on the ₹7,000-capped wage; ₹21,000 eligibility edge --------------------
+- id: bonus_min_at_calc_ceiling_7000
+  statute: Code on Wages 2019
+  section: "26(1); 26(2)"
+  provenance: interpretation
+  citation_url: "https://www.indiacode.nic.in/bitstream/123456789/15793/1/aA2019-29.pdf"
+  citation_locator: >-
+    CoW s.26(1): "an annual minimum bonus calculated at the rate of eight and one-third per
+    cent. of the wages earned"; s.26(2): calculation wage where wages exceed the notified
+    amount. Amounts: Payment of Bonus (Amendment) Act 2015 s.3 — PoB s.12 "seven thousand
+    rupees or the minimum wage ... whichever is higher"
+    (https://www.labour.gov.in/static/uploads/2025/06/c47b3b4a1390d211cf63f144f8aa6e7f.pdf).
+  alternatives_considered:
+    - "CHOSEN — the PoB-era notified amounts (₹21,000 eligibility, ₹7,000 calculation wage)
+       carry into CoW s.26's 'as determined by notification' slots via the s.69(2) savings
+       clause, the same transition reading the owner approved for the gratuity ceiling
+       (gratuity_ceiling_clamps_at_20_lakh). No CoW-specific notification of different amounts
+       was found."
+    - "No eligibility/calculation ceiling operates until a notification expressly under CoW
+       s.26 issues — rejected: it would strip the bonus provisions of their operative amounts
+       and contradicts the s.69(2) deeming."
+    - "s.26(2) 'or the minimum wage, whichever is higher' could lift the ₹7,000 calc wage in
+       scheduled employments — the engine takes no minimum-wage input, so the ₹7,000 leg alone
+       is exercised here (gap recorded in PROGRESS)."
+  source: >-
+    Basic ₹7,000 (at the calc ceiling): monthly minimum-bonus provision = 8⅓% × 7,000 =
+    ₹583.33 -> ₹583 = 58,300 paise. (The engine's 0.0833 rate gives ₹583.10 -> the same ₹583 —
+    this input is chosen so both the statutory 8⅓% and the engine rate round identically; the
+    rate defect itself is reported in PROGRESS, not masked.)
+  ca_initials: PENDING
+  ca_date: null
+  target: bonus_provision_monthly
+  inputs: {basic_monthly: 700000}
+  expected: 58300
+
+- id: bonus_min_6000_exact_500
+  statute: Code on Wages 2019
+  section: "26(1)"
+  provenance: interpretation
+  citation_url: "https://www.indiacode.nic.in/bitstream/123456789/15793/1/aA2019-29.pdf"
+  citation_locator: >-
+    CoW s.26(1) ("eight and one-third per cent. of the wages earned ... or one hundred rupees,
+    whichever is higher").
+  alternatives_considered:
+    - "CHOSEN — ₹21,000/₹7,000 PoB-era ceilings carried over (record on
+       bonus_min_at_calc_ceiling_7000; one CA confirmation covers this file's bonus vectors)."
+    - "No ceilings until CoW-specific notification — rejected as above."
+  source: >-
+    Basic ₹6,000 (below the calc ceiling): 8⅓% × 6,000 = ₹500.00 exactly; the ₹100 s.26(1)
+    floor is far below. 50,000 paise. (Engine's 0.0833 gives ₹499.80 -> the same ₹500.)
+  ca_initials: PENDING
+  ca_date: null
+  target: bonus_provision_monthly
+  inputs: {basic_monthly: 600000}
+  expected: 50000
+
+- id: bonus_eligible_at_21000_exact
+  statute: Code on Wages 2019
+  section: "26(1); PoB s.2(13) amount"
+  provenance: interpretation
+  citation_url: "https://www.labour.gov.in/static/uploads/2025/06/c47b3b4a1390d211cf63f144f8aa6e7f.pdf"
+  citation_locator: >-
+    Payment of Bonus (Amendment) Act 2015 s.2: PoB s.2(13) employee ceiling "twenty-one
+    thousand rupees"; CoW s.26(1): bonus payable to every employee "drawing wages not exceeding
+    such amount per mensem, as determined by notification"
+    (https://www.indiacode.nic.in/bitstream/123456789/15793/1/aA2019-29.pdf).
+  alternatives_considered:
+    - "CHOSEN — ₹21,000 eligibility carried over (record on bonus_min_at_calc_ceiling_7000);
+       'not exceeding' makes exactly ₹21,000 ELIGIBLE."
+    - "No eligibility ceiling until CoW notification — rejected as above."
+  source: >-
+    Basic exactly ₹21,000 does not exceed the eligibility amount -> eligible; calc wage capped
+    at ₹7,000 -> ₹583 = 58,300 paise. Paired with the one-rupee-above vector.
+  ca_initials: PENDING
+  ca_date: null
+  target: bonus_provision_monthly
+  inputs: {basic_monthly: 2100000}
+  expected: 58300
+
+- id: bonus_ineligible_above_21000
+  statute: Code on Wages 2019
+  section: "26(1); PoB s.2(13) amount"
+  provenance: interpretation
+  citation_url: "https://www.labour.gov.in/static/uploads/2025/06/c47b3b4a1390d211cf63f144f8aa6e7f.pdf"
+  citation_locator: >-
+    Payment of Bonus (Amendment) Act 2015 s.2 (₹21,000) + CoW s.26(1) "not exceeding".
+  alternatives_considered:
+    - "CHOSEN — ₹21,000 eligibility carried over; ₹21,001 exceeds it -> no statutory minimum
+       bonus provision accrues for this employee."
+    - "No eligibility ceiling until CoW notification — under that reading a ₹21,001 employee
+       WOULD be eligible; rejected as above, and recorded."
+  source: >-
+    Basic ₹21,001 exceeds the eligibility amount -> ₹0.
+  ca_initials: PENDING
+  ca_date: null
+  target: bonus_provision_monthly
+  inputs: {basic_monthly: 2100100}
+  expected: 0
+
+# ---- Gratuity accrual (15/26 formula + s.53(3) ceiling) ----------------------------------------
+- id: gratuity_accrual_26000_10y
+  statute: Code on Social Security 2020
+  section: "53(2) Explanation 3"
+  provenance: primary
+  citation_url: "https://www.indiacode.nic.in/bitstream/123456789/16823/1/aA2020-36.pdf"
+  citation_locator: >-
+    CoSS s.53(2) + Explanation 3: fifteen days' wages per completed year = monthly wages last
+    drawn ÷ 26 × 15 (verbatim on record in ws1b_wiring_gratuity.yaml).
+  source: >-
+    ACCRUAL-LIABILITY figure (balance-sheet provision), not an exit award — the s.53(1)
+    eligibility floors live on the gratuity_hybrid vectors. Last-drawn ₹26,000, 10 completed
+    years: (15/26) × 26,000 × 10 = ₹1,50,000 exactly = 15,000,000 paise, under the ceiling.
+  ca_initials: PENDING
+  ca_date: null
+  target: gratuity_required
+  inputs: {last_basic_monthly: 2600000, completed_years: 10}
+  expected: 15000000
+
+- id: gratuity_accrual_ceiling_clamps
+  statute: Code on Social Security 2020
+  section: "53(3)"
+  provenance: interpretation
+  citation_url: "https://www.indiacode.nic.in/bitstream/123456789/16823/1/aA2020-36.pdf"
+  citation_locator: >-
+    CoSS s.53(3) ("shall not exceed such amount as may be notified") + s.164(2)(a) carry-over of
+    S.O. 1420(E) (29-03-2018, ₹20,00,000) — the full instrument trail is recorded on the
+    owner-initialled vector gratuity_ceiling_clamps_at_20_lakh in ws1b_wiring_gratuity.yaml.
+  alternatives_considered:
+    - "CHOSEN — ₹20,00,000 ceiling via s.164(2)(a) carry-over, identical to the reading already
+       recorded and owner-initialled on gratuity_ceiling_clamps_at_20_lakh; this vector only
+       extends it to the accrual-liability helper."
+    - "No ceiling until a CoSS-specific s.53(3) notification — rejected there; same here."
+  source: >-
+    Last-drawn ₹1,00,000, 40 completed years: raw (15/26) × 1,00,000 × 40 = ₹23,07,692.31 ->
+    ₹23,07,692, clamped to the ₹20,00,000 notified ceiling = 200,000,000 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: gratuity_required
+  inputs: {last_basic_monthly: 10000000, completed_years: 40}
+  expected: 200000000
+
+- id: gratuity_accrual_zero_years
+  statute: Code on Social Security 2020
+  section: "53(2)"
+  provenance: derived
+  source: >-
+    DERIVED — zero completed years of service means zero "completed year[s] of service" to
+    multiply the fifteen-days wage by; the liability is nil by arithmetic, no statutory figure
+    involved.
+  ca_initials: PENDING
+  ca_date: null
+  target: gratuity_required
+  inputs: {last_basic_monthly: 2600000, completed_years: 0}
+  expected: 0

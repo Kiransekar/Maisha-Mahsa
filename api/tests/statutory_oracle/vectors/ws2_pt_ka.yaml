@@ -1,0 +1,49 @@
+# WS2.2 — Karnataka profession tax, via the WS2 state pack (app/states/KA.yaml).
+# Includes the Act 33 of 2025 February Rs.300 rate the pre-pack engine table missed.
+
+- id: pt_ka_below_25000_nil
+  statute: Karnataka Tax on Professions, Trades, Callings and Employments Act, 1976
+  section: "Schedule [See section 3(2)], Sl. No. 1 (Act 14 of 2023 w.e.f. 01.04.2023)"
+  provenance: primary
+  citation_url: "https://www.indiacode.nic.in/bitstream/123456789/6864/1/22_of_2026_%28e%29.pdf"
+  citation_locator: >-
+    India Code consolidated PDF, Schedule Sl. No. 1: liability attaches to "Salary or wage
+    earners whose salary or wage ... for a month is Rs. 25,000-00 and above"; below Rs.25,000
+    no entry covers a salary earner -> Nil.
+  source: "Rs.24,999 is below the Rs.25,000 liability line -> Nil."
+  ca_initials: PENDING
+  ca_date: null
+  target: professional_tax
+  inputs: {state: KA, gross_monthly: 2499900, month: 6}
+  expected: 0
+
+- id: pt_ka_at_25000_200_regular_month
+  statute: Karnataka Tax on Professions, Trades, Callings and Employments Act, 1976
+  section: "Schedule Sl. No. 1, rate clause (i) (Act 33 of 2025 w.e.f. 01.04.2025)"
+  provenance: primary
+  citation_url: "https://www.indiacode.nic.in/bitstream/123456789/6864/1/22_of_2026_%28e%29.pdf"
+  citation_locator: >-
+    Schedule Sl. No. 1: "(i) Rs.200-00 per month (except for the month of February)".
+  source: "Rs.25,000 in June -> Rs.200."
+  ca_initials: PENDING
+  ca_date: null
+  target: professional_tax
+  inputs: {state: KA, gross_monthly: 2500000, month: 6}
+  expected: 20000
+
+- id: pt_ka_february_300_act_33_of_2025
+  statute: Karnataka Tax on Professions, Trades, Callings and Employments Act, 1976
+  section: "Schedule Sl. No. 1, rate clause (ii) (Act 33 of 2025 w.e.f. 01.04.2025)"
+  provenance: primary
+  citation_url: "https://www.indiacode.nic.in/bitstream/123456789/6864/1/22_of_2026_%28e%29.pdf"
+  citation_locator: >-
+    Schedule Sl. No. 1: "(ii) Rs.300-00 for the month of February". Schedule footnote list:
+    "8. Substituted by Act 33 of 2025 w.e.f. 01.04.2025."
+  source: >-
+    Rs.25,000 in February -> Rs.300 (11 x 200 + 300 = Rs.2,500/yr). REGRESSION LOCK: the
+    pre-pack engine charged a flat Rs.200 with no February special — stale vs Act 33 of 2025.
+  ca_initials: PENDING
+  ca_date: null
+  target: professional_tax
+  inputs: {state: KA, gross_monthly: 2500000, month: 2}
+  expected: 30000

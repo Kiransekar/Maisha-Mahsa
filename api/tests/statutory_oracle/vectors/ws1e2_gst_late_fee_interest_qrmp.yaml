@@ -1,0 +1,425 @@
+# WS1.E2 — GST: GSTR-3B late fee (CGST Act s.47 + waiver notifications), s.50 interest, QRMP
+# PMT-06 fixed sum, composition levy rates, and the composite 3B computation.
+# Amounts are integer paise. The engine reports COMBINED CGST+SGST figures; every vector's
+# comment shows the split. The SGST half rests on the mirrored State GST Acts (the GST design
+# levies identical central and State halves); the CGST half is cited to the central instrument.
+#
+# PRIMARY SOURCES fetched 2026-07-23 and read verbatim:
+#  * CGST Act 2017 s.47(1) — "a late fee of one hundred rupees for every day during which such
+#    failure continues subject to a maximum amount of five thousand rupees"
+#    (https://cbic-gst.gov.in/pdf/CGST-Act-Updated-30092020.pdf).
+#  * Notification No. 76/2018-Central Tax (31-12-2018, G.S.R. 1253(E)) — late fee under s.47
+#    "in excess of an amount of twenty-five rupees for every day" waived; where central tax
+#    payable is nil, waived in excess of "ten rupees for every day"
+#    (https://gstcouncil.gov.in/sites/default/files/2024-05/notfctn-76-central-tax-english-2018.pdf).
+#  * Notification No. 19/2021-Central Tax (01-06-2021) — for June 2021 onwards, TOTAL s.47 late
+#    fee capped by class: nil-return ₹250; AATO ≤ ₹1.5 crore ₹1,000; ₹1.5–5 crore ₹2,500 (all
+#    CGST side, mirrored in SGST). Above ₹5 crore no waiver-cap applies, leaving the s.47(1)
+#    statutory maximum ₹5,000
+#    (https://gstcouncil.gov.in/sites/default/files/2024-05/notfctn-19-central-tax-english-2021.pdf).
+#  * Notification No. 13/2017-Central Tax (28-06-2017) — interest u/s 50(1) fixed at 18% p.a.
+#    (https://gstcouncil.gov.in/sites/default/files/2024-04/notfctn-13-central-tax-english.pdf);
+#    CGST Act s.50(1): rate "not exceeding eighteen per cent., as may be notified"; proviso —
+#    interest levied "on that portion of the tax that is paid by debiting the electronic cash
+#    ledger" (net-cash basis).
+#  * Notification No. 85/2020-Central Tax (10-11-2020) — QRMP fixed-sum deposit: "thirty five
+#    per cent. of the tax liability paid by debiting the electronic cash ledger in the return
+#    for the preceding quarter where the return is furnished quarterly"
+#    (https://gstcouncil.gov.in/sites/default/files/2024-05/notfctn-85-central-tax-english-2020.pdf).
+#  * CGST Act s.10 + CGST Rules rule 7 (rate table, as substituted by Notf 50/2020-CT):
+#    manufacturers "half per cent. of the turnover"; Schedule II para 6(b) suppliers (restaurant)
+#    "two and a half per cent."; other suppliers "half per cent. of the turnover of taxable
+#    supplies"; s.10(2A) persons "three per cent." — each CGST side, mirrored in SGST
+#    (https://cbic-gst.gov.in/pdf/24092021-CGST-Rules-2017-Part-A-Rules.pdf).
+#
+# ENGINE-SCOPE NOTES (reported in PROGRESS [WS1.E2-expand], not papered over):
+#  * TURNOVER-LINKED CAPS: late_fee_3b has no turnover input — its ₹10,000 combined cap is the
+#    s.47 statutory maximum (the > ₹5 crore AATO band). For AATO ≤ ₹5 crore, Notification
+#    19/2021 caps the fee LOWER (₹2,000 / ₹5,000 combined) — the engine OVERSTATES the fee for
+#    those taxpayers once the lower cap would bind (> 40 / > 100 days late). Real gap, reported.
+#  * DAY-COUNT: s.50 and rule 88B prescribe no annual divisor; the engine uses /365. Interest
+#    vectors are provenance=interpretation with the divisor alternatives recorded.
+
+# ---- late fee: per-day and both caps -----------------------------------------------------------
+- id: gst_late_fee_zero_days
+  statute: CGST Act 2017
+  section: "47(1)"
+  provenance: derived
+  source: >-
+    DERIVED — filing on/before the due date leaves no "day during which such failure continues"
+    (s.47(1)); zero days of failure is zero fee by the statute's own counting, no figure lifted.
+  ca_initials: PENDING
+  ca_date: null
+  target: late_fee_3b
+  inputs: {days_late: 0}
+  expected: 0
+
+- id: gst_late_fee_one_day
+  statute: CGST Act 2017
+  section: "47(1); Notf 76/2018"
+  provenance: primary
+  citation_url: "https://gstcouncil.gov.in/sites/default/files/2024-05/notfctn-76-central-tax-english-2018.pdf"
+  citation_locator: >-
+    Notification 76/2018-Central Tax: s.47 late fee waived "which is in excess of an amount of
+    twenty-five rupees for every day during which such failure continues" — effective ₹25/day
+    CGST; the State half mirrors it (combined ₹50/day). Levy: CGST Act s.47(1) (₹100/day
+    statutory, waived down to ₹25).
+  source: >-
+    1 day late, tax payable in the return: ₹25 CGST + ₹25 SGST = ₹50 = 5,000 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: late_fee_3b
+  inputs: {days_late: 1}
+  expected: 5000
+
+- id: gst_late_fee_ten_days
+  statute: CGST Act 2017
+  section: "47(1); Notf 76/2018"
+  provenance: primary
+  citation_url: "https://gstcouncil.gov.in/sites/default/files/2024-05/notfctn-76-central-tax-english-2018.pdf"
+  citation_locator: >-
+    Notification 76/2018-Central Tax (₹25/day CGST after waiver) + mirrored SGST half.
+  source: >-
+    10 days × ₹50/day combined = ₹500 = 50,000 paise; caps far away.
+  ca_initials: PENDING
+  ca_date: null
+  target: late_fee_3b
+  inputs: {days_late: 10}
+  expected: 50000
+
+- id: gst_late_fee_199_days_below_cap
+  statute: CGST Act 2017
+  section: "47(1)"
+  provenance: primary
+  citation_url: "https://cbic-gst.gov.in/pdf/CGST-Act-Updated-30092020.pdf"
+  citation_locator: >-
+    CGST Act s.47(1): per-day fee "subject to a maximum amount of five thousand rupees" (CGST
+    side; combined cap ₹10,000 with the SGST mirror). Per-day ₹25+₹25: Notification 76/2018.
+  source: >-
+    199 days × ₹50 = ₹9,950 = 995,000 paise — one day short of the combined ₹10,000 statutory
+    cap. Cap-boundary triple with the two vectors below.
+  ca_initials: PENDING
+  ca_date: null
+  target: late_fee_3b
+  inputs: {days_late: 199}
+  expected: 995000
+
+- id: gst_late_fee_200_days_cap_reached_exactly
+  statute: CGST Act 2017
+  section: "47(1)"
+  provenance: primary
+  citation_url: "https://cbic-gst.gov.in/pdf/CGST-Act-Updated-30092020.pdf"
+  citation_locator: >-
+    CGST Act s.47(1) ("maximum amount of five thousand rupees", CGST side).
+  source: >-
+    200 days × ₹50 = ₹10,000 = the combined ₹5,000+₹5,000 statutory maximum exactly (1,000,000
+    paise). Applies to the > ₹5 crore AATO class; for smaller taxpayers Notification 19/2021
+    caps lower — NOT modelled by the engine (gap recorded in PROGRESS).
+  ca_initials: PENDING
+  ca_date: null
+  target: late_fee_3b
+  inputs: {days_late: 200}
+  expected: 1000000
+
+- id: gst_late_fee_201_days_cap_binds
+  statute: CGST Act 2017
+  section: "47(1)"
+  provenance: primary
+  citation_url: "https://cbic-gst.gov.in/pdf/CGST-Act-Updated-30092020.pdf"
+  citation_locator: >-
+    CGST Act s.47(1) ("subject to a maximum amount of five thousand rupees").
+  source: >-
+    201 days would accrue ₹10,050; the s.47(1) maximum clips it at ₹10,000 combined = 1,000,000
+    paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: late_fee_3b
+  inputs: {days_late: 201}
+  expected: 1000000
+
+- id: gst_late_fee_nil_return_one_day
+  statute: CGST Act 2017
+  section: "47(1); Notf 76/2018 nil proviso"
+  provenance: primary
+  citation_url: "https://gstcouncil.gov.in/sites/default/files/2024-05/notfctn-76-central-tax-english-2018.pdf"
+  citation_locator: >-
+    Notification 76/2018-Central Tax, first proviso: "where the total amount of central tax
+    payable in the said return is nil", late fee waived in excess of "ten rupees for every day".
+  source: >-
+    Nil return, 1 day late: ₹10 CGST + ₹10 SGST = ₹20 = 2,000 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: late_fee_3b
+  inputs: {days_late: 1, is_nil: true}
+  expected: 2000
+
+- id: gst_late_fee_nil_25_days_cap_reached_exactly
+  statute: CGST Act 2017
+  section: "47(1); Notf 19/2021 nil cap"
+  provenance: primary
+  citation_url: "https://gstcouncil.gov.in/sites/default/files/2024-05/notfctn-19-central-tax-english-2021.pdf"
+  citation_locator: >-
+    Notification 19/2021-Central Tax, Table for June 2021 onwards, Sl.1: "Registered persons
+    whose total amount of central tax payable in the said return is nil — Two hundred and fifty
+    rupees" (CGST side; combined ₹500 with the SGST mirror). Per-day ₹10+₹10: Notf 76/2018.
+  source: >-
+    25 days × ₹20/day = ₹500 = the combined nil-return cap exactly (50,000 paise).
+  ca_initials: PENDING
+  ca_date: null
+  target: late_fee_3b
+  inputs: {days_late: 25, is_nil: true}
+  expected: 50000
+
+- id: gst_late_fee_nil_26_days_capped
+  statute: CGST Act 2017
+  section: "47(1); Notf 19/2021 nil cap"
+  provenance: primary
+  citation_url: "https://gstcouncil.gov.in/sites/default/files/2024-05/notfctn-19-central-tax-english-2021.pdf"
+  citation_locator: >-
+    Notification 19/2021-Central Tax, Table Sl.1 (₹250 CGST nil-return cap).
+  source: >-
+    26 days would accrue ₹520; the ₹250+₹250 cap clips it at ₹500 = 50,000 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: late_fee_3b
+  inputs: {days_late: 26, is_nil: true}
+  expected: 50000
+
+# ---- s.50 interest (18% notified; /365 divisor is the recorded interpretation) -----------------
+- id: gst_interest_zero_days
+  statute: CGST Act 2017
+  section: "50(1)"
+  provenance: derived
+  source: >-
+    DERIVED — tax paid within the prescribed period leaves no "period for which the tax ...
+    remains unpaid" (s.50(1)); no days, no interest. No figure lifted.
+  ca_initials: PENDING
+  ca_date: null
+  target: interest_3b
+  inputs: {cash_tax: 10000000, days_late: 0}
+  expected: 0
+
+- id: gst_interest_full_year_exact_18pct
+  statute: CGST Act 2017
+  section: "50(1); Notf 13/2017"
+  provenance: interpretation
+  citation_url: "https://gstcouncil.gov.in/sites/default/files/2024-04/notfctn-13-central-tax-english.pdf"
+  citation_locator: >-
+    Notification 13/2017-Central Tax, Table Sl.1: "Sub-section (1) of section 50 — 18" (per
+    cent per annum); CGST Act s.50(1): "at such rate, not exceeding eighteen per cent., as may
+    be notified" (https://cbic-gst.gov.in/pdf/CGST-Act-Updated-30092020.pdf).
+  alternatives_considered:
+    - "CHOSEN — simple interest, days/365 annualisation: 365 late days on ₹1,00,000 = 18% ×
+       365/365 = ₹18,000 exactly."
+    - "days/366 in a leap year — would give ₹17,950.82 for the same 365 days. Neither s.50 nor
+       rule 88B prescribes the divisor; /365 is the administration's standard convention but a
+       convention nonetheless, hence interpretation."
+    - "Calendar-month proration (18%/12 per month or part) — no textual basis found; rejected."
+  source: >-
+    18% p.a. is primary (Notf 13/2017). The /365 day-count is the recorded choice. ₹1,00,000 ×
+    18% × 365/365 = ₹18,000 = 1,800,000 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: interest_3b
+  inputs: {cash_tax: 10000000, days_late: 365}
+  expected: 1800000
+
+- id: gst_interest_73_days_exact_fifth
+  statute: CGST Act 2017
+  section: "50(1); Notf 13/2017"
+  provenance: interpretation
+  citation_url: "https://gstcouncil.gov.in/sites/default/files/2024-04/notfctn-13-central-tax-english.pdf"
+  citation_locator: >-
+    Notification 13/2017-Central Tax Sl.1 (18% u/s 50(1)).
+  alternatives_considered:
+    - "CHOSEN — days/365: 73/365 = exactly 1/5 of a year; ₹50,000 × 18% × 1/5 = ₹1,800."
+    - "days/366 (leap): ₹1,795.08 — divisor choice as recorded on
+       gst_interest_full_year_exact_18pct; one CA confirmation resolves all three vectors."
+  source: >-
+    ₹50,000 × 0.18 × 73/365 = ₹1,800 exactly = 180,000 paise (no rounding involved at this
+    exact-fifth boundary).
+  ca_initials: PENDING
+  ca_date: null
+  target: interest_3b
+  inputs: {cash_tax: 5000000, days_late: 73}
+  expected: 180000
+
+- id: gst_interest_30_days_rounding
+  statute: CGST Act 2017
+  section: "50(1); Notf 13/2017"
+  provenance: interpretation
+  citation_url: "https://gstcouncil.gov.in/sites/default/files/2024-04/notfctn-13-central-tax-english.pdf"
+  citation_locator: >-
+    Notification 13/2017-Central Tax Sl.1 (18% u/s 50(1)).
+  alternatives_considered:
+    - "CHOSEN — days/365 with rupee rounding of the result: ₹1,00,000 × 18% × 30/365 =
+       ₹1,479.452... -> ₹1,479."
+    - "days/366: ₹1,475.41. Divisor choice as recorded on gst_interest_full_year_exact_18pct."
+  source: >-
+    10,000,000 paise × 0.18 × 30/365 = 147,945.205... paise -> half-up to 147,945 -> rupee
+    rounding gives ₹1,479 = 147,900 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: interest_3b
+  inputs: {cash_tax: 10000000, days_late: 30}
+  expected: 147900
+
+# ---- QRMP: PMT-06 fixed-sum deposit ------------------------------------------------------------
+- id: qrmp_pmt06_fixed_sum_35pct
+  statute: CGST Act 2017
+  section: "39(7) proviso; Notf 85/2020"
+  provenance: primary
+  citation_url: "https://gstcouncil.gov.in/sites/default/files/2024-05/notfctn-85-central-tax-english-2020.pdf"
+  citation_locator: >-
+    Notification 85/2020-Central Tax (10-11-2020), para 1(i): deposit "equivalent to ... thirty
+    five per cent. of the tax liability paid by debiting the electronic cash ledger in the
+    return for the preceding quarter where the return is furnished quarterly".
+  source: >-
+    Preceding quarter's cash tax ₹1,00,000 -> 35% = ₹35,000 = 3,500,000 paise (exact).
+  ca_initials: PENDING
+  ca_date: null
+  target: pmt06_fixed_sum
+  inputs: {prev_quarter_cash: 10000000}
+  expected: 3500000
+
+- id: qrmp_pmt06_fixed_sum_rounding
+  statute: CGST Act 2017
+  section: "39(7) proviso; Notf 85/2020"
+  provenance: primary
+  citation_url: "https://gstcouncil.gov.in/sites/default/files/2024-05/notfctn-85-central-tax-english-2020.pdf"
+  citation_locator: >-
+    Notification 85/2020-Central Tax para 1(i) ("thirty five per cent.").
+  source: >-
+    Preceding quarter cash ₹3,333.33 (333,333 paise) -> 35% = 116,666.55 paise -> rounds
+    half-up to 116,667 paise. The 35% is primary; sub-paisa rounding is the engine's exact-money
+    convention.
+  ca_initials: PENDING
+  ca_date: null
+  target: pmt06_fixed_sum
+  inputs: {prev_quarter_cash: 333333}
+  expected: 116667
+
+# ---- composition levy (s.10 + rule 7) ----------------------------------------------------------
+- id: composition_trader_1pct_combined
+  statute: CGST Act 2017
+  section: "10(1)(c); rule 7 Sl.3"
+  provenance: primary
+  citation_url: "https://cbic-gst.gov.in/pdf/24092021-CGST-Rules-2017-Part-A-Rules.pdf"
+  citation_locator: >-
+    CGST Rules rule 7, Table Sl.3 (as substituted by Notf 50/2020-CT): "Any other supplier
+    eligible for composition levy under sub-sections (1) and (2) of section 10 — half per cent.
+    of the turnover of taxable supplies of goods and services in the State or Union territory";
+    Act ceiling: CGST Act s.10(1)(c) "half per cent. of the turnover" (updated Act PDF,
+    https://cbic-gst.gov.in/pdf/CGST-Act-Updated-30092020.pdf).
+  source: >-
+    Trader, taxable-supplies turnover ₹10,00,000: 0.5% CGST + 0.5% SGST = 1% combined =
+    ₹10,000 = 1,000,000 paise. Note the rule-7 base for this class is the turnover of TAXABLE
+    supplies — the caller passes that figure.
+  ca_initials: PENDING
+  ca_date: null
+  target: composition_tax
+  inputs: {turnover: 100000000, category: "trader"}
+  expected: {tax: 1000000, rate_pct: 1.0}
+
+- id: composition_manufacturer_1pct_combined
+  statute: CGST Act 2017
+  section: "10(1)(a); rule 7 Sl.1"
+  provenance: primary
+  citation_url: "https://cbic-gst.gov.in/pdf/24092021-CGST-Rules-2017-Part-A-Rules.pdf"
+  citation_locator: >-
+    CGST Rules rule 7, Table Sl.1: "Manufacturers, other than manufacturers of such goods as
+    may be notified by the Government — half per cent. of the turnover in the State or Union
+    territory" (+ SGST mirror; Act ceiling s.10(1)(a) "one per cent.").
+  source: >-
+    Manufacturer, turnover ₹10,00,000: 0.5% + 0.5% = 1% = ₹10,000 = 1,000,000 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: composition_tax
+  inputs: {turnover: 100000000, category: "manufacturer"}
+  expected: {tax: 1000000, rate_pct: 1.0}
+
+- id: composition_restaurant_5pct_combined
+  statute: CGST Act 2017
+  section: "10(1)(b); rule 7 Sl.2"
+  provenance: primary
+  citation_url: "https://cbic-gst.gov.in/pdf/24092021-CGST-Rules-2017-Part-A-Rules.pdf"
+  citation_locator: >-
+    CGST Rules rule 7, Table Sl.2: "Suppliers making supplies referred to in clause (b) of
+    paragraph 6 of Schedule II — two and a half per cent. of the turnover in the State or Union
+    territory" (restaurant-type composite supplies; + SGST mirror. Act: s.10(1)(b) "two and a
+    half per cent.").
+  source: >-
+    Restaurant, turnover ₹8,00,000: 2.5% + 2.5% = 5% = ₹40,000 = 4,000,000 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: composition_tax
+  inputs: {turnover: 80000000, category: "restaurant"}
+  expected: {tax: 4000000, rate_pct: 5.0}
+
+- id: composition_service_6pct_combined
+  statute: CGST Act 2017
+  section: "10(2A); rule 7 Sl.4"
+  provenance: primary
+  citation_url: "https://cbic-gst.gov.in/pdf/24092021-CGST-Rules-2017-Part-A-Rules.pdf"
+  citation_locator: >-
+    CGST Rules rule 7, Table Sl.4: "Registered persons not eligible under the composition levy
+    under sub-sections (1) and (2), but eligible to opt to pay tax under sub-section (2A), of
+    section 10 — three per cent. of the turnover of supplies of goods and services in the State
+    or Union territory" (+ SGST mirror = 6% combined).
+  source: >-
+    s.10(2A) service supplier, turnover ₹5,00,000: 3% + 3% = 6% = ₹30,000 = 3,000,000 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: composition_tax
+  inputs: {turnover: 50000000, category: "service"}
+  expected: {tax: 3000000, rate_pct: 6.0}
+
+# ---- composite GSTR-3B: set-off + fee + net-cash interest --------------------------------------
+- id: gstr3b_composite_setoff_fee_and_netcash_interest
+  statute: CGST Act 2017
+  section: "49(5); 47(1); 50(1) proviso"
+  provenance: interpretation
+  citation_url: "https://gstcouncil.gov.in/sites/default/files/2024-04/notfctn-13-central-tax-english.pdf"
+  citation_locator: >-
+    Interest 18%: Notification 13/2017-Central Tax Sl.1. Net-cash base: CGST Act s.50(1)
+    proviso — interest "levied on that portion of the tax that is paid by debiting the
+    electronic cash ledger" (https://cbic-gst.gov.in/pdf/CGST-Act-Updated-30092020.pdf).
+    Late fee ₹25+₹25/day: Notification 76/2018. Set-off: s.49(5) own-head first.
+  alternatives_considered:
+    - "CHOSEN — days/365 annualisation of the 18% rate (divisor choice recorded on
+       gst_interest_full_year_exact_18pct; this vector otherwise rests on primary text)."
+    - "days/366 — would give interest ₹888 here."
+  source: >-
+    Output CGST ₹50,000 + SGST ₹50,000; ITC CGST ₹20,000 + SGST ₹20,000 -> own-head set-off
+    (s.49(5)(b)/(c)) leaves cash ₹30,000 + ₹30,000 = ₹60,000. Filed 10 days late: late fee 10 ×
+    ₹50 = ₹500. Interest on the CASH portion only (s.50(1) proviso): ₹60,000 × 18% × 10/365 =
+    ₹295.89... -> ₹296. Total payable = 6,000,000 + 50,000 + 29,600 = 6,079,600 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: gstr3b
+  inputs:
+    output: {igst: 0, cgst: 5000000, sgst: 5000000}
+    itc_available: {igst: 0, cgst: 2000000, sgst: 2000000}
+    days_late: 10
+  expected: {cash_total: 6000000, late_fee: 50000, interest: 29600, total_payable: 6079600}
+
+- id: gstr3b_nil_return_late_fee_only
+  statute: CGST Act 2017
+  section: "47(1); Notf 76/2018 nil proviso"
+  provenance: primary
+  citation_url: "https://gstcouncil.gov.in/sites/default/files/2024-05/notfctn-76-central-tax-english-2018.pdf"
+  citation_locator: >-
+    Notification 76/2018-Central Tax nil proviso (₹10/day CGST + SGST mirror); interest base is
+    zero because there is no unpaid tax (CGST Act s.50(1)).
+  source: >-
+    Nil return, 5 days late: cash ₹0; late fee 5 × ₹20 = ₹100 = 10,000 paise; interest ₹0 (no
+    tax remained unpaid). Total ₹100.
+  ca_initials: PENDING
+  ca_date: null
+  target: gstr3b
+  inputs:
+    output: {igst: 0, cgst: 0, sgst: 0}
+    itc_available: {igst: 0, cgst: 0, sgst: 0}
+    days_late: 5
+    is_nil: true
+  expected: {cash_total: 0, late_fee: 10000, interest: 0, total_payable: 10000}

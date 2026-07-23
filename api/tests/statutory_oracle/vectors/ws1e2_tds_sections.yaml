@@ -1,0 +1,406 @@
+# WS1.E2 — TDS section boundaries: 194C, 194H, 194J (technical), 194I month edge, 194Q, 194T.
+# Extends ws1c_proven_defects.yaml (which owns the 194J 50k pair, 194I 55k/40k, 194C rate pair).
+# Amounts are integer paise. All thresholds use STRICT "does not exceed" semantics — at the
+# threshold no deduction, one paisa above it the duty begins (the §WS1.C1 operator, already
+# regression-locked; every pair below extends it to more sections).
+#
+# PRIMARY SOURCES fetched 2026-07-23 and read verbatim:
+#  * Finance Act 2025 (No. 7 of 2025), https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf:
+#    s.63 — s.194H first proviso: for "fifteen thousand rupees" substitute "twenty thousand
+#    rupees"; s.65 — s.194J: "fifty thousand rupees" (already vectored in ws1c).
+#  * Finance (No. 2) Act 2024 (No. 15 of 2024), https://egazette.gov.in/WriteReadData/2024/256436.pdf:
+#    s.57 — s.194H: for "five per cent." substitute "two per cent." (w.e.f. 1-10-2024);
+#    s.62 — inserts s.194T: firm paying a partner salary/remuneration/commission/bonus/interest
+#    deducts "at the rate of ten per cent"; s.194T(2): no deduction "where such sum or the
+#    aggregate of such sums ... does not exceed twenty thousand rupees during the financial year".
+#  * Finance Act 2020 (No. 12 of 2020), https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202020.pdf:
+#    s.79 — s.194J(1): "two per cent. of such sum in case of fees for technical services (not
+#    being a professional services ...) ... and ten per cent. of such sum in other cases".
+#  * Finance Act 2021 (No. 13 of 2021), https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202021.pdf:
+#    s.54 — inserts s.194Q: buyer paying a resident seller "for purchase of any goods of the
+#    value or aggregate of such value exceeding fifty lakh rupees in any previous year ...
+#    deduct an amount equal to 0.1 per cent. of such sum exceeding fifty lakh rupees".
+#    s.194Q(5)(b) carve-out for 206C(1H) transactions was OMITTED by Finance Act 2025 s.69,
+#    confirming TDS primacy (the engine's tcs_206c_1h_suppressed flag).
+#  * s.194C rates/thresholds: already sourced in ws1c_proven_defects.yaml
+#    (https://www.incometaxindia.gov.in/w/section-194c-54 — s.194C(1)(i)/(ii) 1%/2%, s.194C(5)
+#    "does not exceed thirty thousand rupees", proviso: aggregate "exceeds one lakh rupees").
+#
+# ENGINE-SCOPE NOTES (see PROGRESS [WS1.E2-expand]):
+#  * AGGREGATE CATCH-UP: when the FY aggregate first crosses a threshold, these engines deduct
+#    on the CURRENT payment only — no retro-deduction on earlier sub-threshold payments in the
+#    same FY. The statutes exempt while the aggregate "does not exceed" the limit and are silent
+#    on arrears mechanics; deduct-on-crossing-payment-onward is one defensible reading, and every
+#    vector that depends on it is provenance=interpretation with the alternative recorded.
+#  * 194Q buyer precondition (turnover > ₹10 crore, s.194Q(1) Explanation) is presumed by the
+#    engine — the caller is responsible for applicability; recorded, not modelled.
+#  * s.194-I(a) 2% plant/machinery rate: NO reachable primary text this round
+#    (incometaxindia.gov.in Akamai-403s this environment; no wayback snapshot) — the plant-rate
+#    path stays unvectored, BLOCKED on a fetchable primary. Recorded in PROGRESS.
+
+# ---- 194C: single-payment threshold pair + aggregate edge --------------------------------------
+- id: tds_194c_at_30000_exact_none
+  statute: Income-tax Act 1961
+  section: "194C(5)"
+  provenance: primary
+  citation_url: "https://www.incometaxindia.gov.in/w/section-194c-54"
+  citation_locator: >-
+    s.194C(5): "No deduction shall be made from the amount of any sum credited or paid ... if
+    such sum does not exceed thirty thousand rupees" (verbatim text already on record in
+    ws1c_proven_defects.yaml).
+  source: >-
+    Exactly ₹30,000 "does not exceed" ₹30,000 -> no deduction. FY aggregate 0 keeps the
+    ₹1,00,000 proviso inert. Paired with the one-paisa-above vector.
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_on_payment
+  inputs: {section: "194C", amount: 3000000, payee_type: "individual"}
+  expected: {applicable: false, tds_paise: 0}
+
+- id: tds_194c_one_paisa_above_30000
+  statute: Income-tax Act 1961
+  section: "194C(1)(i); 194C(5)"
+  provenance: primary
+  citation_url: "https://www.incometaxindia.gov.in/w/section-194c-54"
+  citation_locator: >-
+    s.194C(1)(i): "one per cent where the payment is being made or credit is being given to an
+    individual or a Hindu undivided family"; s.194C(5) "does not exceed thirty thousand rupees".
+  source: >-
+    ₹30,000.01 exceeds ₹30,000 -> duty arises on the whole sum. 1% × 30,000.01 = ₹300.0001 ->
+    rounds to ₹300 = 30,000 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_on_payment
+  inputs: {section: "194C", amount: 3000001, payee_type: "individual"}
+  expected: {applicable: true, tds_paise: 30000}
+
+- id: tds_194c_aggregate_at_100000_exact_none
+  statute: Income-tax Act 1961
+  section: "194C(5) proviso"
+  provenance: primary
+  citation_url: "https://www.incometaxindia.gov.in/w/section-194c-54"
+  citation_locator: >-
+    s.194C(5) proviso: deduction where "the aggregate of the amounts of such sums credited or
+    paid or likely to be credited or paid during the financial year exceeds one lakh rupees".
+  source: >-
+    FY aggregate ₹70,000 + this ₹30,000 = exactly ₹1,00,000, which does not EXCEED one lakh;
+    the single payment is also at (not above) ₹30,000. Neither trigger fires -> no deduction.
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_on_payment
+  inputs: {section: "194C", amount: 3000000, payee_type: "individual", aggregate_ytd: 7000000}
+  expected: {applicable: false, tds_paise: 0}
+
+- id: tds_194c_aggregate_crossing_payment
+  statute: Income-tax Act 1961
+  section: "194C(5) proviso"
+  provenance: interpretation
+  citation_url: "https://www.incometaxindia.gov.in/w/section-194c-54"
+  citation_locator: >-
+    s.194C(5) proviso: "where the aggregate ... exceeds one lakh rupees, the person responsible
+    for paying such sums ... shall be liable to deduct income-tax under this section".
+  alternatives_considered:
+    - "CHOSEN — deduct on the crossing payment (and every later one) only: ₹25,000 single is
+       under ₹30,000, but aggregate ₹80,000 + ₹25,000 = ₹1,05,000 exceeds ₹1,00,000, so this
+       payment is deducted at 1% = ₹250. Earlier sub-threshold payments of the FY are not
+       retro-deducted by the engine."
+    - "Catch-up on crossing: once the aggregate exceeds ₹1,00,000 the deductor must deduct on
+       the ENTIRE aggregate including the earlier ₹80,000 (common compliance practice; 'liable
+       to deduct income-tax under this section' read as reaching all sums of the year). Under
+       this reading ₹1,050 falls due at this event, not ₹250. The statute does not spell out
+       the arrears mechanics; CA to confirm which convention the product must implement."
+  source: >-
+    The aggregate trigger itself is primary; WHAT the crossing payment drags into deduction is
+    the recorded choice. 1% × ₹25,000 = ₹250 = 25,000 paise on the chosen reading.
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_on_payment
+  inputs: {section: "194C", amount: 2500000, payee_type: "individual", aggregate_ytd: 8000000}
+  expected: {applicable: true, tds_paise: 25000}
+
+# ---- 194H: new ₹20,000 threshold (FA 2025) at the 2% rate (FA No.2 2024) -----------------------
+- id: tds_194h_at_20000_exact_none
+  statute: Income-tax Act 1961
+  section: "194H first proviso"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    Finance Act 2025 s.63: in s.194H first proviso, for "fifteen thousand rupees" substitute
+    "twenty thousand rupees" — the proviso is the standard "does not exceed" exemption, so at
+    exactly ₹20,000 no deduction arises.
+  source: >-
+    Commission of exactly ₹20,000 does not exceed the FA-2025 threshold -> no TDS. Paired with
+    the one-paisa-above vector; a ₹15,000 vector below proves the OLD threshold no longer bites.
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_on_payment
+  inputs: {section: "194H", amount: 2000000}
+  expected: {applicable: false, tds_paise: 0}
+
+- id: tds_194h_one_paisa_above_20000
+  statute: Income-tax Act 1961
+  section: "194H; FA(No.2) 2024 s.57 rate"
+  provenance: primary
+  citation_url: "https://egazette.gov.in/WriteReadData/2024/256436.pdf"
+  citation_locator: >-
+    Finance (No. 2) Act 2024 s.57: in s.194H, for "five per cent." substitute "two per cent."
+    (w.e.f. 1-10-2024). Threshold: Finance Act 2025 s.63 ("twenty thousand rupees").
+  source: >-
+    ₹20,000.01 exceeds the threshold -> 2% × 20,000.01 = ₹400.0002 -> rounds to ₹400 = 40,000
+    paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_on_payment
+  inputs: {section: "194H", amount: 2000001}
+  expected: {applicable: true, tds_paise: 40000}
+
+- id: tds_194h_old_15000_threshold_gone
+  statute: Income-tax Act 1961
+  section: "194H first proviso"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    Finance Act 2025 s.63 — the ₹15,000 words were SUBSTITUTED by ₹20,000, so a ₹15,000-crossing
+    payment that would have attracted TDS under the pre-2025 proviso no longer does.
+  source: >-
+    ₹18,000 sits between the repealed ₹15,000 figure and the current ₹20,000 threshold: under
+    current law no deduction. Locks the FY 2025-26 threshold in against a stale-value regression
+    (the exact failure class WS1.C found for 194J).
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_on_payment
+  inputs: {section: "194H", amount: 1800000}
+  expected: {applicable: false, tds_paise: 0}
+
+# ---- 194J: technical-services 2% rate; aggregate edge ------------------------------------------
+- id: tds_194j_technical_2pct
+  statute: Income-tax Act 1961
+  section: "194J(1) — technical services rate"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202020.pdf"
+  citation_locator: >-
+    Finance Act 2020 (No. 12 of 2020) s.79(a): in s.194J(1), for "ten per cent. of such sum",
+    substitute "two per cent. of such sum in case of fees for technical services (not being a
+    professional services, or royalty where such royalty is in the nature of consideration for
+    sale, distribution or exhibition of cinematographic films and ten per cent. of such sum in
+    other cases".
+  source: >-
+    Fees for technical services ₹60,000 (above the ₹50,000 FA-2025 threshold pinned in ws1c):
+    2% × 60,000 = ₹1,200 = 120,000 paise (exact, no rounding needed).
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_on_payment
+  inputs: {section: "194J", amount: 6000000, category: "technical"}
+  expected: {applicable: true, tds_paise: 120000}
+
+- id: tds_194j_aggregate_at_50000_exact_none
+  statute: Income-tax Act 1961
+  section: "194J(1) first proviso (B)"
+  provenance: primary
+  citation_url: "https://www.incometaxindia.gov.in/w/section-194j-33"
+  citation_locator: >-
+    s.194J(1) first proviso clause (B)(i): no deduction where "the aggregate of the amounts of
+    such sums credited or paid or likely to be credited or paid during the financial year ...
+    does not exceed" fifty thousand rupees (verbatim on record in ws1c_proven_defects.yaml).
+  source: >-
+    FY aggregate ₹30,000 + this ₹20,000 = exactly ₹50,000 -> does not exceed -> no deduction.
+    Aggregate-side twin of the ws1c single-payment boundary pair.
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_on_payment
+  inputs: {section: "194J", amount: 2000000, aggregate_ytd: 3000000}
+  expected: {applicable: false, tds_paise: 0}
+
+- id: tds_194j_aggregate_crossing_payment
+  statute: Income-tax Act 1961
+  section: "194J(1) first proviso (B)"
+  provenance: interpretation
+  citation_url: "https://www.incometaxindia.gov.in/w/section-194j-33"
+  citation_locator: >-
+    s.194J(1) first proviso clause (B)(i) ("does not exceed ... fifty thousand rupees") read
+    with s.194J(1) ("ten per cent of such sum in other cases").
+  alternatives_considered:
+    - "CHOSEN — deduct on the crossing payment onward only: aggregate ₹30,000 + ₹20,000.01 =
+       ₹50,000.01 exceeds ₹50,000 -> this payment deducted at 10% = ₹2,000.001 -> ₹2,000. The
+       earlier ₹30,000 of the FY is not retro-deducted by the engine."
+    - "Catch-up on crossing: deduct on the whole FY aggregate (₹5,000 due at this event).
+       Statute silent on arrears mechanics — CA to confirm (same choice as
+       tds_194c_aggregate_crossing_payment; one confirmation resolves all these)."
+  source: >-
+    10% × ₹20,000.01 = ₹2,000.001 -> rounds half-up to ₹2,000 = 200,000 paise on the chosen
+    per-payment reading.
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_on_payment
+  inputs: {section: "194J", amount: 2000001, aggregate_ytd: 3000000}
+  expected: {applicable: true, tds_paise: 200000}
+
+# ---- 194I: per-month threshold edge (extends the ws1c 55k/40k pair) ----------------------------
+- id: tds_194i_at_50000_month_exact_none
+  statute: Income-tax Act 1961
+  section: "194-I first proviso"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    Finance Act 2025 s.64, substituted first proviso to s.194-I: "no deduction shall be made
+    under this section, where the income by way of rent credited or paid for a month or part of
+    a month ... does not exceed fifty thousand rupees".
+  source: >-
+    Rent of exactly ₹50,000 for the month "does not exceed" ₹50,000 -> no deduction. Pairs with
+    the one-paisa-above vector below and ws1c's ₹55,000 full-month vector.
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_on_payment
+  inputs: {section: "194I", amount: 5000000, category: "building"}
+  expected: {applicable: false, tds_paise: 0}
+
+- id: tds_194i_one_paisa_above_month_threshold
+  statute: Income-tax Act 1961
+  section: "194-I(b); first proviso"
+  provenance: primary
+  citation_url: "https://www.incometaxindia.gov.in/w/section-194-i-19"
+  citation_locator: >-
+    s.194-I clause (b): "ten per cent for the use of any land or building ..." (verbatim on
+    record in ws1c_proven_defects.yaml); threshold: Finance Act 2025 s.64 substituted proviso
+    ("does not exceed fifty thousand rupees" per month,
+    https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf).
+  source: >-
+    ₹50,000.01 exceeds the monthly threshold -> TDS on the FULL month's rent: 10% × 50,000.01 =
+    ₹5,000.001 -> rounds to ₹5,000 = 500,000 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_on_payment
+  inputs: {section: "194I", amount: 5000001, category: "building"}
+  expected: {applicable: true, tds_paise: 500000}
+
+# ---- 194Q: 0.1% on the slice above ₹50 lakh ----------------------------------------------------
+- id: tds_194q_at_50_lakh_exact_none
+  statute: Income-tax Act 1961
+  section: "194Q(1)"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202021.pdf"
+  citation_locator: >-
+    Finance Act 2021 (No. 13 of 2021) s.54, inserted s.194Q(1): duty on purchase value
+    "exceeding fifty lakh rupees in any previous year", tax "equal to 0.1 per cent. of such sum
+    exceeding fifty lakh rupees".
+  source: >-
+    A single FY purchase of exactly ₹50,00,000 does not EXCEED fifty lakh -> nothing above the
+    threshold, no deduction. (Buyer-turnover > ₹10 crore precondition of the s.194Q(1)
+    Explanation is presumed by the engine — recorded in the file header.)
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_194q
+  inputs: {amount: 500000000, aggregate_ytd: 0}
+  expected: {applicable: false, tds_paise: 0, taxable_paise: 0, tcs_206c_1h_suppressed: false}
+
+- id: tds_194q_one_paisa_above_50_lakh
+  statute: Income-tax Act 1961
+  section: "194Q(1)"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202021.pdf"
+  citation_locator: >-
+    Finance Act 2021 s.54: "0.1 per cent. of such sum exceeding fifty lakh rupees" — the base
+    is only the slice ABOVE ₹50,00,000, not the whole consideration.
+  source: >-
+    ₹50,00,000.01 -> taxable slice = 1 paisa; 0.1% of 1 paisa = 0.001 paise -> rounds to ₹0.
+    The section APPLIES (applicable true, and the seller's 206C(1H) collection is displaced —
+    Finance Act 2025 s.69 removed the 194Q(5)(b) carve-out) even though the rounded deduction
+    is zero at this extreme boundary.
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_194q
+  inputs: {amount: 500000001, aggregate_ytd: 0}
+  expected: {applicable: true, tds_paise: 0, taxable_paise: 1, tcs_206c_1h_suppressed: true}
+
+- id: tds_194q_slice_straddles_threshold
+  statute: Income-tax Act 1961
+  section: "194Q(1)"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202021.pdf"
+  citation_locator: >-
+    Finance Act 2021 s.54 ("value or aggregate of such value exceeding fifty lakh rupees ...
+    0.1 per cent. of such sum exceeding fifty lakh rupees").
+  source: >-
+    FY aggregate ₹45,00,000 booked; this purchase ₹10,00,000 takes the year to ₹55,00,000. Only
+    the ₹5,00,000 above the ₹50,00,000 line is taxable: 0.1% × 5,00,000 = ₹500 = 50,000 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_194q
+  inputs: {amount: 100000000, aggregate_ytd: 450000000}
+  expected: {applicable: true, tds_paise: 50000, taxable_paise: 50000000, tcs_206c_1h_suppressed: true}
+
+- id: tds_194q_fully_above_threshold
+  statute: Income-tax Act 1961
+  section: "194Q(1)"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202021.pdf"
+  citation_locator: >-
+    Finance Act 2021 s.54 (as above).
+  source: >-
+    Aggregate already ₹60,00,000 (threshold long crossed): the whole ₹10,00,000 purchase lies
+    above the line -> 0.1% × 10,00,000 = ₹1,000 = 100,000 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_194q
+  inputs: {amount: 100000000, aggregate_ytd: 600000000}
+  expected: {applicable: true, tds_paise: 100000, taxable_paise: 100000000, tcs_206c_1h_suppressed: true}
+
+# ---- 194T: partner payments, ₹20,000 FY threshold, 10% -----------------------------------------
+- id: tds_194t_at_20000_exact_none
+  statute: Income-tax Act 1961
+  section: "194T(2)"
+  provenance: primary
+  citation_url: "https://egazette.gov.in/WriteReadData/2024/256436.pdf"
+  citation_locator: >-
+    Finance (No. 2) Act 2024 s.62, inserted s.194T(2): "No deduction shall be made under
+    sub-section (1) where such sum or the aggregate of such sums credited or paid or likely to
+    be credited or paid to the partner of the firm does not exceed twenty thousand rupees during
+    the financial year."
+  source: >-
+    First partner payment of the FY, exactly ₹20,000 -> does not exceed -> no deduction.
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_194t
+  inputs: {amount: 2000000, aggregate_ytd: 0}
+  expected: {applicable: false, tds_paise: 0}
+
+- id: tds_194t_one_paisa_above_20000
+  statute: Income-tax Act 1961
+  section: "194T(1)"
+  provenance: primary
+  citation_url: "https://egazette.gov.in/WriteReadData/2024/256436.pdf"
+  citation_locator: >-
+    Finance (No. 2) Act 2024 s.62, s.194T(1): the firm "shall, deduct income-tax thereon at the
+    rate of ten per cent"; s.194T(2) exemption fails once the sum exceeds ₹20,000.
+  source: >-
+    ₹20,000.01 exceeds the FY threshold -> 10% × 20,000.01 = ₹2,000.001 -> rounds to ₹2,000 =
+    200,000 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_194t
+  inputs: {amount: 2000001, aggregate_ytd: 0}
+  expected: {applicable: true, tds_paise: 200000}
+
+- id: tds_194t_aggregate_crossing_payment
+  statute: Income-tax Act 1961
+  section: "194T(1)-(2)"
+  provenance: interpretation
+  citation_url: "https://egazette.gov.in/WriteReadData/2024/256436.pdf"
+  citation_locator: >-
+    Finance (No. 2) Act 2024 s.62 — s.194T(1) "deduct income-tax thereon at the rate of ten per
+    cent"; s.194T(2) FY-aggregate ₹20,000 exemption.
+  alternatives_considered:
+    - "CHOSEN — deduct on the crossing payment onward: earlier FY payments ₹15,000; this
+       ₹10,000 takes the aggregate to ₹25,000 > ₹20,000 -> deduct 10% of THIS sum ('thereon') =
+       ₹1,000. Earlier ₹15,000 not retro-deducted."
+    - "Catch-up on crossing: deduct on the full ₹25,000 aggregate at this event (₹2,500).
+       s.194T(2) is an exemption while under the limit; the Act does not state arrears
+       mechanics for the crossing event — CA to confirm (same convention question as 194C/194J
+       aggregate crossings)."
+  source: >-
+    10% × ₹10,000 = ₹1,000 = 100,000 paise on the chosen per-payment reading.
+  ca_initials: PENDING
+  ca_date: null
+  target: tds_194t
+  inputs: {amount: 1000000, aggregate_ytd: 1500000}
+  expected: {applicable: true, tds_paise: 100000}

@@ -1,0 +1,59 @@
+# WS2.2 state pack — Gujarat. Data, not code (§WS2). Amounts are integer paise.
+code: GJ
+name: Gujarat
+pack_version: "2026.07.1"
+
+pt:
+  status: sourced
+  statute: "Gujarat State Tax on Professions, Trades, Callings and Employments Act, 1976"
+  section: "Rate schedule Sr. No. 1(A)/(B) — salary and wages earners, effective 01/04/2022 (notification GHN-35-PFT-2022-S.3(2)(10)-TH dt. 08-04-2022)"
+  citation_url: "https://commercialtax.gujarat.gov.in/vatwebsite/download/schedule/Rate_of_Profession_Tax.pdf"
+  citation_locator: >-
+    Gujarat Commercial Tax Department (commercialtax.gujarat.gov.in), "Rate of Profession
+    Tax under the Gujarat State Tax on Professions, Trades, Callings and Employments Act,
+    1976", Sr. No. 1(A) and 1(B) — salary and wages earners whose monthly salaries or wages
+    are: "(i) Up to ₹12,000/- — Zero; (ii) More than ₹12,000/- — 200/- per month",
+    "Effective from 01/04/2022". Fetched 2026-07-23 and read verbatim.
+  registration_types: [employer-registration, enrolment]
+  periodicity: monthly
+  slabs_monthly:
+    all:
+      - { upto_rupees: 12000, tax_paise: 0 }
+      - { upto_rupees: null, tax_paise: 20000 }
+
+lwf:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: Gujarat Labour Welfare Fund amounts/due months not yet sourced from the
+    Gujarat Labour Welfare Board's official notification. The engine's legacy table
+    (Rs.6/12, Jun+Dec) is uncited and cannot be promoted into pack data (§0.6).
+
+shops_establishments:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: Gujarat Shops and Establishments Act 2019 registration/renewal and leave
+    defaults not yet sourced from the official instrument.
+
+minimum_wages:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: minimum-wage tables require the current Gujarat labour-department VDA
+    notification; no official notification sourced.
+
+stamp_duty_share_certificates:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: share-certificate stamp duty under the Gujarat Stamp Act 1958 not yet
+    sourced from the official schedule text.
+
+eway_intra_state_threshold:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: Gujarat intra-state e-way-bill threshold requires the state rule-138(1)
+    notification; not yet sourced from an official notification.
+
+labour_code_rules:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: status of Gujarat's rules under the four Labour Codes requires verification
+    against the state gazette; tracked by the compliance-calendar watch item.

@@ -1,0 +1,57 @@
+# WS2.2 state pack — Telangana. Data, not code (§WS2). Amounts are integer paise.
+code: TS
+name: Telangana
+pack_version: "2026.07.1"
+
+pt:
+  status: sourced
+  statute: "Telangana Tax on Professions, Trades, Callings and Employments Act, 1987"
+  section: "First Schedule, entry 1 — salary and wage earners"
+  citation_url: "https://www.tgct.gov.in/tgportal/AllActs/APPT/APPTSchedule.aspx"
+  citation_locator: >-
+    Telangana Commercial Taxes Department portal (tgct.gov.in), "PT Schedule" — First
+    Schedule entry 1, salary and wage earners, monthly salary: "Up to 15,000 — Nil; From
+    15,001 to 20,000 — 150 PM; Above 20,000 — 200 PM". Fetched 2026-07-23 and read verbatim.
+  registration_types: [employer-registration, enrolment]
+  periodicity: monthly
+  slabs_monthly:
+    all:
+      - { upto_rupees: 15000, tax_paise: 0 }
+      - { upto_rupees: 20000, tax_paise: 15000 }
+      - { upto_rupees: null, tax_paise: 20000 }
+
+lwf:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: Telangana Labour Welfare Fund amounts/due months not yet sourced from the
+    TS Labour Welfare Board's official notification.
+
+shops_establishments:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: Telangana Shops and Establishments Act 1988 registration/renewal and leave
+    defaults not yet sourced from the official instrument.
+
+minimum_wages:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: minimum-wage tables require the current TS labour-department VDA
+    notification; no official notification sourced.
+
+stamp_duty_share_certificates:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: share-certificate stamp duty for Telangana not yet sourced from the official
+    schedule text.
+
+eway_intra_state_threshold:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: Telangana intra-state e-way-bill threshold requires the state rule-138(1)
+    notification; not yet sourced from an official notification.
+
+labour_code_rules:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: status of Telangana's rules under the four Labour Codes requires
+    verification against the state gazette; tracked by the compliance-calendar watch item.

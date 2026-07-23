@@ -1,0 +1,50 @@
+# WS2.2 state pack — Delhi. Data, not code (§WS2).
+# PT is NOT APPLICABLE here: no profession-tax statute is in force. Rendered honestly as
+# "Not applicable in Delhi" — never a computed ₹0 (§WS2.1: a silent ₹0 is a defect).
+code: DL
+name: Delhi
+pack_version: "2026.07.1"
+
+pt:
+  status: not_applicable
+  basis: >-
+    No profession tax is levied in Delhi: the state/UT has not enacted a profession-tax
+    statute under Article 276 of the Constitution. This is an absence of a levy — there is
+    no instrument to cite. Render "Not applicable in Delhi"; a monthly payslip PT line of
+    zero here means "no levy exists", not "computed as zero".
+
+lwf:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: whether and at what amounts a Labour Welfare Fund levy applies in Delhi is
+    not yet sourced from an official instrument; computing refuses rather than guessing.
+
+shops_establishments:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: Delhi Shops and Establishments registration/renewal and leave defaults not
+    yet sourced from the official instrument.
+
+minimum_wages:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: minimum-wage tables require the current Delhi labour-department VDA
+    notification; no official notification sourced.
+
+stamp_duty_share_certificates:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: share-certificate stamp duty for Delhi not yet sourced from the official
+    schedule text.
+
+eway_intra_state_threshold:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: Delhi intra-state e-way-bill threshold requires the state/UT rule-138(1)
+    notification; not yet sourced from an official notification.
+
+labour_code_rules:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: status of Delhi's rules under the four Labour Codes requires verification
+    against the gazette; tracked by the compliance-calendar watch item.

@@ -22,9 +22,9 @@ from typing import Any
 import pytest
 import yaml
 
-from app.core import statutory_regime
+from app.core import state_packs, statutory_regime
 from app.core.statutory_wage import statutory_wage_base
-from app.domains.gst import gst_calc
+from app.domains.gst import gst_calc, qrmp
 from app.domains.payables import payables_calc
 from app.domains.payroll import service as payroll_service
 from app.domains.payroll import statutory as payroll
@@ -99,11 +99,109 @@ def _itc_setoff(**kw: Any) -> dict[str, int]:
     return flat
 
 
+def _professional_tax(**kw: Any) -> int:
+    # WS2 pack path: statutory.professional_tax routes through app/core/state_packs.
+    return int(payroll.professional_tax(**kw))
+
+
+def _pt_status(**kw: Any) -> str:
+    # Pins the WS2.1 honesty statuses (not_applicable / half_yearly), so a ₹0 payslip line
+    # for DL or TN can never be mistaken for a computed zero.
+    return state_packs.pt_status(**kw)
+
+
+def _pt_half_yearly(**kw: Any) -> int:
+    det = state_packs.pt_half_yearly(**kw)
+    assert det.amount_paise is not None
+    return int(det.amount_paise)
+
+
 def _gratuity_hybrid(**kw: Any) -> int:
     kw = dict(kw)
     for key in ("doj", "exit_date", "boundary"):
         kw[key] = date.fromisoformat(kw[key])
     return int(payroll.gratuity_hybrid(**kw))
+
+
+# ---- WS1.E2 expansion targets (one adapter line per ported engine path) ----------------
+
+
+def _annual_income_tax(**kw: Any) -> int:
+    return int(payroll.annual_income_tax(**kw))
+
+
+def _monthly_tds(**kw: Any) -> int:
+    return int(payroll.monthly_tds(**kw))
+
+
+def _pf_breakdown(basic_monthly: int) -> dict[str, int]:
+    # EPF/EPS split on one wage: the EPFO published-rate table in a single JSON-able view.
+    return {
+        "pf_wage": int(payroll.pf_wage(basic_monthly)),
+        "employee_pf": int(payroll.pf_employee(basic_monthly)),
+        "employer_pf": int(payroll.pf_employer(basic_monthly)),
+        "eps_employer": int(payroll.eps_employer(basic_monthly)),
+        "epf_employer_diff": int(payroll.epf_employer_diff(basic_monthly)),
+    }
+
+
+def _bonus_provision_monthly(**kw: Any) -> int:
+    return int(payroll.bonus_provision_monthly(**kw))
+
+
+def _gratuity_required(**kw: Any) -> int:
+    return int(payroll.gratuity_required(**kw))
+
+
+def _late_fee_3b(**kw: Any) -> int:
+    return int(gst_calc.late_fee_3b(**kw))
+
+
+def _interest_3b(**kw: Any) -> int:
+    return int(gst_calc.interest_3b(**kw))
+
+
+def _gstr3b(**kw: Any) -> dict[str, int]:
+    r = gst_calc.compute_gstr3b(
+        kw["output"],
+        kw["itc_available"],
+        days_late=int(kw.get("days_late", 0)),
+        is_nil=bool(kw.get("is_nil", False)),
+    )
+    return {
+        "cash_total": int(r["cash_total"]),
+        "late_fee": int(r["late_fee"]),
+        "interest": int(r["interest"]),
+        "total_payable": int(r["total_payable"]),
+    }
+
+
+def _pmt06_fixed_sum(**kw: Any) -> int:
+    return int(qrmp.pmt06_fixed_sum(**kw))
+
+
+def _composition_tax(**kw: Any) -> dict[str, Any]:
+    r = gst_calc.composition_tax(**kw)
+    return {"tax": int(r["tax"]), "rate_pct": float(r["rate_pct"])}
+
+
+def _tds_194q(**kw: Any) -> dict[str, Any]:
+    r = payables_calc.tds_194q(**kw)
+    return {
+        "applicable": r["applicable"],
+        "tds_paise": int(r["tds_paise"]),
+        "taxable_paise": int(r["taxable_paise"]),
+        "tcs_206c_1h_suppressed": r["tcs_206c_1h_suppressed"],
+    }
+
+
+def _tds_194t(**kw: Any) -> dict[str, Any]:
+    r = payables_calc.tds_194t(**kw)
+    return {"applicable": r["applicable"], "tds_paise": int(r["tds_paise"])}
+
+
+def _year_label(**kw: Any) -> str:
+    return statutory_regime.year_label(**kw)
 
 
 # target name -> pure engine callable returning JSON-comparable output. Add a line to port a path.
@@ -122,6 +220,22 @@ TARGETS: dict[str, Callable[..., Any]] = {
     "interest_234c": _interest_234c,
     "company_tax_115baa": _company_tax_115baa,
     "itc_setoff": _itc_setoff,
+    "professional_tax": _professional_tax,
+    "pt_status": _pt_status,
+    "pt_half_yearly": _pt_half_yearly,
+    "annual_income_tax": _annual_income_tax,
+    "monthly_tds": _monthly_tds,
+    "pf_breakdown": _pf_breakdown,
+    "bonus_provision_monthly": _bonus_provision_monthly,
+    "gratuity_required": _gratuity_required,
+    "late_fee_3b": _late_fee_3b,
+    "interest_3b": _interest_3b,
+    "gstr3b": _gstr3b,
+    "pmt06_fixed_sum": _pmt06_fixed_sum,
+    "composition_tax": _composition_tax,
+    "tds_194q": _tds_194q,
+    "tds_194t": _tds_194t,
+    "year_label": _year_label,
 }
 
 VECTOR_DIR = Path(__file__).parent / "vectors"
@@ -205,6 +319,16 @@ def test_oracle_vector(v: dict[str, Any]) -> None:
 
     target = TARGETS.get(v["target"])
     assert target is not None, f"vector {v['id']}: unknown target {v['target']!r}"
+
+    if v.get("expect_blocked"):
+        # §0.6 asserted-refusal: the engine must REFUSE this computation (BLOCKED-CA), never
+        # return a value. A silently-returned number here is exactly the invented-value defect.
+        with pytest.raises(NotImplementedError) as excinfo:
+            target(**v["inputs"])
+        assert "BLOCKED-CA" in str(excinfo.value), (
+            f"{v['id']}: refusal must carry the BLOCKED-CA marker, got: {excinfo.value}"
+        )
+        return
 
     result = target(**v["inputs"])
     expected = v["expected"]

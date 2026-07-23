@@ -1,0 +1,68 @@
+# WS2.2 state pack — West Bengal. Data, not code (§WS2). Amounts are integer paise.
+code: WB
+name: West Bengal
+pack_version: "2026.07.1"
+
+pt:
+  status: sourced
+  statute: "West Bengal State Tax on Professions, Trades, Callings and Employments Act, 1979"
+  section: "Schedule (see section 3(2)), Sl. No. 1 — employees earning monthly salary or wages; effective 1-4-2014 (Notification 440-L dt. 11-03-2014 read with 848-F.T. dt. 28-05-2014); band (ii) reduced to Nil w.e.f. 1-8-2016 (Notification 682-L dt. 28-07-2016 read with 1197-FT dt. 16-08-2016)"
+  citation_url: "https://comtax.wb.gov.in/Ptax-Schedule-New_(w.e.f._1-4-2014).pdf"
+  citation_locator: >-
+    WB Directorate of Commercial Taxes (comtax.wb.gov.in), "Schedule to the West Bengal
+    State Tax on Professions, Trades, Callings and Employments Act, 1979 effective from
+    1-4-2014", Sl. No. 1 "Employees earning monthly salary or wages": "(i) Not exceeding
+    Rs.8,500 — Nil; (ii) Above Rs.8,500 but not exceeding Rs.10,000 — Nil* (*Tax rate
+    reduced to 'Nil', from Rs 90/- p.m., with effect from 1-8-2016 vide Notification No.
+    682-L dt.28th July, 2016 read with Notification No. 1197-FT dt.16th August, 2016);
+    (iii) Above Rs.10,000 but not exceeding Rs.15,000 — Rs.110 per month; (iv) Above
+    Rs.15,000 but not exceeding Rs.25,000 — Rs.130 per month; (v) Above Rs.25,000 but not
+    exceeding Rs.40,000 — Rs.150 per month; (vi) Above Rs.40,000 — Rs.200 per month".
+    Fetched 2026-07-23 and read verbatim.
+  registration_types: [employer-registration, enrolment]
+  periodicity: monthly
+  slabs_monthly:
+    all:
+      - { upto_rupees: 8500, tax_paise: 0 }
+      - { upto_rupees: 10000, tax_paise: 0 }
+      - { upto_rupees: 15000, tax_paise: 11000 }
+      - { upto_rupees: 25000, tax_paise: 13000 }
+      - { upto_rupees: 40000, tax_paise: 15000 }
+      - { upto_rupees: null, tax_paise: 20000 }
+
+lwf:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: WB Labour Welfare Fund amounts/due months not yet sourced from the WB Labour
+    Welfare Board's official notification. The engine's legacy table (Rs.3/15, Jun+Dec) is
+    uncited and cannot be promoted into pack data (§0.6).
+
+shops_establishments:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: WB Shops and Establishments Act 1963 registration/renewal and leave defaults
+    not yet sourced from the official instrument.
+
+minimum_wages:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: minimum-wage tables require the current WB labour-department VDA
+    notification; no official notification sourced.
+
+stamp_duty_share_certificates:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: share-certificate stamp duty under the Indian Stamp Act as in force in WB
+    not yet sourced from the official schedule text.
+
+eway_intra_state_threshold:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: WB intra-state e-way-bill threshold requires the state rule-138(1)
+    notification; not yet sourced from an official notification.
+
+labour_code_rules:
+  status: blocked_ca
+  reason: >-
+    BLOCKED-CA: status of WB's rules under the four Labour Codes requires verification
+    against the state gazette; tracked by the compliance-calendar watch item.

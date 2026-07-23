@@ -46,12 +46,23 @@ Three layers, each with its own command:
   `cargo build` in `dif/`, and `npx playwright install chromium`. Deliberately NOT part of
   `scripts/ci_gate.sh` yet — promoting it to a gate step is an ORCH decision.
 - `npm run lighthouse` — perf budget (`budget.json`: script ≤ 300 KB, total ≤ 600 KB,
-  LCP ≤ 2500 ms). Honesty notes from the 2026-07-23 run (Lighthouse 12.8, headless Chrome,
-  mobile throttling, production build served by `vite preview`):
-  - resource budgets PASS with headroom: script 144.8 KB transfer, total 152.4 KB;
+  LCP ≤ 2500 ms). Status from the 2026-07-23 WS7.9-perf fix (Lighthouse 12.8, headless Chrome,
+  mobile throttling, production build served by `vite preview`, target `/today` as a guest —
+  the session-check → /sign-in redirect path):
+  - **ALL budgets PASS**: LCP **1263–1330 ms** across 4 runs (budget 2500 ms), initial-route
+    script 102.7 KB transfer (budget 300), total 110.5 KB (budget 600), perf score 0.99;
+  - before the fix the same runs measured LCP 2.4–3.0 s (median ~2.9 s; an earlier run on a
+    loaded machine recorded 11.2 s — not reproducible since, but the budget breach was real).
+    Two root causes, both fixed: (1) a single 510 KB/146 KB-gzip bundle had to download AND
+    parse before any paint — every authenticated screen is now a `lazy()` route-level chunk
+    (`src/App.tsx`; entry is 334 KB/106 KB gzip; SignIn stays eager because it IS the guest LCP
+    path); (2) nothing painted until React mounted — `index.html` now carries a static app-shell
+    first paint (inlined styles, product name + the recompute-promise sentence; NO figures, no
+    data-shaped chrome per anti-pattern #14), so first paint no longer waits on script parse or
+    the session roundtrip;
   - Lighthouse ≥ 12 REMOVED the `--budget-path` budget audits, so `budget.json` is no longer
-    asserted by lighthouse itself — the resource-summary numbers must be compared against
-    budget.json by the reader (or by lighthouse-ci `assertions` if/when CI adopts it);
-  - throttled-mobile LCP measured 11.2 s against the 2500 ms budget target on the sign-in
-    screen (guest redirect). That is a real WS7.9 gap on the ₹10k-Android profile, recorded
-    here rather than hidden.
+    asserted by lighthouse itself — compare the printed resource-summary/LCP numbers against
+    budget.json yourself (or via lighthouse-ci `assertions` if/when CI adopts it);
+  - the script now finds the npx-cached lighthouse (not just a PATH install) and runs Chrome
+    headless, so it works on CI boxes and over ssh; the HTML report lands in `frontend/` and is
+    gitignored (`*.report.html`).

@@ -1,0 +1,146 @@
+# WS2.2 — Tamil Nadu profession tax: HALF-YEARLY, corporation-wise (app/states/TN.yaml).
+# Chennai + Village Panchayat tables sourced from the Government of Tamil Nadu Single Window
+# Portal; Madurai Corporation is BLOCKED-CA and its vector asserts the REFUSAL (§0.6).
+
+- id: pt_tn_is_half_yearly_not_a_monthly_levy
+  statute: Tamil Nadu municipal-law profession tax
+  section: "levied half-yearly by the local body"
+  provenance: derived
+  source: >-
+    Structural rule pinned so a TN payslip's Rs.0 monthly PT line reads as "half-yearly levy,
+    computed per jurisdiction" — never as a computed monthly zero (WS2.1 honesty clause).
+  ca_initials: PENDING
+  ca_date: null
+  target: pt_status
+  inputs: {state: TN}
+  expected: half_yearly
+
+- id: pt_tn_monthly_payslip_line_carries_no_monthly_deduction
+  statute: Tamil Nadu municipal-law profession tax
+  section: "levied half-yearly by the local body"
+  provenance: derived
+  source: >-
+    Consequence of the half-yearly periodicity: the MONTHLY payslip PT deduction is nil; the
+    liability is the half-yearly figure asserted by the pt_tn_chennai_* vectors below.
+  ca_initials: PENDING
+  ca_date: null
+  target: professional_tax
+  inputs: {state: TN, gross_monthly: 5000000, month: 6}
+  expected: 0
+
+- id: pt_tn_chennai_upto_21000_nil
+  statute: Tamil Nadu municipal-law profession tax (Greater Chennai Corporation)
+  section: "GCC half-yearly slab table"
+  provenance: primary
+  citation_url: "https://tnswp.com/DIGIGOV/StaticAttachment?AttachmentFileName=%2Fpdf%2FTax_rules%2FProfession_Tax_Updated.pdf"
+  citation_locator: >-
+    TN Single Window Portal "Profession Tax Slabs", Greater Chennai Corporation table, row 1:
+    "Upto Rs.21,000/- — NIL".
+  source: "Average half-yearly income Rs.20,000 -> NIL."
+  ca_initials: PENDING
+  ca_date: null
+  target: pt_half_yearly
+  inputs: {state: TN, half_yearly_income_paise: 2000000, jurisdiction: chennai_corporation}
+  expected: 0
+
+- id: pt_tn_chennai_25000_100
+  statute: Tamil Nadu municipal-law profession tax (Greater Chennai Corporation)
+  section: "GCC half-yearly slab table"
+  provenance: primary
+  citation_url: "https://tnswp.com/DIGIGOV/StaticAttachment?AttachmentFileName=%2Fpdf%2FTax_rules%2FProfession_Tax_Updated.pdf"
+  citation_locator: >-
+    GCC table row 2: "Rs.21,001/- to Rs.30,000/- — Rs.100/-".
+  source: "Rs.25,000 half-yearly income -> Rs.100 half-yearly tax."
+  ca_initials: PENDING
+  ca_date: null
+  target: pt_half_yearly
+  inputs: {state: TN, half_yearly_income_paise: 2500000, jurisdiction: chennai_corporation}
+  expected: 10000
+
+- id: pt_tn_chennai_40000_235
+  statute: Tamil Nadu municipal-law profession tax (Greater Chennai Corporation)
+  section: "GCC half-yearly slab table"
+  provenance: primary
+  citation_url: "https://tnswp.com/DIGIGOV/StaticAttachment?AttachmentFileName=%2Fpdf%2FTax_rules%2FProfession_Tax_Updated.pdf"
+  citation_locator: >-
+    GCC table row 3: "Rs. 30,001/- to Rs.45,000/- — Rs.235/-".
+  source: "Rs.40,000 -> Rs.235."
+  ca_initials: PENDING
+  ca_date: null
+  target: pt_half_yearly
+  inputs: {state: TN, half_yearly_income_paise: 4000000, jurisdiction: chennai_corporation}
+  expected: 23500
+
+- id: pt_tn_chennai_50000_510
+  statute: Tamil Nadu municipal-law profession tax (Greater Chennai Corporation)
+  section: "GCC half-yearly slab table"
+  provenance: primary
+  citation_url: "https://tnswp.com/DIGIGOV/StaticAttachment?AttachmentFileName=%2Fpdf%2FTax_rules%2FProfession_Tax_Updated.pdf"
+  citation_locator: >-
+    GCC table row 4: "Rs.45,001/- to Rs.60,000/- — Rs.510/-".
+  source: "Rs.50,000 -> Rs.510."
+  ca_initials: PENDING
+  ca_date: null
+  target: pt_half_yearly
+  inputs: {state: TN, half_yearly_income_paise: 5000000, jurisdiction: chennai_corporation}
+  expected: 51000
+
+- id: pt_tn_chennai_70000_760
+  statute: Tamil Nadu municipal-law profession tax (Greater Chennai Corporation)
+  section: "GCC half-yearly slab table"
+  provenance: primary
+  citation_url: "https://tnswp.com/DIGIGOV/StaticAttachment?AttachmentFileName=%2Fpdf%2FTax_rules%2FProfession_Tax_Updated.pdf"
+  citation_locator: >-
+    GCC table row 5: "Rs.60,001/- to Rs.75,000/- — Rs.760/-".
+  source: "Rs.70,000 -> Rs.760."
+  ca_initials: PENDING
+  ca_date: null
+  target: pt_half_yearly
+  inputs: {state: TN, half_yearly_income_paise: 7000000, jurisdiction: chennai_corporation}
+  expected: 76000
+
+- id: pt_tn_chennai_above_75001_1095
+  statute: Tamil Nadu municipal-law profession tax (Greater Chennai Corporation)
+  section: "GCC half-yearly slab table"
+  provenance: primary
+  citation_url: "https://tnswp.com/DIGIGOV/StaticAttachment?AttachmentFileName=%2Fpdf%2FTax_rules%2FProfession_Tax_Updated.pdf"
+  citation_locator: >-
+    GCC table row 6: "Rs. 75,001/- and above — Rs.1095/-".
+  source: "Rs.80,000 -> Rs.1,095."
+  ca_initials: PENDING
+  ca_date: null
+  target: pt_half_yearly
+  inputs: {state: TN, half_yearly_income_paise: 8000000, jurisdiction: chennai_corporation}
+  expected: 109500
+
+- id: pt_tn_village_panchayat_top_slab_2500
+  statute: Tamil Nadu municipal-law profession tax (Village Panchayats)
+  section: "Village Panchayaths half-yearly slab table"
+  provenance: primary
+  citation_url: "https://tnswp.com/DIGIGOV/StaticAttachment?AttachmentFileName=%2Fpdf%2FTax_rules%2FProfession_Tax_Updated.pdf"
+  citation_locator: >-
+    TN Single Window Portal "Profession Tax Slabs", Village Panchayaths table, row 6:
+    "Rs. 75,001/- and above — Rs.2500/-".
+  source: "Rs.80,000 in a village panchayat -> Rs.2,500 (the Article 276(2) ceiling)."
+  ca_initials: PENDING
+  ca_date: null
+  target: pt_half_yearly
+  inputs: {state: TN, half_yearly_income_paise: 8000000, jurisdiction: village_panchayat}
+  expected: 250000
+
+- id: pt_tn_madurai_blocked_ca_refuses
+  statute: Tamil Nadu municipal-law profession tax (Madurai City Municipal Corporation)
+  section: "Madurai corporation slab table — NOT SOURCED"
+  provenance: derived
+  source: >-
+    Asserted refusal (§0.6): Madurai Corporation's current slab table could not be sourced
+    from an official publication, so the pack marks it BLOCKED-CA and computing it MUST raise
+    — a silently returned number here is the invented-value defect. Unblock path: cite the
+    corporation's own notified table (or CA initials) in app/states/TN.yaml, recompute the
+    manifest sha256, and replace this vector with value-asserting ones.
+  ca_initials: PENDING
+  ca_date: null
+  target: pt_half_yearly
+  inputs: {state: TN, half_yearly_income_paise: 5000000, jurisdiction: madurai_corporation}
+  expected: BLOCKED-CA
+  expect_blocked: true

@@ -1,0 +1,74 @@
+# WS2.2 — West Bengal profession tax, via the WS2 state pack (app/states/WB.yaml).
+
+- id: pt_wb_9000_nil_post_2016_reduction
+  statute: West Bengal State Tax on Professions, Trades, Callings and Employments Act, 1979
+  section: "Schedule Sl. No. 1(ii), as reduced to Nil w.e.f. 1-8-2016"
+  provenance: primary
+  citation_url: "https://comtax.wb.gov.in/Ptax-Schedule-New_(w.e.f._1-4-2014).pdf"
+  citation_locator: >-
+    WB Directorate of Commercial Taxes schedule PDF, Sl. No. 1: "(ii) Above Rs.8,500 but not
+    exceeding Rs. 10,000 — Nil*"; footnote: "*Tax rate reduced to 'Nil', from Rs 90/- p.m.,
+    with effect from 1-8-2016 vide Notification No. 682-L dt.28th July, 2016 read with
+    Notification No. 1197-FT dt.16th August, 2016."
+  source: "Rs.9,000 -> Nil (the 2016 reduction band)."
+  ca_initials: PENDING
+  ca_date: null
+  target: professional_tax
+  inputs: {state: WB, gross_monthly: 900000, month: 6}
+  expected: 0
+
+- id: pt_wb_12000_110
+  statute: West Bengal State Tax on Professions, Trades, Callings and Employments Act, 1979
+  section: "Schedule Sl. No. 1(iii)"
+  provenance: primary
+  citation_url: "https://comtax.wb.gov.in/Ptax-Schedule-New_(w.e.f._1-4-2014).pdf"
+  citation_locator: >-
+    Schedule Sl. No. 1: "(iii) Above Rs. 10,000 but not exceeding Rs. 15,000 — Rs.110 per month".
+  source: "Rs.12,000 -> Rs.110/month."
+  ca_initials: PENDING
+  ca_date: null
+  target: professional_tax
+  inputs: {state: WB, gross_monthly: 1200000, month: 6}
+  expected: 11000
+
+- id: pt_wb_20000_130
+  statute: West Bengal State Tax on Professions, Trades, Callings and Employments Act, 1979
+  section: "Schedule Sl. No. 1(iv)"
+  provenance: primary
+  citation_url: "https://comtax.wb.gov.in/Ptax-Schedule-New_(w.e.f._1-4-2014).pdf"
+  citation_locator: >-
+    Schedule Sl. No. 1: "(iv) Above Rs. 15,000 but not exceeding Rs. 25,000 — Rs. 130 per month".
+  source: "Rs.20,000 -> Rs.130/month."
+  ca_initials: PENDING
+  ca_date: null
+  target: professional_tax
+  inputs: {state: WB, gross_monthly: 2000000, month: 6}
+  expected: 13000
+
+- id: pt_wb_30000_150
+  statute: West Bengal State Tax on Professions, Trades, Callings and Employments Act, 1979
+  section: "Schedule Sl. No. 1(v)"
+  provenance: primary
+  citation_url: "https://comtax.wb.gov.in/Ptax-Schedule-New_(w.e.f._1-4-2014).pdf"
+  citation_locator: >-
+    Schedule Sl. No. 1: "(v) Above Rs.25,000 but not exceeding Rs.40,000 — Rs. 150 per month".
+  source: "Rs.30,000 -> Rs.150/month."
+  ca_initials: PENDING
+  ca_date: null
+  target: professional_tax
+  inputs: {state: WB, gross_monthly: 3000000, month: 6}
+  expected: 15000
+
+- id: pt_wb_50000_200
+  statute: West Bengal State Tax on Professions, Trades, Callings and Employments Act, 1979
+  section: "Schedule Sl. No. 1(vi)"
+  provenance: primary
+  citation_url: "https://comtax.wb.gov.in/Ptax-Schedule-New_(w.e.f._1-4-2014).pdf"
+  citation_locator: >-
+    Schedule Sl. No. 1: "(vi) Above Rs.40,000 — Rs. 200 per month".
+  source: "Rs.50,000 -> Rs.200/month."
+  ca_initials: PENDING
+  ca_date: null
+  target: professional_tax
+  inputs: {state: WB, gross_monthly: 5000000, month: 6}
+  expected: 20000

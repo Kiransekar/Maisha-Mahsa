@@ -39,6 +39,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.core import state_packs
 from app.core.entitlement_deps import require_feature
 from app.core.landing import mask_field, mask_figures
 from app.core.mahsa_client import MahsaClient, MahsaError, RecomputeCheck
@@ -528,3 +529,45 @@ def ecr_txt(period: str, db: Session = Depends(get_session)) -> Response:
         media_type="text/plain",
         headers={"Content-Disposition": f'attachment; filename="ecr-{period}.txt"'},
     )
+
+
+# ── WS2.3 — state-pack PT surfacing: provenance card + pack-path computation ─────────────
+
+
+@router.get("/state-pack/{state}")
+def state_pack_pt(
+    state: str,
+    gross_monthly_paise: int | None = None,
+    month: int | None = None,
+    half_yearly_income_paise: int | None = None,
+    jurisdiction: str | None = None,
+) -> dict[str, Any]:
+    """The WS2 state pack's PT card for ``state``: provenance (statute/section/citation,
+    pack version + sha256) plus, when the query asks, the computed figure THROUGH the pack
+    path. Honesty rules carried in:
+      * not-applicable states render as not-applicable — never a computed ₹0;
+      * a BLOCKED-CA item (e.g. TN Madurai Corporation slabs) REFUSES with 409, never 0;
+      * the figure is pack-cited but not Mahsa-ported, so its badge stays ◐ (honest_pending)
+        on every figure surface — this route adds provenance, it cannot mint a ✓ (§0.4).
+    """
+    out: dict[str, Any] = {"pt": state_packs.pt_provenance(state)}
+    try:
+        if gross_monthly_paise is not None and month is not None:
+            det = state_packs.pt_monthly(state, gross_monthly_paise, month)
+            out["monthly"] = {
+                "status": det.status,
+                "amount_paise": det.amount_paise,
+                "note": det.note,
+            }
+        if half_yearly_income_paise is not None and jurisdiction is not None:
+            det = state_packs.pt_half_yearly(state, half_yearly_income_paise, jurisdiction)
+            out["half_yearly"] = {
+                "status": det.status,
+                "amount_paise": det.amount_paise,
+                "jurisdiction": jurisdiction,
+            }
+    except state_packs.StatePackBlocked as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return out

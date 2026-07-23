@@ -8,9 +8,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#8a6a1f" />
     <title>Maisha-Mahsa</title>
+    <!-- WS7.9-perf: the boot shell below must paint before ANY external request resolves, so its
+         styles are inlined here. Values are hand-copied from src/theme/tokens.css (ground / ink /
+         ink-muted / font-sans) — if the brand tokens change, change these four literals too. -->
+    <style>
+      body { margin: 0; background: #faf8f4; color: #1c1a17; font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-size: 14px; line-height: 1.5; }
+      .boot-shell { max-width: 380px; margin: 10vh auto 0; padding: 0 16px; }
+      .boot-shell h1 { font-size: 15px; font-weight: 400; letter-spacing: -0.02em; margin: 0 0 4px; }
+      .boot-shell p { color: #6b6459; font-size: 13px; margin: 0; }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- WS7.9-perf app-shell first paint. Static, state-agnostic product copy — NO figures, no
+           data-shaped chrome, nothing that implies an account or a ledger loading (WS7
+           anti-pattern #14). React replaces this the moment it mounts. -->
+      <section class="boot-shell">
+        <h1>Maisha<span style="color: #9a9287">·</span>Mahsa</h1>
+        <p>
+          Every figure in Maisha-Mahsa is recomputed by Mahsa, a second deterministic engine,
+          before it is shown — not just reviewed.
+        </p>
+      </section>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

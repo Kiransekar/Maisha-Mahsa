@@ -1,0 +1,338 @@
+# WS1.E2 — Personal income-tax (s.192 projection engine): new-regime slabs, s.87A rebate
+# boundary, marginal relief, and the standard deduction, FY 2025-26 (AY 2026-27).
+# Targets: annual_income_tax / monthly_tds (app/domains/payroll/statutory.py). Integer paise.
+#
+# PRIMARY SOURCES (each fetched 2026-07-23 and read verbatim from the PDF text):
+#  * SLABS — Finance Act, 2025 (No. 7 of 2025) s.25, inserting s.115BAC(1A)(iii) Income-tax Act
+#    1961 "for any previous year relevant to the assessment year beginning on or after the
+#    1st April, 2026": Upto Rs. 4,00,000 Nil; 4,00,001–8,00,000 5%; 8,00,001–12,00,000 10%;
+#    12,00,001–16,00,000 15%; 16,00,001–20,00,000 20%; 20,00,001–24,00,000 25%; above 24,00,000
+#    30%. https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf
+#    (Gazette CG-DL-E-29032025-262125; same URL already relied on by company_115baa_1cr).
+#  * REBATE — Finance Act 2025 s.20, amending s.87A (w.e.f. 1-4-2026): proviso clause (a) —
+#    limit "twelve hundred thousand rupees", cap "sixty thousand rupees"; clause (b) — marginal
+#    relief: where total income exceeds 12,00,000 "and the income-tax payable on such total
+#    income exceeds the amount by which the total income is in excess of twelve hundred thousand
+#    rupees, an amount equal to the amount by which the income-tax payable ... is in excess of
+#    the amount by which the total income exceeds" 12,00,000; new second proviso — the deduction
+#    shall not exceed the tax payable per s.115BAC(1A) rates.
+#  * CESS — Finance Act 2025 s.2(11): "Health and Education Cess on income-tax, calculated at
+#    the rate of four per cent. of such income-tax and surcharge".
+#  * SURCHARGE nil band — Finance Act 2025 s.2(9) proviso for persons taxed under s.115BAC(1A):
+#    surcharge applies where "such income exceeds ... fifty lakh rupees". All vectors here are
+#    AT or BELOW ₹50,00,000 total income, where no surcharge arises.
+#  * STANDARD DEDUCTION — Finance (No. 2) Act, 2024 (No. 15 of 2024) s.10, inserting a proviso
+#    into s.16(ia): under new-regime computation the deduction reads "seventy-five thousand
+#    rupees" (https://egazette.gov.in/WriteReadData/2024/256436.pdf, w.e.f. 1-4-2025).
+#
+# ENGINE-SCOPE NOTES (recorded, not hidden — see PROGRESS [WS1.E2-expand]):
+#  * The engine's s.87A implementation zeroes tax whenever taxable <= ₹12,00,000. That is exactly
+#    "100% of the tax or ₹60,000 whichever is less" because the slab tax AT ₹12,00,000 is exactly
+#    ₹60,000 (5%×4L + 10%×4L) and is monotonic below it — so the ₹60,000 cap can never bind
+#    inside the rebate zone. The equivalence is arithmetic, not an extra assumption.
+#  * Individual SURCHARGE BANDS (>₹50L) are NOT implemented in annual_income_tax — no vector
+#    above ₹50,00,000 is drafted; the gap is reported in PROGRESS, not papered over.
+#  * The engine applies cess to the post-rebate tax and rounds the final figure to the nearest
+#    rupee (s.288B rounding convention carried by the existing suite).
+
+- id: it192_nil_at_400000
+  statute: Income-tax Act 1961
+  section: "115BAC(1A)(iii) Sl.1"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    Finance Act 2025 s.25, Table inserted as s.115BAC(1A)(iii): "1. Upto Rs. 4,00,000 — Nil".
+  source: >-
+    Taxable exactly ₹4,00,000 sits in the Nil slab: slab tax ₹0; rebate/cess on zero are zero.
+  ca_initials: PENDING
+  ca_date: null
+  target: annual_income_tax
+  inputs: {annual_taxable: 40000000}
+  expected: 0
+
+- id: it192_rebate_zero_at_800000
+  statute: Income-tax Act 1961
+  section: "115BAC(1A)(iii) Sl.2; 87A"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    Finance Act 2025 s.25 Table Sl.2 ("From Rs. 4,00,001 to Rs. 8,00,000 — 5 per cent.") and
+    s.20(a)(i) amending s.87A: limit "twelve hundred thousand rupees", cap "sixty thousand
+    rupees".
+  source: >-
+    Slab tax at ₹8,00,000 = 5% × ₹4,00,000 = ₹20,000; total income ≤ ₹12,00,000 so the s.87A
+    rebate (100% of tax, under the ₹60,000 cap) extinguishes it. Net tax ₹0.
+  ca_initials: PENDING
+  ca_date: null
+  target: annual_income_tax
+  inputs: {annual_taxable: 80000000}
+  expected: 0
+
+- id: it192_rebate_zero_at_limit_1200000
+  statute: Income-tax Act 1961
+  section: "87A proviso (a)"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    Finance Act 2025 s.20(a)(i): s.87A proviso clause (a) — "the income does not exceed"
+    twelve hundred thousand rupees -> deduction of 100% of the income-tax payable or sixty
+    thousand rupees, whichever is less.
+  source: >-
+    AT exactly ₹12,00,000 the income "does not exceed" the limit, so the rebate applies. Slab
+    tax = 5%×4,00,000 + 10%×4,00,000 = ₹20,000 + ₹40,000 = ₹60,000 — exactly the ₹60,000 cap,
+    so 100%-of-tax and the cap coincide and the rebate wipes the full tax. Net ₹0. This is the
+    right-edge of the rebate zone; the next vector is one rupee past it.
+  ca_initials: PENDING
+  ca_date: null
+  target: annual_income_tax
+  inputs: {annual_taxable: 120000000}
+  expected: 0
+
+- id: it192_marginal_relief_one_rupee_above_limit
+  statute: Income-tax Act 1961
+  section: "87A proviso (b) — marginal relief"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    Finance Act 2025 s.20: s.87A proviso clause (b) — where total income exceeds ₹12,00,000 and
+    the tax payable exceeds the excess of income over ₹12,00,000, the deduction equals the tax
+    in excess of that excess (i.e. tax is clipped to the excess). Cess: FA 2025 s.2(11), 4%.
+  source: >-
+    Taxable ₹12,00,001. Slab tax = 60,000 + 15% × ₹1 = ₹60,000.15 (6,000,015 paise). Excess over
+    the limit = ₹1 (100 paise). Marginal relief clips tax to the ₹1 excess. Cess 4% -> 104 paise
+    -> rounds to the nearest rupee -> ₹1 = 100 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: annual_income_tax
+  inputs: {annual_taxable: 120000100}
+  expected: 100
+
+- id: it192_marginal_relief_last_rupee_1270588
+  statute: Income-tax Act 1961
+  section: "87A proviso (b) — marginal relief"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    Finance Act 2025 s.20 (s.87A clause (b)) read with s.25 (slab table) and s.2(11) (4% cess).
+  source: >-
+    Taxable ₹12,70,588: slab tax = 60,000 + 15% × 70,588 = ₹70,588.20 (7,058,820 paise); excess
+    over ₹12,00,000 = ₹70,588.00 (7,058,800 paise). Tax exceeds excess by 20 paise -> relief
+    still operates, tax clipped to 7,058,800. Cess ×1.04 = 7,341,152 paise = ₹73,411.52 ->
+    rounds half-up to ₹73,412 (7,341,200 paise). Paired with the vector below, where relief
+    exactly exhausts one rupee higher.
+  ca_initials: PENDING
+  ca_date: null
+  target: annual_income_tax
+  inputs: {annual_taxable: 127058800}
+  expected: 7341200
+
+- id: it192_marginal_relief_exhausted_1270589
+  statute: Income-tax Act 1961
+  section: "87A proviso (b) — relief crossover"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    Finance Act 2025 s.20 (s.87A clause (b)), s.25 (slabs), s.2(11) (cess).
+  source: >-
+    Taxable ₹12,70,589: slab tax = 60,000 + 15% × 70,589 = ₹70,588.35 (7,058,835 paise); excess
+    = ₹70,589.00 (7,058,900 paise). Tax no longer exceeds the excess -> clause (b) gives no
+    deduction; slab tax stands. Cess: 7,058,835 × 1.04 = 7,341,188.4 -> 7,341,188 paise =
+    ₹73,411.88 -> rounds to ₹73,412 (7,341,200). Same rupee figure as one rupee below — the
+    relief taper is exactly exhausted here, which is what this pair pins.
+  ca_initials: PENDING
+  ca_date: null
+  target: annual_income_tax
+  inputs: {annual_taxable: 127058900}
+  expected: 7341200
+
+- id: it192_no_relief_at_1275000
+  statute: Income-tax Act 1961
+  section: "115BAC(1A)(iii); 87A"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    Finance Act 2025 s.25 (Sl.4: 12,00,001–16,00,000 at 15 per cent.), s.20, s.2(11).
+  source: >-
+    Taxable ₹12,75,000: slab tax = 60,000 + 15% × 75,000 = ₹71,250 (7,125,000 paise); excess
+    over the limit = ₹75,000 -> tax does not exceed the excess, no relief. Cess ×1.04 =
+    7,410,000 paise = ₹74,100 exactly.
+  ca_initials: PENDING
+  ca_date: null
+  target: annual_income_tax
+  inputs: {annual_taxable: 127500000}
+  expected: 7410000
+
+- id: it192_slab_top_1600000
+  statute: Income-tax Act 1961
+  section: "115BAC(1A)(iii) Sl.4"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    Finance Act 2025 s.25 Table Sl.2–4; s.2(11) cess.
+  source: >-
+    Taxable ₹16,00,000: 5%×4L + 10%×4L + 15%×4L = 20,000 + 40,000 + 60,000 = ₹1,20,000. Cess
+    ×1.04 = ₹1,24,800 = 12,480,000 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: annual_income_tax
+  inputs: {annual_taxable: 160000000}
+  expected: 12480000
+
+- id: it192_slab20_starts_above_1600000
+  statute: Income-tax Act 1961
+  section: "115BAC(1A)(iii) Sl.5"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    Finance Act 2025 s.25 Table Sl.5: "From Rs. 16,00,001 to Rs. 20,00,000 — 20 per cent.".
+  source: >-
+    Taxable ₹16,00,100 (₹100 into the 20% slab): tax = 1,20,000 + 20% × 100 = ₹1,20,020. Cess
+    ×1.04 = ₹1,24,820.80 -> rounds half-up to ₹1,24,821 (12,482,100 paise). One-rupee-below/at
+    the ₹16,00,000 edge is pinned by the previous vector.
+  ca_initials: PENDING
+  ca_date: null
+  target: annual_income_tax
+  inputs: {annual_taxable: 160010000}
+  expected: 12482100
+
+- id: it192_slab_top_2000000
+  statute: Income-tax Act 1961
+  section: "115BAC(1A)(iii) Sl.5"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    Finance Act 2025 s.25 Table Sl.2–5; s.2(11) cess.
+  source: >-
+    Taxable ₹20,00,000: 20,000 + 40,000 + 60,000 + 20%×4,00,000 (=80,000) = ₹2,00,000. Cess
+    ×1.04 = ₹2,08,000 = 20,800,000 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: annual_income_tax
+  inputs: {annual_taxable: 200000000}
+  expected: 20800000
+
+- id: it192_slab_top_2400000
+  statute: Income-tax Act 1961
+  section: "115BAC(1A)(iii) Sl.6"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    Finance Act 2025 s.25 Table Sl.6: "From Rs. 20,00,001 to Rs. 24,00,000 — 25 per cent.".
+  source: >-
+    Taxable ₹24,00,000: 2,00,000 + 25%×4,00,000 (=1,00,000) = ₹3,00,000. Cess ×1.04 = ₹3,12,000
+    = 31,200,000 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: annual_income_tax
+  inputs: {annual_taxable: 240000000}
+  expected: 31200000
+
+- id: it192_slab30_2500000
+  statute: Income-tax Act 1961
+  section: "115BAC(1A)(iii) Sl.7"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    Finance Act 2025 s.25 Table Sl.7: "Above Rs. 24,00,000 — 30 per cent.".
+  source: >-
+    Taxable ₹25,00,000: 3,00,000 + 30% × 1,00,000 = ₹3,30,000. Cess ×1.04 = ₹3,43,200 =
+    34,320,000 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: annual_income_tax
+  inputs: {annual_taxable: 250000000}
+  expected: 34320000
+
+- id: it192_no_surcharge_at_exactly_50_lakh
+  statute: Income-tax Act 1961
+  section: "115BAC(1A)(iii); FA 2025 s.2(9) surcharge threshold"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    Finance Act 2025 s.2(9), proviso for persons chargeable under s.115BAC(1A): surcharge where
+    "such income exceeds ... fifty lakh rupees". At exactly ₹50,00,000 the income does not
+    EXCEED fifty lakh, so no surcharge arises. Slabs s.25; cess s.2(11).
+  source: >-
+    Taxable ₹50,00,000: 3,00,000 + 30% × 26,00,000 (=7,80,000) = ₹10,80,000; no surcharge at
+    exactly ₹50L; cess ×1.04 = ₹11,23,200 = 112,320,000 paise. This is the highest income this
+    suite pins: the engine implements NO surcharge bands, so incomes above ₹50,00,000 are out
+    of its honest range (gap recorded in PROGRESS [WS1.E2-expand], not vectored).
+  ca_initials: PENDING
+  ca_date: null
+  target: annual_income_tax
+  inputs: {annual_taxable: 500000000}
+  expected: 112320000
+
+# ---- monthly_tds: standard deduction + /12 projection ------------------------------------------
+- id: it192_monthly_tds_nil_at_1275000_gross
+  statute: Income-tax Act 1961
+  section: "16(ia) proviso; 87A"
+  provenance: primary
+  citation_url: "https://egazette.gov.in/WriteReadData/2024/256436.pdf"
+  citation_locator: >-
+    Finance (No. 2) Act, 2024 (No. 15 of 2024) s.10 — proviso inserted in s.16(ia): under
+    new-regime computation the standard deduction reads "seventy-five thousand rupees" (w.e.f.
+    1-4-2025). Rebate: Finance Act 2025 s.20 (₹12,00,000 limit).
+  source: >-
+    Annual gross ₹12,75,000 − standard deduction ₹75,000 = taxable ₹12,00,000 -> fully rebated
+    (see it192_rebate_zero_at_limit_1200000) -> annual tax ₹0 -> monthly TDS ₹0. Pins that the
+    ₹75,000 deduction is applied before the slab computation.
+  ca_initials: PENDING
+  ca_date: null
+  target: monthly_tds
+  inputs: {annual_gross: 127500000}
+  expected: 0
+
+- id: it192_monthly_tds_30_lakh_gross
+  statute: Income-tax Act 1961
+  section: "192; 16(ia); 115BAC(1A)(iii)"
+  provenance: primary
+  citation_url: "https://thc.nic.in/Central%20Governmental%20Acts/Finance%20Act,%202025.pdf"
+  citation_locator: >-
+    Slabs: Finance Act 2025 s.25; cess s.2(11); standard deduction: Finance (No. 2) Act 2024
+    s.10 (https://egazette.gov.in/WriteReadData/2024/256436.pdf).
+  source: >-
+    Annual gross ₹30,00,000 − ₹75,000 = taxable ₹29,25,000. Slab tax = 3,00,000 + 30% ×
+    (29,25,000 − 24,00,000 = 5,25,000) = 3,00,000 + 1,57,500 = ₹4,57,500. Cess ×1.04 =
+    ₹4,75,800 (annual, exact). Monthly = 4,75,800 / 12 = ₹39,650 exactly = 3,965,000 paise.
+  ca_initials: PENDING
+  ca_date: null
+  target: monthly_tds
+  inputs: {annual_gross: 300000000}
+  expected: 3965000
+
+- id: it192_monthly_tds_nil_below_rebate_875000
+  statute: Income-tax Act 1961
+  section: "16(ia); 87A"
+  provenance: primary
+  citation_url: "https://egazette.gov.in/WriteReadData/2024/256436.pdf"
+  citation_locator: >-
+    Finance (No. 2) Act 2024 s.10 (₹75,000 standard deduction); Finance Act 2025 s.20 (rebate).
+  source: >-
+    Annual gross ₹8,75,000 − ₹75,000 = ₹8,00,000 taxable, inside the rebate zone -> ₹0 annual,
+    ₹0 monthly.
+  ca_initials: PENDING
+  ca_date: null
+  target: monthly_tds
+  inputs: {annual_gross: 87500000}
+  expected: 0
+
+# ---- s.234E: cap-exact boundary (extends ws1_late_fee_234e) ------------------------------------
+- id: late_fee_234e_cap_reached_exactly
+  statute: Income-tax Act 1961
+  section: "234E"
+  provenance: primary
+  citation_url: https://www.incometaxindia.gov.in/w/section-234e-13
+  citation_locator: >-
+    s.234E(1) — "a sum of two hundred rupees for every day during which the failure continues";
+    s.234E(2) — the fee "shall not exceed the amount of tax deductible or collectible" (same
+    departmental text already read verbatim for the ws1_late_fee_234e vectors).
+  source: >-
+    100 days × ₹200/day = ₹20,000 = the TDS amount exactly. min(20,000, 20,000) = ₹20,000 =
+    2,000,000 paise. Boundary where the per-day accrual meets the s.234E(2) ceiling exactly —
+    one more day (ws1_late_fee_234e's capped vector) stays flat.
+  ca_initials: PENDING
+  ca_date: null
+  target: late_fee_234e
+  inputs: {days_late: 100, tds_amount: 2000000}
+  expected: 2000000

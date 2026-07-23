@@ -1,0 +1,75 @@
+# WS2.2 — Maharashtra profession tax, via the WS2 state pack (app/states/MH.yaml).
+# Amounts are integer paise; gross_monthly inputs are paise.
+
+- id: pt_mh_at_7500_nil
+  statute: Maharashtra State Tax on Professions, Trades, Callings and Employments Act, 1975
+  section: "Schedule I, entry 1 (1/4/2023 onwards), men, clause (a)"
+  provenance: primary
+  citation_url: "https://www.mahagst.gov.in/public/uploads/menufiles/PT%20Rate%20Schedule%20updated%20upto%2031.03.2025%20(1)%20(1).pdf"
+  citation_locator: >-
+    "RATE SCHEDULES UNDER THE PROFESSION TAX ACT, 1975 — As on 31.03.2025", Schedule I entry 1,
+    period "1/4/2023 onwards", men: "(a) do not exceed rupees seven thousand five hundred — Nil."
+  source: "Salary of exactly Rs.7,500 does not exceed Rs.7,500 -> Nil."
+  ca_initials: PENDING
+  ca_date: null
+  target: professional_tax
+  inputs: {state: MH, gross_monthly: 750000, month: 6}
+  expected: 0
+
+- id: pt_mh_7501_first_taxed_rupee_175
+  statute: Maharashtra State Tax on Professions, Trades, Callings and Employments Act, 1975
+  section: "Schedule I, entry 1 (1/4/2023 onwards), men, clause (b)"
+  provenance: primary
+  citation_url: "https://www.mahagst.gov.in/public/uploads/menufiles/PT%20Rate%20Schedule%20updated%20upto%2031.03.2025%20(1)%20(1).pdf"
+  citation_locator: >-
+    Schedule I entry 1, men: "(b) exceed rupees seven thousand five hundred but do not exceed
+    rupees ten thousand — one hundred seventy-five per month."
+  source: "Rs.7,501 exceeds 7,500 and does not exceed 10,000 -> Rs.175/month."
+  ca_initials: PENDING
+  ca_date: null
+  target: professional_tax
+  inputs: {state: MH, gross_monthly: 750100, month: 6}
+  expected: 17500
+
+- id: pt_mh_above_10000_200_regular_month
+  statute: Maharashtra State Tax on Professions, Trades, Callings and Employments Act, 1975
+  section: "Schedule I, entry 1 (1/4/2023 onwards), men, clause (c)(a)"
+  provenance: primary
+  citation_url: "https://www.mahagst.gov.in/public/uploads/menufiles/PT%20Rate%20Schedule%20updated%20upto%2031.03.2025%20(1)%20(1).pdf"
+  citation_locator: >-
+    Schedule I entry 1, men clause (c): "exceed rupees ten thousand — two thousand five hundred
+    per annum to be paid in following manner: (a) two hundred per month except for the month of
+    February."
+  source: "Rs.20,000 in June -> Rs.200."
+  ca_initials: PENDING
+  ca_date: null
+  target: professional_tax
+  inputs: {state: MH, gross_monthly: 2000000, month: 6}
+  expected: 20000
+
+- id: pt_mh_above_10000_february_300
+  statute: Maharashtra State Tax on Professions, Trades, Callings and Employments Act, 1975
+  section: "Schedule I, entry 1 (1/4/2023 onwards), men, clause (c)(b)"
+  provenance: primary
+  citation_url: "https://www.mahagst.gov.in/public/uploads/menufiles/PT%20Rate%20Schedule%20updated%20upto%2031.03.2025%20(1)%20(1).pdf"
+  citation_locator: >-
+    Schedule I entry 1, men clause (c): "(b) three hundred for the month of February."
+  source: "Rs.20,000 in February -> Rs.300 (11 x 200 + 300 = the Rs.2,500 annual ceiling)."
+  ca_initials: PENDING
+  ca_date: null
+  target: professional_tax
+  inputs: {state: MH, gross_monthly: 2000000, month: 2}
+  expected: 30000
+
+- id: pt_mh_175_slab_unchanged_in_february
+  statute: Maharashtra State Tax on Professions, Trades, Callings and Employments Act, 1975
+  section: "Schedule I, entry 1 (1/4/2023 onwards), men, clauses (b)/(c)"
+  provenance: derived
+  source: >-
+    Arithmetic consequence of the cited schedule shape: the February Rs.300 belongs only to
+    clause (c) (the >10,000 slab); the 7,501-10,000 slab pays Rs.175 in February too.
+  ca_initials: PENDING
+  ca_date: null
+  target: professional_tax
+  inputs: {state: MH, gross_monthly: 900000, month: 2}
+  expected: 17500

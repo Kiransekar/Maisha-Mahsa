@@ -1,0 +1,17 @@
+# WS2.2 — Uttar Pradesh: profession tax NOT APPLICABLE (no PT statute in force).
+# The vector pins the HONEST rendering: status not_applicable, never a computed ₹0.
+
+- id: pt_up_not_applicable
+  statute: "None — no profession-tax statute is in force in Uttar Pradesh"
+  section: "absence of a levy under Article 276"
+  provenance: derived
+  source: >-
+    Absence of a levy: Uttar Pradesh has not enacted a profession-tax statute, so there is no
+    instrument to cite. The pack renders "Not applicable in Uttar Pradesh"; this vector pins that
+    the engine reports not_applicable rather than presenting a computed zero (WS2.1:
+    a silent Rs.0 is a defect).
+  ca_initials: PENDING
+  ca_date: null
+  target: pt_status
+  inputs: {state: UP}
+  expected: not_applicable

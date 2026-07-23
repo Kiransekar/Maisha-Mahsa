@@ -17,6 +17,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import ROUND_CEILING, ROUND_HALF_UP, Decimal
 
+from app.core import state_packs
 from app.core.money import Paise
 
 # ---- statutory constants (FY 2025-26) -------------------------------------------------
@@ -63,41 +64,23 @@ _TDS_SLABS: list[tuple[int, int | None, Decimal]] = [
     (Paise.from_rupees(2400000), None, Decimal("0.30")),
 ]
 
-# Professional Tax monthly slabs by state. Each entry: (gross_upto_rupees_or_None, paise).
-# Only fully-modelled MONTHLY-slab states are listed; unlisted states return 0 (documented
-# limitation — many states levy no PT, and a few, e.g. TN/KL, are half-yearly and not modelled
-# here). Re-verify slabs against each state's PT Act annually (see skills/indian-fin-rules).
-_PT_TABLES: dict[str, list[tuple[int | None, int]]] = {
-    # Maharashtra (men): nil <=7500; 175 up to 10000; 200 above (300 in February).
-    "MH": [(7500, 0), (10000, Paise.from_rupees(175)), (None, Paise.from_rupees(200))],
-    # Karnataka: nil below 25000; 200 at/above 25000.
-    "KA": [(24999, 0), (None, Paise.from_rupees(200))],
-    # West Bengal: graded monthly slabs.
-    "WB": [
-        (10000, 0), (15000, Paise.from_rupees(110)), (25000, Paise.from_rupees(130)),
-        (40000, Paise.from_rupees(150)), (None, Paise.from_rupees(200)),
-    ],
-    # Gujarat: nil <=12000; 200 above.
-    "GJ": [(12000, 0), (None, Paise.from_rupees(200))],
-    # Andhra Pradesh: nil <=15000; 150 up to 20000; 200 above.
-    "AP": [(15000, 0), (20000, Paise.from_rupees(150)), (None, Paise.from_rupees(200))],
-    # Telangana: nil <=15000; 150 up to 20000; 200 above.
-    "TS": [(15000, 0), (20000, Paise.from_rupees(150)), (None, Paise.from_rupees(200))],
-}
-_PT_STATES_MODELLED = frozenset(_PT_TABLES)
+# Professional Tax comes from the WS2 state packs (app/states/<code>.yaml — cited, sha256-
+# verified data; see app/core/state_packs.py). The old in-code _PT_TABLES were deleted when
+# the packs shipped: an uncited in-code slab cannot satisfy §0.6, and KA's table was in fact
+# stale (missed the Rs.300 February rate, Act 33 of 2025 w.e.f. 01.04.2025).
 
 # Labour Welfare Fund: (employee_paise, employer_paise, due_months). LWF is a PERIODIC
 # remittance (half-yearly/annual), NOT a monthly payslip line — surfaced as a compliance
 # figure, returned only in its due month(s). Amounts/calendars vary by state and change;
 # re-verify against each state's LWF Act/notification annually.
 _LWF_TABLES: dict[str, tuple[int, int, tuple[int, ...]]] = {
-    "MH": (Paise.from_rupees(25), Paise.from_rupees(75), (6, 12)),   # half-yearly: Jun, Dec
-    "KA": (Paise.from_rupees(20), Paise.from_rupees(40), (12,)),     # annual: Dec
-    "TN": (Paise.from_rupees(20), Paise.from_rupees(40), (12,)),     # annual: Dec
-    "GJ": (Paise.from_rupees(6), Paise.from_rupees(12), (6, 12)),    # half-yearly
-    "WB": (Paise.from_rupees(3), Paise.from_rupees(15), (6, 12)),    # half-yearly
-    "AP": (Paise.from_rupees(30), Paise.from_rupees(70), (12,)),     # annual
-    "MP": (Paise.from_rupees(10), Paise.from_rupees(30), (6, 12)),   # half-yearly
+    "MH": (Paise.from_rupees(25), Paise.from_rupees(75), (6, 12)),  # half-yearly: Jun, Dec
+    "KA": (Paise.from_rupees(20), Paise.from_rupees(40), (12,)),  # annual: Dec
+    "TN": (Paise.from_rupees(20), Paise.from_rupees(40), (12,)),  # annual: Dec
+    "GJ": (Paise.from_rupees(6), Paise.from_rupees(12), (6, 12)),  # half-yearly
+    "WB": (Paise.from_rupees(3), Paise.from_rupees(15), (6, 12)),  # half-yearly
+    "AP": (Paise.from_rupees(30), Paise.from_rupees(70), (12,)),  # annual
+    "MP": (Paise.from_rupees(10), Paise.from_rupees(30), (6, 12)),  # half-yearly
 }
 _LWF_STATES_MODELLED = frozenset(_LWF_TABLES)
 
@@ -162,25 +145,24 @@ def esi(gross_monthly: int) -> tuple[Paise, Paise]:
 
 
 def pt_is_modelled(state: str | None) -> bool:
-    return (state or "").upper() in _PT_STATES_MODELLED
+    """True when the state's pack computes a MONTHLY payslip PT line (sourced monthly slabs)."""
+    return state_packs.pt_status(state) == "monthly"
 
 
 def professional_tax(state: str | None, gross_monthly: int, month: int) -> Paise:
-    """Monthly PT for a modelled state; ₹0 for unmodelled states. ``month`` is 1-12 (the
-    Maharashtra February special of ₹300 depends on it)."""
-    code = (state or "").upper()
-    table = _PT_TABLES.get(code)
-    if table is None:
-        return Paise(0)
-    gross_rupees = int(gross_monthly) // 100
-    amount = 0
-    for upto, paise in table:
-        if upto is None or gross_rupees <= upto:
-            amount = paise
-            break
-    if code == "MH" and month == 2 and amount == int(Paise.from_rupees(200)):
-        amount = int(Paise.from_rupees(300))
-    return Paise(amount)
+    """Monthly-payslip PT via the WS2 state pack. ``month`` is 1-12 (February specials —
+    MH ₹300, and KA ₹300 w.e.f. 01.04.2025 — come from the cited pack data).
+
+    The payslip line is ₹0 in three HONEST cases the pack distinguishes (surfaced via
+    ``state_packs.pt_provenance`` — the zero is never "computed as zero"):
+      * ``not_applicable`` — no PT levy exists in the state (DL/HR/UP);
+      * ``half_yearly``    — the levy is half-yearly per local body (TN), computed via
+        ``state_packs.pt_half_yearly``, not as a monthly deduction;
+      * ``no_pack``        — state not yet covered (WS2.4 backlog; pre-pack behaviour).
+    A BLOCKED-CA pack refuses (raises) rather than returning zero (§0.6).
+    """
+    det = state_packs.pt_monthly(state, gross_monthly, month)
+    return Paise(det.amount_paise if det.amount_paise is not None else 0)
 
 
 # ---- Labour Welfare Fund (state calendars) --------------------------------------------
@@ -267,8 +249,9 @@ def gratuity_required(last_basic_monthly: int, completed_years: int) -> Paise:
     if completed_years <= 0:
         return Paise(0)
     amount = Decimal(int(last_basic_monthly)) * GRATUITY_NUM * completed_years / GRATUITY_DEN
-    return Paise(min(_round_rupee(int(amount.to_integral_value(ROUND_HALF_UP))),
-                     int(GRATUITY_CEILING)))
+    return Paise(
+        min(_round_rupee(int(amount.to_integral_value(ROUND_HALF_UP))), int(GRATUITY_CEILING))
+    )
 
 
 def _completed_years(start: date, end: date) -> int:
@@ -312,15 +295,14 @@ def gratuity_hybrid(
     if total_years < floor:
         return Paise(0)
     b = (boundary.year, boundary.month, boundary.day)
-    pre_years = sum(
-        1 for k in range(1, total_years + 1) if (doj.year + k, doj.month, doj.day) < b
-    )
+    pre_years = sum(1 for k in range(1, total_years + 1) if (doj.year + k, doj.month, doj.day) < b)
     post_years = total_years - pre_years
     old_leg = Decimal(int(old_base)) * GRATUITY_NUM * pre_years / GRATUITY_DEN
     new_leg = Decimal(int(new_base)) * GRATUITY_NUM * post_years / GRATUITY_DEN
     total = old_leg + new_leg
-    return Paise(min(_round_rupee(int(total.to_integral_value(ROUND_HALF_UP))),
-                     int(GRATUITY_CEILING)))
+    return Paise(
+        min(_round_rupee(int(total.to_integral_value(ROUND_HALF_UP))), int(GRATUITY_CEILING))
+    )
 
 
 def bonus_provision_monthly(basic_monthly: int) -> Paise:

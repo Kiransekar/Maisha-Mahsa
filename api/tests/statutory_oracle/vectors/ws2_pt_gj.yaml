@@ -1,0 +1,31 @@
+# WS2.2 — Gujarat profession tax, via the WS2 state pack (app/states/GJ.yaml).
+
+- id: pt_gj_at_12000_nil
+  statute: Gujarat State Tax on Professions, Trades, Callings and Employments Act, 1976
+  section: "Rate schedule Sr. No. 1, clause (i), effective 01/04/2022"
+  provenance: primary
+  citation_url: "https://commercialtax.gujarat.gov.in/vatwebsite/download/schedule/Rate_of_Profession_Tax.pdf"
+  citation_locator: >-
+    Gujarat Commercial Tax Department "Rate of Profession Tax", Sr. No. 1(A)/(B), salary and
+    wages earners: "(i) Up to ₹12,000/- — Zero", "Effective from 01/04/2022".
+  source: "Rs.12,000 -> Zero."
+  ca_initials: PENDING
+  ca_date: null
+  target: professional_tax
+  inputs: {state: GJ, gross_monthly: 1200000, month: 6}
+  expected: 0
+
+- id: pt_gj_above_12000_200
+  statute: Gujarat State Tax on Professions, Trades, Callings and Employments Act, 1976
+  section: "Rate schedule Sr. No. 1, clause (ii), effective 01/04/2022"
+  provenance: primary
+  citation_url: "https://commercialtax.gujarat.gov.in/vatwebsite/download/schedule/Rate_of_Profession_Tax.pdf"
+  citation_locator: >-
+    Gujarat Commercial Tax Department "Rate of Profession Tax", Sr. No. 1(A)/(B):
+    "(ii) More than ₹12,000/- — 200/- per month".
+  source: "Rs.20,000 -> Rs.200/month."
+  ca_initials: PENDING
+  ca_date: null
+  target: professional_tax
+  inputs: {state: GJ, gross_monthly: 2000000, month: 6}
+  expected: 20000

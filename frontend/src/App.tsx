@@ -1,22 +1,37 @@
-import type { ReactNode } from "react";
+import { Suspense, lazy, type ReactNode } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { Shell } from "./components/Shell";
-import { Today } from "./routes/Today";
-import { Inbox } from "./routes/Inbox";
-import { Approvals } from "./routes/Approvals";
-import { Domains } from "./routes/Domains";
-import { Domain } from "./routes/Domain";
-import { AuditRoom } from "./routes/AuditRoom";
-import { Onboarding } from "./routes/Onboarding";
-import { Filings } from "./routes/Filings";
-import { PayrollRun } from "./routes/PayrollRun";
-import { Statements } from "./routes/Statements";
-import { Ask } from "./routes/Ask";
 import { SignIn } from "./routes/SignIn";
-import { Settings } from "./routes/Settings";
-import { CaAccept } from "./routes/CaAccept";
-import { Cfo } from "./routes/Cfo";
+
+// WS7.9-perf: every authenticated screen is a lazy route-level chunk. Before this, the single
+// bundle (510 KB raw / 146 KB gzip) had to download AND parse on a throttled ₹10k-Android
+// profile before ANYTHING painted — the measured LCP blocker (render delay was 99% of LCP).
+// SignIn stays a static import on purpose: it is the guest LCP path (/today → session check →
+// redirect → sign-in), and lazy-loading it would put an extra chunk round-trip inside the LCP
+// chain it exists to shorten. The Suspense fallback is a plain sentence about the SCREEN, not a
+// data-shaped skeleton (same anti-pattern-#14 rule as the session gate: nothing may look like a
+// ledger loading, and no figure is ever painted that Mahsa hasn't produced).
+const Today = lazy(() => import("./routes/Today").then((m) => ({ default: m.Today })));
+const Inbox = lazy(() => import("./routes/Inbox").then((m) => ({ default: m.Inbox })));
+const Approvals = lazy(() => import("./routes/Approvals").then((m) => ({ default: m.Approvals })));
+const Domains = lazy(() => import("./routes/Domains").then((m) => ({ default: m.Domains })));
+const Domain = lazy(() => import("./routes/Domain").then((m) => ({ default: m.Domain })));
+const AuditRoom = lazy(() => import("./routes/AuditRoom").then((m) => ({ default: m.AuditRoom })));
+const Onboarding = lazy(() =>
+  import("./routes/Onboarding").then((m) => ({ default: m.Onboarding })),
+);
+const Filings = lazy(() => import("./routes/Filings").then((m) => ({ default: m.Filings })));
+const PayrollRun = lazy(() =>
+  import("./routes/PayrollRun").then((m) => ({ default: m.PayrollRun })),
+);
+const Statements = lazy(() =>
+  import("./routes/Statements").then((m) => ({ default: m.Statements })),
+);
+const Ask = lazy(() => import("./routes/Ask").then((m) => ({ default: m.Ask })));
+const Settings = lazy(() => import("./routes/Settings").then((m) => ({ default: m.Settings })));
+const CaAccept = lazy(() => import("./routes/CaAccept").then((m) => ({ default: m.CaAccept })));
+const Cfo = lazy(() => import("./routes/Cfo").then((m) => ({ default: m.Cfo })));
 import {
   sessionStatus,
   switchOrganization,
@@ -117,26 +132,34 @@ export function App() {
           <RequireAuth>
             <Shell>
               <OrgSwitcher />
-              <Routes>
-                {/* Owner's landing per app/core/landing.py ROLE_LANDING. */}
-                <Route path="/" element={<Navigate to="/today" replace />} />
-                <Route path="/today" element={<Today />} />
-                <Route path="/inbox" element={<Inbox />} />
-                <Route path="/approvals" element={<Approvals />} />
-                <Route path="/domains" element={<Domains />} />
-                <Route path="/d/:domain" element={<Domain />} />
-                <Route path="/audit" element={<AuditRoom />} />
-                <Route path="/onboarding" element={<Onboarding />} />
-                {/* T2: appended, never reshuffled. */}
-                <Route path="/file" element={<Filings />} />
-                <Route path="/payroll-run" element={<PayrollRun />} />
-                <Route path="/statements" element={<Statements />} />
-                <Route path="/ask" element={<Ask />} />
-                <Route path="/settings" element={<Settings />} />
-                <Route path="/ca/accept" element={<CaAccept />} />
-                <Route path="/cfo" element={<Cfo />} />
-                <Route path="*" element={<p>Not found.</p>} />
-              </Routes>
+              <Suspense
+                fallback={
+                  <p style={{ color: "var(--color-ink-muted)", fontSize: 13 }}>
+                    Loading this screen…
+                  </p>
+                }
+              >
+                <Routes>
+                  {/* Owner's landing per app/core/landing.py ROLE_LANDING. */}
+                  <Route path="/" element={<Navigate to="/today" replace />} />
+                  <Route path="/today" element={<Today />} />
+                  <Route path="/inbox" element={<Inbox />} />
+                  <Route path="/approvals" element={<Approvals />} />
+                  <Route path="/domains" element={<Domains />} />
+                  <Route path="/d/:domain" element={<Domain />} />
+                  <Route path="/audit" element={<AuditRoom />} />
+                  <Route path="/onboarding" element={<Onboarding />} />
+                  {/* T2: appended, never reshuffled. */}
+                  <Route path="/file" element={<Filings />} />
+                  <Route path="/payroll-run" element={<PayrollRun />} />
+                  <Route path="/statements" element={<Statements />} />
+                  <Route path="/ask" element={<Ask />} />
+                  <Route path="/settings" element={<Settings />} />
+                  <Route path="/ca/accept" element={<CaAccept />} />
+                  <Route path="/cfo" element={<Cfo />} />
+                  <Route path="*" element={<p>Not found.</p>} />
+                </Routes>
+              </Suspense>
             </Shell>
           </RequireAuth>
         }
