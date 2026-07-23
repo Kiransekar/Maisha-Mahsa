@@ -6,7 +6,7 @@ PIP := api/.venv/bin/pip
 # Prefer a rustup-installed cargo; fall back to PATH.
 CARGO := $(shell [ -x "$$HOME/.cargo/bin/cargo" ] && echo "$$HOME/.cargo/bin/cargo" || echo cargo)
 
-.PHONY: help verify ci test test-rust test-py eval eval-real capture brief dunning scheduler lint fmt venv dev clean migrate
+.PHONY: help verify ci test test-rust test-py eval eval-real capture brief dunning scheduler lint fmt venv dev clean migrate e2e-frontend
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  \033[36m%-12s\033[0m %s\n",$$1,$$2}'
@@ -54,6 +54,13 @@ brief: ## Send the daily CFO brief once (needs Mahsa + SMTP/MailHog up)
 scheduler: ## Run the long-lived scheduler loop (daily capture + 8pm brief)
 	cd api && .venv/bin/python -m app.jobs serve
 
+# QG.2. NOT a ci_gate.sh step yet — that promotion is an ORCH decision (see PROGRESS.md
+# [QG.2+MED-2]). Needs: `make venv`, `cargo build` in dif/, and Playwright browsers
+# (npx playwright install chromium). The stack (Mahsa + API + SPA + auth stand-in) is started
+# and torn down by the suite itself (frontend/e2e/stack.mjs).
+e2e-frontend: ## Playwright browser E2E: sign-in, Today, GST hub, approvals, Ask (QG.2)
+	cd frontend && npm run test:e2e
+
 test-rust: ## cargo test for the Mahsa DIF core
 	cd dif && $(CARGO) test
 
@@ -64,11 +71,12 @@ lint: gates ## ruff + mypy + clippy + statutory grep-gates (warnings are errors)
 	cd api && .venv/bin/ruff check . && .venv/bin/mypy app evals
 	cd dif && $(CARGO) clippy --all-targets -- -D warnings
 
-gates: ## MMX-1.0 grep-gates (QG.3): truncate-then-round, draft-IRN honesty, money format, RLS coverage
+gates: ## MMX-1.0 grep-gates (QG.3): truncate-then-round, draft-IRN honesty, money format, RLS coverage, stale citations
 	bash scripts/check_no_truncate_round.sh
 	bash scripts/check_no_draft_irn.sh
 	bash scripts/check_money_format.sh
 	bash scripts/check_rls_coverage.sh
+	bash scripts/check_no_stale_citations.sh
 
 fmt: ## Format Rust + Python
 	cd dif && $(CARGO) fmt

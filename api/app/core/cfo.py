@@ -67,10 +67,16 @@ class DailyBrief:
     needs_attention: list[DomainHealth]
     approvals_pending: list[DomainHealth]
     overall_score: float | None
+    #: MEM.P1-2 (SPEC-MEMCITE-1.0 §A7): the org's memory profile block, threaded through as a
+    #: LABELED context-only section of the brief. It is never a figure source — every number
+    #: in the brief comes from the deterministic Mahsa-folded health above (§0.4 firewall).
+    memory_context: str | None = None
 
 
-def compose_brief(as_of: str, health: list[DomainHealth]) -> DailyBrief:
-    """Compose the 8pm CFO brief from collected health. Pure."""
+def compose_brief(as_of: str, health: list[DomainHealth], memory: str | None = None) -> DailyBrief:
+    """Compose the 8pm CFO brief from collected health. Pure. ``memory`` (MEM.P1-2) is the
+    org's profile block; it rides as labeled context only and changes NO number — the
+    scorecard, attention list and overall score are computed from ``health`` alone."""
     scored = [h.score for h in health if h.score is not None]
     overall = round(sum(scored) / len(scored), 1) if scored else None
     # Worst first in the scorecard (red, then yellow, then green); stable by domain name.
@@ -84,6 +90,7 @@ def compose_brief(as_of: str, health: list[DomainHealth]) -> DailyBrief:
         needs_attention=needs_attention,
         approvals_pending=approvals_pending,
         overall_score=overall,
+        memory_context=memory or None,
     )
 
 
@@ -106,4 +113,5 @@ def brief_payload(brief: DailyBrief) -> dict[str, Any]:
         "scorecard": [row(h) for h in brief.scorecard],
         "needs_attention": [row(h) for h in brief.needs_attention],
         "approvals_pending": [row(h) for h in brief.approvals_pending],
+        "memory_context": brief.memory_context,
     }

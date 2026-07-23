@@ -92,4 +92,14 @@ describe("Shell — mounts ConnectionHealthStrip once, visible on every screen",
     const html = renderShell(unhealthy());
     expect(html).toContain("screen content marker");
   });
+
+  // WS10.4 — the in-product disclaimer must render on every screen, byte-for-byte the mirror
+  // of app.core.legal.DISCLAIMER_TEXT (a paraphrase is not the disclaimer the ticket
+  // specifies). JSX collapses whitespace to single spaces, matching the constant exactly.
+  it("renders the byte-exact WS10.4 disclaimer on every screen", () => {
+    const html = renderShell(healthy());
+    expect(html).toContain(
+      "software tool, not the practice of chartered accountancy; outputs require professional verification",
+    );
+  });
 });

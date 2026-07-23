@@ -81,6 +81,7 @@ import zipfile
 from typing import Any, NotRequired, TypedDict
 
 from app.core.audit import canonical_json
+from app.core.legal import DISCLAIMER_TEXT
 from app.core.mahsa_coverage import badge_state
 from app.core.money import Paise
 
@@ -114,7 +115,10 @@ class AuditFigure(TypedDict):
     # dotted computation path — the path says WHICH computation, the anchors say WHICH source
     # rows. Present only where a minting path recorded one (§B5: absence renders as absence);
     # when present they are inside the sealed sections, so tampering an anchor breaks the
-    # pack's integrity hash. Excerpt rendering in the exports is CITE.P1-1.
+    # pack's integrity hash. Each anchor carries its resolution state (§B2) as resolved at
+    # pack-build time, so a sealed export never claims a resolved citation that was broken
+    # when the artifact was generated. Exports render the excerpts (CITE.P1-1): see
+    # :func:`pack_to_csv_zip` and :func:`app.core.pdf.audit_pack_pdf`.
     anchors: NotRequired[list[dict[str, Any]]]
 
 
@@ -422,6 +426,9 @@ def pack_to_csv_zip(pack: dict[str, Any]) -> bytes:
             ["Integrity hash (SHA-256)", integrity["hash"]],
             ["Badge legend", "VERIFIED = Mahsa independently recomputed; PENDING = not yet; "
                              "BLOCKED = recompute mismatch"],
+            # WS10.4 — disclaimer line on the export cover (rendered from the byte-exact
+            # constant; DISCLAIMERS.md placement policy).
+            ["Disclaimer", DISCLAIMER_TEXT],
             ["Pending sections", ", ".join(pack["pending_sections"]) or "none"],
         ]
         zf.writestr("00_cover.csv", _sheet(cover))
@@ -437,6 +444,17 @@ def pack_to_csv_zip(pack: dict[str, Any]) -> bytes:
                     badge_text(fig["badge"]),
                     fig["evidence_ref"],
                 ])
+                # CITE.P1-1 (§B4.2): one row per cell-level source anchor — the excerpt plus
+                # its resolution state, verbatim from the sealed pack. MOVED/BROKEN render
+                # exactly as resolved at build time (never silently normalised to RESOLVED).
+                for a in fig.get("anchors", []):
+                    rows.append([
+                        "SOURCE",
+                        a.get("excerpt", ""),
+                        "",
+                        str(a.get("resolution", "")).upper(),
+                        a.get("note") or "",
+                    ])
             note = pack["section_notes"].get(name)
             if note:
                 rows.append(["NOTE", note, "", "", ""])

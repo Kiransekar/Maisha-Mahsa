@@ -32,7 +32,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -42,6 +42,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.core import legal
 from app.core.mahsa_coverage import badge_state
 from app.core.money import Paise
 from app.core.principal import Principal
@@ -265,6 +266,10 @@ async def action_commit(
             ),
         )
     try:
+        # WS10.4 — same ToS/Privacy acceptance gate as the HTMX action_submit surface (dormant
+        # until counsel publishes; ReacceptanceRequiredError subclasses ValueError so the
+        # nothing-was-changed 422 path below carries the accept-first message).
+        legal.require_terms_acceptance(db, principal.user_id, datetime.now(UTC))
         result = action.handler(db, normalized)
         db.commit()
     except (ValueError, KeyError, TypeError, IntegrityError) as exc:

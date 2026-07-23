@@ -98,10 +98,13 @@ async def run_brief(
     to: str,
     company_name: str,
     as_of: date,
+    memory: str | None = None,
 ) -> dict[str, Any]:
-    """Compose and dispatch the daily CFO Domain-Health brief."""
+    """Compose and dispatch the daily CFO Domain-Health brief. ``memory`` (MEM.P1-2) is the
+    org's memory profile block, rendered as a LABELED context-only section — it never changes
+    a number (every figure comes from the Mahsa-folded health, §0.4)."""
     health = await collect_health(session, mahsa, registry, as_of=as_of)
-    brief = compose_brief(as_of.isoformat(), health)
+    brief = compose_brief(as_of.isoformat(), health, memory=memory)
     await channel.send_daily_brief(to=to, brief=brief, company_name=company_name)
     return {
         "job": "brief",
@@ -147,6 +150,15 @@ def run_evolve(session: Session, org: str | None, *, now: str) -> dict[str, Any]
         "consolidated": consolidated,
         "history_pruned": pruned,
     }
+
+
+def _org_memory_block(session: Session, org: str | None) -> str | None:
+    """MEM.P1-2: the org's memory profile block for brief/dunning personalization, fetched
+    under the already-bound org GUC. The legacy single-tenant pass has no org identity, so it
+    honestly gets no memory (never another org's)."""
+    if org is None:
+        return None
+    return memory.profile_block(session, org) or None
 
 
 def run_audit_verify(session: Session, org: str | None = None) -> dict[str, Any]:
@@ -268,6 +280,7 @@ async def _run_org(
                 to=settings.cfo_email,
                 company_name=settings.app_name,
                 as_of=today,
+                memory=_org_memory_block(session, org),
             )
 
         await guarded("brief", _brief)
@@ -275,7 +288,11 @@ async def _run_org(
 
         async def _dunning() -> dict[str, Any]:
             summary = await RevenueService().dunning_run(
-                session, today, channel(), company_name=settings.app_name
+                session,
+                today,
+                channel(),
+                company_name=settings.app_name,
+                memory=_org_memory_block(session, org),
             )
             return {"job": "dunning", **summary}
 

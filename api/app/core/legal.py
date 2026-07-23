@@ -190,6 +190,23 @@ def require_current_acceptance(
         )
 
 
+def require_terms_acceptance(
+    session: Session,
+    user_id: str | None,
+    now: datetime,
+    published: tuple[PublishedVersion, ...] = PUBLISHED,
+) -> None:
+    """WS10.4 — the ToS + Privacy gate for the sign-in/first-mutation surface: raise unless the
+    verified caller has accepted the IN-FORCE version of both documents.
+
+    Same mechanics and same dormancy as the WS10.1 DPDP-notice gate: while nothing is published
+    (every document in ``docs/legal/`` is still a counsel-gated draft) this is a no-op, and the
+    moment counsel publishes a version — or bumps one — the gate goes live with no code change.
+    """
+    for doc in (DocType.TOS, DocType.PRIVACY):
+        require_current_acceptance(session, user_id, doc, now, published)
+
+
 def needs_reacceptance(
     session: Session,
     user_id: str,

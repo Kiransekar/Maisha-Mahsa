@@ -1,6 +1,7 @@
 import { NavLink } from "react-router-dom";
 import type { ReactNode } from "react";
 import { ConnectionHealthStrip } from "./ConnectionHealth";
+import { RulePackVersion } from "./RulePackVersion";
 
 // Ordered by the roles in app/core/landing.py: Owner lands on Today, Accountant on the Exception
 // Inbox, CA on the Audit Room. Stable ordering is part of the trust contract (UX research T2 —
@@ -62,6 +63,14 @@ export function Shell({ children }: { children: ReactNode }) {
         >
           Every figure here is recomputed by a second engine before you see it. Figures that
           aren't say so.
+          {/* WS10.4 — byte-exact disclaimer, mirror of app.core.legal.DISCLAIMER_TEXT
+              (do not reword; Shell.test.tsx pins it). */}
+          <div style={{ marginTop: 10 }}>
+            software tool, not the practice of chartered accountancy; outputs require
+            professional verification
+          </div>
+          {/* WS1.E3: rule-pack version, rendered only when Mahsa reports it. */}
+          <RulePackVersion />
         </div>
       </aside>
       <main className="shell-main">

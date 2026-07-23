@@ -146,6 +146,10 @@ class ComplianceService(BaseDomainService):
     def alerts(self, session: Session, as_of: date) -> list[dict[str, Any]]:
         return compliance_calc.alerts(self._entries(session), as_of)
 
+    def watch_items(self) -> list[dict[str, Any]]:
+        """WS1.B4: date-to-be-notified / state-rules Labour-Code watch list (not deadlines)."""
+        return compliance_calc.labour_code_watch_items()
+
     # ---- Mahsa contract -------------------------------------------------------------
 
     def build_snapshot(self, session: Session, as_of: date | None = None) -> dict[str, Any]:

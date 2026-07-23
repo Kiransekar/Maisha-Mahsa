@@ -1,0 +1,7 @@
+# Archived manifest for pack 2026.07.1 (superseded by 2026.07.2 — WS1.B4 citation sweep).
+# Kept so the loader can pin/roll back to this exact pack: point MAHSA_RULES at
+# archive/rules-2026.07.1.yaml and MAHSA_RULES_MANIFEST at this file (docs/RULE_PACK_SLA.md).
+pack: in-core
+version: "2026.07.1"
+rules_sha256: "341fd81e6190610ef0ddc57a13564aaf51e2e6044c186653fc9b1b0452e0c877"
+channel: archived

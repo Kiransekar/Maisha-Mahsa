@@ -46,11 +46,18 @@
         </form>
         <div class="appbar__status" title="Mahsa gatekeeper status">
           Mahsa <span class="sdot {{ 'sdot--ok' if mahsa_up|default(true) else 'sdot--off' }}"></span>
+          {#- WS1.E3: pack version as Mahsa reports it — rendered only when known, never assumed. -#}
+          {% if rules_version %}<span class="muted" title="Statutory rule-pack version (see dif/rules/CHANGELOG.md)">· rules {{ rules_version }}</span>{% endif %}
         </div>
       </header>
       <div id="ask-result"></div>
       {% block content %}{% endblock %}
       <div id="toast" class="toast" aria-live="polite"></div>
+      {# WS10.4 — byte-exact disclaimer (app.core.legal.DISCLAIMER_TEXT; locked by
+         tests/unit/core/test_ws104_surfaces.py) on every screen. #}
+      <footer class="muted" style="margin-top: var(--sp-4); font-size: var(--fs-xs);">
+        software tool, not the practice of chartered accountancy; outputs require professional verification
+      </footer>
     </main>
   </div>
 </body>

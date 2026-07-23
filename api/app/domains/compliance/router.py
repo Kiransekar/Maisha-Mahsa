@@ -60,6 +60,12 @@ def mark_filed(
     return {"status": "filed"}
 
 
+@router.get("/watch")
+def watch_items() -> list[dict]:
+    """Labour-Code watch list (WS1.B4): date-to-be-notified mandates + state-rules tracker."""
+    return _service.watch_items()
+
+
 @router.get("/alerts")
 def alerts(as_of: str | None = None, db: Session = Depends(get_session)) -> list[dict]:
     anchor = date.fromisoformat(as_of) if as_of else datetime.now(UTC).date()

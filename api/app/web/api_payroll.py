@@ -148,7 +148,7 @@ def _run_figures(
                 chk=checks.get(f"{prefix}.pf_employee"),
                 mahsa_up=mahsa_up,
                 formula="12% of the s.2(y) statutory wage base (EPF wage ceiling applied)",
-                citation="EPF & MP Act 1952 / s.6",
+                citation="Code on Social Security 2020 s.16(1)(a) (ex EPF & MP Act 1952 s.6)",
                 inputs=[{"label": "wage base (paise)", "value": str(comp["wage_base"])}],
             ),
             _figure(
@@ -158,7 +158,7 @@ def _run_figures(
                 chk=checks.get(f"{prefix}.esi_employee"),
                 mahsa_up=mahsa_up,
                 formula="employee ESI contribution; nil above the wage ceiling",
-                citation="ESI Act 1948 / s.39",
+                citation="Code on Social Security 2020 s.29 (ex ESI Act 1948 s.39)",
                 inputs=[{"label": "wage base (paise)", "value": str(comp["wage_base"])}],
             ),
             _figure(

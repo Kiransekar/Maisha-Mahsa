@@ -157,10 +157,19 @@ class RevenueService(BaseDomainService):
         return out
 
     async def dunning_run(
-        self, session: Session, as_of: date, channel: Any, *, company_name: str = "Maisha-Mahsa"
+        self,
+        session: Session,
+        as_of: date,
+        channel: Any,
+        *,
+        company_name: str = "Maisha-Mahsa",
+        memory: str | None = None,
     ) -> dict[str, Any]:
         """Dispatch a dunning reminder for each invoice due on ``as_of``. Invoices without a
-        customer email are skipped (reported, not sent). ``channel`` is an ``EmailChannel``."""
+        customer email are skipped (reported, not sent). ``channel`` is an ``EmailChannel``.
+        ``memory`` (MEM.P1-2) is the org's memory profile block — consumed for TONE only
+        (see ``compose_dunning``); it never changes a number and never reaches the customer
+        verbatim."""
         from app.core.email.compose import compose_dunning
 
         pending = self.pending_dunning(session, as_of)
@@ -172,7 +181,7 @@ class RevenueService(BaseDomainService):
                 continue
             await channel.send_dunning(
                 to=item["customer_email"],
-                ctx=compose_dunning(item, as_of.isoformat()),
+                ctx=compose_dunning(item, as_of.isoformat(), memory=memory),
                 company_name=company_name,
             )
             sent += 1

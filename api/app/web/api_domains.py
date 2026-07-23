@@ -566,12 +566,15 @@ def _audit_pack_entity_data(db: Session, *, org_id: str, rules_version: str) -> 
     is recomputed here (§0.4)."""
     from sqlalchemy import select
 
+    from app.core.anchors import bank_anchors
     from app.db.models.gst import GstReturn
     from app.db.models.ledger import ChartOfAccounts
     from app.db.models.tax import TdsReturn
+    from app.db.models.treasury import BankAccount, BankTransaction
     from app.domains.ledger.service import LedgerService
     from app.domains.payables.service import PayablesService
     from app.domains.payroll.service import PayrollService
+    from app.domains.treasury.service import TreasuryService
 
     # Concrete, stateless services (same instances-by-construction as build_registry uses) —
     # concrete types so the ledger/payables/payroll-specific methods are statically checked.
@@ -587,12 +590,33 @@ def _audit_pack_entity_data(db: Session, *, org_id: str, rules_version: str) -> 
         for a in accounts
     ]
     payroll_metrics = payroll.build_snapshot(db, as_of)
+
+    # SPEC-MEMCITE-1.0 CITE.P1-1 (§B4.2): the one pack figure genuinely derived from imported
+    # bank statements — cash & bank per TreasuryService.metrics (already computed by the
+    # domain, never recomputed here) — carries the cell-level anchors behind those statements,
+    # resolved LIVE at pack-build time via the shared resolution service (app.core.anchors,
+    # not forked). Legacy rows without anchors contribute nothing (§B5), and an org with no
+    # bank accounts gets no figure at all — honest-empty, never a fabricated real ₹0.
+    balance_sheet: dict[str, Any] = ledger.balance_sheet(db)
+    if db.scalars(select(BankAccount)).first() is not None:
+        txns = db.scalars(select(BankTransaction).order_by(BankTransaction.id)).all()
+        balance_sheet["extra_figures"] = [
+            {
+                "label": "Cash & bank balances (per imported bank statements)",
+                "value_paise": int(TreasuryService().metrics(db, as_of)["cash_paise"]),
+                # Not a Mahsa-ported target -> badges honest_pending, never a fabricated ✓.
+                "target": "treasury.metrics.cash",
+                "evidence_ref": "treasury.metrics:cash_paise",
+                "anchors": bank_anchors(db, txns) or None,
+            }
+        ]
+
     return {
         "org_id": org_id,
         "rules_version": rules_version,
         "trial_balance": ledger.trial_balance(db),
         "profit_and_loss": ledger.profit_and_loss(db),
-        "balance_sheet": ledger.balance_sheet(db),
+        "balance_sheet": balance_sheet,
         "general_ledger": gl,
         "statutory_registers": {
             "tds_returns": [

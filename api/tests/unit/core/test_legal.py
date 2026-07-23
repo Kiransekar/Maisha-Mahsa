@@ -294,3 +294,48 @@ def test_migration_ships_rls_and_a_policy_for_the_new_table():
     assert "GRANT SELECT, INSERT ON legal_acceptance TO maisha_app;" in sql
     assert "UPDATE" not in sql.split("GRANT")[-1]
     assert "DELETE" not in sql.split("GRANT")[-1]
+
+
+# ---------------------------------------------------------------------------------------
+# WS10.4 — require_terms_acceptance: the ToS+Privacy sign-in/mutation gate
+# ---------------------------------------------------------------------------------------
+
+
+def test_terms_gate_is_dormant_while_nothing_is_published(db: Session, org_a: None):
+    # The shipped registry is empty (drafts publish nothing) — the gate must be a no-op,
+    # for a verified user AND for an unattributable caller.
+    legal.require_terms_acceptance(db, "user-1", NOW)
+    legal.require_terms_acceptance(db, None, NOW)
+
+
+def test_terms_gate_blocks_until_BOTH_documents_are_accepted(db: Session, org_a: None):
+    # Both ToS and Privacy are in force at NOW: accepting only one must still block —
+    # a gate that checked only the ToS would pass here and prove nothing about privacy.
+    with pytest.raises(legal.ReacceptanceRequiredError):
+        legal.require_terms_acceptance(db, "user-1", NOW, REGISTRY)
+
+    legal.record_acceptance(db, "user-1", DocType.TOS, "v1", NOW, REGISTRY)
+    with pytest.raises(legal.ReacceptanceRequiredError, match="privacy"):
+        legal.require_terms_acceptance(db, "user-1", NOW, REGISTRY)
+
+    legal.record_acceptance(db, "user-1", DocType.PRIVACY, "v1", NOW, REGISTRY)
+    legal.require_terms_acceptance(db, "user-1", NOW, REGISTRY)  # both accepted -> passes
+
+
+def test_terms_gate_fails_closed_for_an_unattributable_caller(db: Session, org_a: None):
+    # Something is published + no verified user: an unattributable caller cannot have
+    # accepted anything (same stance as require_current_acceptance).
+    with pytest.raises(legal.ReacceptanceRequiredError):
+        legal.require_terms_acceptance(db, None, NOW, REGISTRY)
+
+
+def test_terms_gate_reopens_on_a_version_bump(db: Session, org_a: None):
+    legal.record_acceptance(db, "user-1", DocType.TOS, "v1", NOW, REGISTRY)
+    legal.record_acceptance(db, "user-1", DocType.PRIVACY, "v1", NOW, REGISTRY)
+    legal.require_terms_acceptance(db, "user-1", NOW, REGISTRY)
+
+    # ToS v2 takes effect at LATER — the gate must close again until v2 is accepted.
+    with pytest.raises(legal.ReacceptanceRequiredError, match="tos"):
+        legal.require_terms_acceptance(db, "user-1", LATER, REGISTRY)
+    legal.record_acceptance(db, "user-1", DocType.TOS, "v2", LATER, REGISTRY)
+    legal.require_terms_acceptance(db, "user-1", LATER, REGISTRY)

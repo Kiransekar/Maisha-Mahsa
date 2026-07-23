@@ -26,6 +26,37 @@ scripts/preflight.sh infra/.env     # env completeness + DB reachability + Mahsa
 
 ---
 
+## 0 · Host requirements (WS10.2 — CERT-In posture)
+
+Two host-level settings on the VPS **before first deploy** (`infra/deploy.sh` checks both —
+NTP is a hard stop, retention a loud warning):
+
+**NTP sync** — audit-chain and incident timestamps are evidence; CERT-In requires synchronised
+clocks. Containers use the host clock, so this is host-level:
+
+```bash
+sudo timedatectl set-ntp true
+timedatectl show -p NTPSynchronized --value   # must print: yes
+```
+
+Non-systemd host synced another way (chrony etc.): verify it, then `SKIP_NTP_CHECK=1 ./deploy.sh`.
+
+**180-day log retention** — `docker-compose.prod.yml` sends every service's logs to the host
+journal (journald driver; `docker logs` still works). The 180-day window is set host-side:
+
+```bash
+sudo install -D -m 0644 infra/host/journald-maisha.conf /etc/systemd/journald.conf.d/maisha.conf
+sudo systemctl restart systemd-journald
+journalctl -u systemd-journald --no-pager | tail -1   # sanity: journald restarted cleanly
+```
+
+`infra/host/journald-maisha.conf` sets `MaxRetentionSec=180day` (the time floor) and
+`SystemMaxUse=4G` — if the journal nears 4G before 180 days pass, grow the cap and the disk;
+never shrink the window below 180 days. Read back service logs with
+`journalctl -t 'maisha/<container-name>'`.
+
+---
+
 ## 1 · Provision the database
 
 Two supported shapes. Pick one.
@@ -329,4 +360,20 @@ a missing chip is not.
 | Static host for SPA | e.g. Vercel | build config + 2 env vars from §5 |
 | Backups | S3/anywhere restic speaks | `RESTIC_REPOSITORY`/`RESTIC_PASSWORD` → §7 |
 | Anthropic API key (optional, only if `MAISHA_LLM_PROVIDER=claude`) | console.anthropic.com | → `MAISHA_CLAUDE_API_KEY` |
+| Alert webhook (WS10.2) | any webhook receiver (Slack/Discord/alertmanager) | → `MAISHA_ALERT_WEBHOOK_URL` — see §10 |
 | Razorpay | — | **nothing to configure — no billing integration exists in the code yet (WS6.4 unbuilt)** |
+
+---
+
+## 10 · Incident alerting (WS10.2 — CERT-In posture)
+
+Severity events (today: every unhandled 5xx, via `app/core/alerting.py` wired in
+`app.main._unhandled_error`) are logged at ERROR always, and additionally POSTed as JSON
+(`{source, event, severity, detail, at}` — no PII) to `MAISHA_ALERT_WEBHOOK_URL` when set.
+
+**OWNER-STEP:** point `MAISHA_ALERT_WEBHOOK_URL` at a webhook a human actually sees
+(Slack/Discord incoming webhook, or an alertmanager receiver). Unset = local log only — fine in
+dev, not in production: CERT-In's 6-hour reporting clock runs from *noticing* the incident, so
+noticing must be push, not log-grepping. When an alert fires and looks like a reportable
+incident, follow `docs/legal/CERTIN_INCIDENT_REPORT_TEMPLATE.md` (which references the
+personal-data-breach runbook where both apply).

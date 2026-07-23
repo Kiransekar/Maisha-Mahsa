@@ -10,7 +10,7 @@ use serde::Serialize;
 pub struct Banner {
     pub severity: Severity,
     pub text: String,
-    /// Human-readable citation, e.g. "EPF & MP Act 1952 — Para 38 / Sec 6".
+    /// Human-readable citation, e.g. "Code on Social Security 2020 — s.16(1)(a) (ex EPF & MP Act 1952 s.6)".
     pub citation: String,
     pub action: String,
 }

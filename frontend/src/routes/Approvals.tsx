@@ -372,7 +372,11 @@ function ApprovalCard({
       {item.figures.length === 0 ? (
         <Empty>{item.figures_note ?? "No recomputable figure in this domain."}</Empty>
       ) : (
-        item.figures.map((f) => <FigureRow key={f.target} figure={f} stale={stale} />)
+        // key carries the index too: a payroll restatement repeats the SAME target per employee
+        // (esi_employer × N employees), and duplicate keys make React drop/duplicate rows — on
+        // the one screen whose whole job is restating every figure being signed (found by QG.2
+        // E2E: "two children with the same key, `esi_employer`").
+        item.figures.map((f, i) => <FigureRow key={`${f.target}-${i}`} figure={f} stale={stale} />)
       )}
 
       <div

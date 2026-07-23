@@ -5,7 +5,11 @@
 #
 # Seed set per PRD §4.4. Expand as each domain module is built; bump `version` on change
 # and record the change in BUILD_PROGRESS.md.
-version: "2026.07.1"
+# Labour-Code citation convention (WS1.B4, mirrors WS1.B code style): the in-force Code is
+# primary; a repealed Act appears only as an "(ex ...)" trace or via the Code's own savings
+# clause (CoSS 2020 s.164(2); CoW 2019 s.69(2)) — never as the sole authority. Enforced by
+# scripts/check_no_stale_citations.sh.
+version: "2026.07.2"
 
 rules:
   - id: TREASURY-001
@@ -21,8 +25,8 @@ rules:
   - id: PAYROLL-001
     domain: payroll
     description: "PF (EPF) not deposited by the 15th of the following month."
-    statute: "EPF & MP Act 1952"
-    section: "Para 38 / Sec 6"
+    statute: "Code on Social Security 2020"
+    section: "s.16(1)(a); EPF Scheme 1952 Para 38 saved by s.164(2)(b) (ex EPF & MP Act 1952 s.6)"
     severity: block
     all_of:
       - { metric: pf_days_overdue, op: gt, value: 0 }
@@ -31,8 +35,8 @@ rules:
   - id: PAYROLL-002
     domain: payroll
     description: "ESI contribution not deposited by the 15th of the following month."
-    statute: "ESI Act 1948"
-    section: "Sec 39-40 / Reg 31"
+    statute: "Code on Social Security 2020"
+    section: "s.29; ESI regulations saved by s.164(2)(b), Reg 31 (ex ESI Act 1948 s.39-40)"
     severity: block
     all_of:
       - { metric: esi_days_overdue, op: gt, value: 0 }
@@ -41,8 +45,8 @@ rules:
   - id: PAYROLL-003
     domain: payroll
     description: "A payroll entry has negative net pay — deductions exceed gross."
-    statute: "Payment of Wages Act 1936"
-    section: "Sec 7"
+    statute: "Code on Wages 2019"
+    section: "s.18 (ex Payment of Wages Act 1936 s.7, repealed by s.69(1))"
     severity: block
     all_of:
       - { metric: min_net_pay_paise, op: lt, value: 0 }
@@ -51,8 +55,8 @@ rules:
   - id: PAYROLL-004
     domain: payroll
     description: "Statutory bonus provision is under-funded vs the 8.33% minimum."
-    statute: "Payment of Bonus Act 1965"
-    section: "Sec 10"
+    statute: "Code on Wages 2019"
+    section: "s.26(1) (ex Payment of Bonus Act 1965 s.10, repealed by s.69(1))"
     severity: warning
     all_of:
       - { metric: bonus_reserve, op: lt, value: 1 }
@@ -66,7 +70,7 @@ rules:
     severity: warning
     all_of:
       - { metric: payroll_run_pending, op: gt, value: 0 }
-    action: "Open Approvals: approve to release the drafted run, or reject to void it. Mind the Payment of Wages Act 1936 Sec 5 disbursement window."
+    action: "Open Approvals: approve to release the drafted run, or reject to void it. Mind the Code on Wages 2019 s.17 time limit for payment of wages (ex Payment of Wages Act 1936 s.5)."
 
   - id: GST-001
     domain: gst

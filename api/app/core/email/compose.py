@@ -3,6 +3,7 @@ JSON-able context each template renders. No DB/Mahsa/network — fully unit-test
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 _DUNNING_TONE = {
@@ -13,12 +14,43 @@ _DUNNING_TONE = {
     "T+7": "your invoice is 7 days overdue — please arrange payment",
 }
 
+# MEM.P1-2 (SPEC-MEMCITE-1.0 §A7): dunning tone from the CFO posture block. The memory text
+# is DATA, never copy — a customer email must never carry the org's internal standing
+# instructions, so the only thing read out of the block is this one recognized directive
+# ("dunning tone: gentle|firm", case-insensitive) mapped to a fixed closing line. Every
+# number in the reminder stays exactly as computed by the revenue domain (§0.4 firewall).
+_TONE_DIRECTIVE = re.compile(r"dunning\s+tone\s*:\s*(gentle|firm)", re.IGNORECASE)
 
-def compose_dunning(item: dict, as_of: str) -> dict[str, Any]:
+_CLOSING = {
+    "standard": (
+        "Please arrange payment at your earliest convenience. "
+        "If you have already paid, kindly ignore this note."
+    ),
+    "gentle": (
+        "Whenever convenient, we would appreciate the payment being scheduled — thank you "
+        "for your continued business. If you have already paid, kindly ignore this note."
+    ),
+    "firm": (
+        "Please arrange payment now; further reminders will follow until it is received. "
+        "If you have already paid, kindly ignore this note."
+    ),
+}
+
+
+def dunning_tone(memory: str | None) -> str:
+    """The tone directive found in the org's memory block, else ``standard``. Deterministic
+    and LLM-free; an unrecognized or absent directive falls back, never guesses."""
+    m = _TONE_DIRECTIVE.search(memory or "")
+    return m.group(1).lower() if m else "standard"
+
+
+def compose_dunning(item: dict, as_of: str, memory: str | None = None) -> dict[str, Any]:
     """Dunning-reminder email context for one outstanding invoice. ``item`` comes from
     ``RevenueService.pending_dunning`` ({invoice_number, customer_name, outstanding, due_date,
-    stage})."""
+    stage}). ``memory`` (MEM.P1-2) personalizes TONE only — the raw memory text never enters
+    this customer-facing context, and every number is untouched by it."""
     stage = item["stage"]
+    tone = dunning_tone(memory)
     return {
         "as_of": as_of,
         "invoice_number": item["invoice_number"],
@@ -28,6 +60,8 @@ def compose_dunning(item: dict, as_of: str) -> dict[str, Any]:
         "stage": stage,
         "message": _DUNNING_TONE.get(stage, "your invoice payment is due"),
         "overdue": stage.startswith("T+"),
+        "tone": tone,
+        "closing": _CLOSING[tone],
     }
 
 

@@ -19,7 +19,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.cfo_router import router as cfo_router
 from app.config import DEFAULT_SESSION_SECRET, get_settings
-from app.core import betterauth, ca_threads, history_store, parallel, trace_store
+from app.core import alerting, betterauth, ca_threads, history_store, legal, parallel, trace_store
 from app.core.approvals import pending_approvals, record_decision
 from app.core.ask import answer_query
 from app.core.audit import verify_chain
@@ -35,6 +35,7 @@ from app.core.overview import collect_kpis, upcoming_deadlines
 from app.core.principal import (
     Principal,
     bind_org_guc,
+    current_user,
     reset_current_org,
     reset_current_user,
     set_current_org,
@@ -190,13 +191,25 @@ def create_app() -> FastAPI:
             reset_current_org(org_token)
 
     @app.get("/me")
-    async def whoami(principal: Principal = Depends(betterauth.get_principal)) -> dict[str, str]:
-        """The verified caller, straight from the token. The SPA's session probe."""
+    async def whoami(
+        principal: Principal = Depends(betterauth.get_principal),
+        db: Session = Depends(get_session),
+    ) -> dict[str, Any]:
+        """The verified caller, straight from the token. The SPA's session probe — which makes
+        it the sign-in surface, so it also reports which in-force legal documents (WS10.4
+        ToS/Privacy) the caller still has to accept. Empty while nothing is published (drafts
+        publish nothing, §0.6) — the same dormancy as the DPDP-notice gate."""
+        now = datetime.now(UTC)
         return {
             "user_id": principal.user_id,
             "org_id": principal.org_id,
             "role": principal.role.value,
             "email": principal.email,
+            "legal_acceptance_required": [
+                doc.value
+                for doc in (legal.DocType.TOS, legal.DocType.PRIVACY)
+                if legal.needs_reacceptance(db, principal.user_id, doc, now)
+            ],
         }
 
     @app.get("/login")
@@ -227,7 +240,8 @@ def create_app() -> FastAPI:
     async def _http_error(request: Request, exc: StarletteHTTPException) -> Response:
         if exc.status_code == 404 and _wants_html(request):
             return templates.TemplateResponse(
-                request, "error.html",
+                request,
+                "error.html",
                 {"settings": settings, "code": 404, "message": "Page not found."},
                 status_code=404,
             )
@@ -236,9 +250,14 @@ def create_app() -> FastAPI:
     @app.exception_handler(Exception)
     async def _unhandled_error(request: Request, exc: Exception) -> Response:
         _log.exception("unhandled error on %s: %s", request.url.path, exc)
+        # WS10.2 — a severity event: page the operator now (webhook when configured), because
+        # CERT-In's 6-hour reporting clock starts at NOTICING. Path + exception class only —
+        # no PII (§0.8).
+        alerting.emit("unhandled_exception", f"{type(exc).__name__} on {request.url.path}")
         if _wants_html(request):
             return templates.TemplateResponse(
-                request, "error.html",
+                request,
+                "error.html",
                 {"settings": settings, "code": 500, "message": "Something went wrong."},
                 status_code=500,
             )
@@ -282,18 +301,26 @@ def create_app() -> FastAPI:
     async def health(db: Session = Depends(get_session)) -> dict[str, Any]:
         # P6-OBSERVABILITY: liveness stays "ok"; dependency reachability is reported alongside.
         deps = {"db": "ok", "mahsa": "ok"}
+        # WS1.E3: the rule-pack version tenants see is what Mahsa REPORTS it loaded, never a
+        # value this process assumes — Mahsa down means version unknown, not a stale echo.
+        rule_pack: dict[str, Any] | None = None
         try:
             db.execute(text("SELECT 1"))
         except Exception:  # noqa: BLE001 - health probe must not raise
             deps["db"] = "down"
         try:
-            await MahsaClient(settings.mahsa_url).health()
+            mahsa_health = await MahsaClient(settings.mahsa_url).health()
+            rule_pack = {
+                "version": mahsa_health.get("rules_version"),
+                "channel": mahsa_health.get("rules_channel", "stable"),
+            }
         except Exception:  # noqa: BLE001 - sidecar down is a reported state, not a crash
             deps["mahsa"] = "down"
         return {
             "status": "ok",
             "service": settings.app_name,
             "version": settings.version,
+            "rule_pack": rule_pack,
             "dependencies": deps,
         }
 
@@ -307,8 +334,11 @@ def create_app() -> FastAPI:
         # Live domain health from Mahsa; degrade gracefully if the sidecar is unreachable.
         health_by_domain: dict[str, DomainHealth] = {}
         mahsa_up = True
+        rules_version: str | None = None
         try:
             mahsa = MahsaClient(settings.mahsa_url)
+            # WS1.E3 tenant-visible pack version: only ever what Mahsa reports it loaded.
+            rules_version = (await mahsa.health()).get("rules_version")
             for h in await collect_health(db, mahsa, registry):
                 health_by_domain[h.domain] = h
         except MahsaError:
@@ -338,6 +368,7 @@ def create_app() -> FastAPI:
                 "domains": domains,
                 "settings": settings,
                 "mahsa_up": mahsa_up,
+                "rules_version": rules_version,
                 "kpis": kpis,
                 "calendar": calendar,
                 "approvals": approvals,
@@ -441,6 +472,11 @@ def create_app() -> FastAPI:
         form = await request.form()
         data = {k: str(v) for k, v in form.items()}
         try:
+            # WS10.4 — once counsel publishes the ToS/Privacy, every drawer mutation requires
+            # the caller to have accepted the in-force versions (dormant until then — the same
+            # stance as the DPDP-notice gate inside _add_employee). Raises a ValueError
+            # subclass, so the existing no-write error path below surfaces the message.
+            legal.require_terms_acceptance(db, current_user(), datetime.now(UTC))
             result = action.handler(db, data)
             # P0-3 handlers may return (message, badged_figures); this HTMX surface shows
             # the message and lets the refreshed figures below carry the numbers.
@@ -517,7 +553,9 @@ def create_app() -> FastAPI:
     ) -> dict[str, Any]:
         try:
             result = VaultService().ingest_image(
-                db, file_name=file.filename or "scan", image_bytes=await file.read(),
+                db,
+                file_name=file.filename or "scan",
+                image_bytes=await file.read(),
                 upload_date=upload_date,
             )
             db.commit()
@@ -540,9 +578,7 @@ def create_app() -> FastAPI:
     @app.get("/d/gst/gstr1.json")
     async def gstr1_json_route(period: str, db: Session = Depends(get_session)) -> Response:
         lines = RevenueService().gstr1_lines(db, period)
-        payload = gst_calc.gstr1_json(
-            lines, gstin=settings.company_gstin, filing_period=period
-        )
+        payload = gst_calc.gstr1_json(lines, gstin=settings.company_gstin, filing_period=period)
         return Response(
             content=json.dumps(payload, indent=2),
             media_type="application/json",
@@ -575,17 +611,13 @@ def create_app() -> FastAPI:
         request: Request, q: str = Form(...), db: Session = Depends(get_session)
     ) -> HTMLResponse:
         today = datetime.now(UTC).date()
-        answer = await answer_query(
-            db, query=q, registry=registry, settings=settings, as_of=today
-        )
+        answer = await answer_query(db, query=q, registry=registry, settings=settings, as_of=today)
         return templates.TemplateResponse(
             request, "partials/answer_card.html", {"answer": answer, "settings": settings}
         )
 
     @app.get("/approvals", response_class=HTMLResponse)
-    async def approvals_page(
-        request: Request, db: Session = Depends(get_session)
-    ) -> HTMLResponse:
+    async def approvals_page(request: Request, db: Session = Depends(get_session)) -> HTMLResponse:
         today = datetime.now(UTC).date()
         items = []
         mahsa_up = True
@@ -752,9 +784,7 @@ def create_app() -> FastAPI:
         response_class=HTMLResponse,
         dependencies=[Depends(require(Capability.WRITE))],
     )
-    async def history_capture(
-        request: Request, db: Session = Depends(get_session)
-    ) -> HTMLResponse:
+    async def history_capture(request: Request, db: Session = Depends(get_session)) -> HTMLResponse:
         today = datetime.now(UTC).date()
         written = history_store.capture(db, registry, captured_at=today.isoformat(), as_of=today)
         db.commit()
@@ -798,8 +828,12 @@ def create_app() -> FastAPI:
         if run is None:
             raise HTTPException(status_code=409, detail="no active parallel run")
         parallel.record_observation(
-            db, run_id=run.id, observed_on=datetime.now(UTC).date(),
-            domain=domain, metric=metric, external_value=external_value,
+            db,
+            run_id=run.id,
+            observed_on=datetime.now(UTC).date(),
+            domain=domain,
+            metric=metric,
+            external_value=external_value,
         )
         db.commit()
         return templates.TemplateResponse(

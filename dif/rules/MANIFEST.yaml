@@ -1,0 +1,17 @@
+# Rule-pack manifest (WS1.E3). The pack = rules.yaml; this file binds its version to a
+# sha256 of the exact bytes, and the loader (RuleSet::load_verified / embedded) refuses to
+# serve a pack whose bytes or version do not match — fail loud at boot, never silently drift.
+#
+# On every rules.yaml change: bump `version` there AND here, recompute `rules_sha256`
+# (sha256sum dif/rules/rules.yaml), archive the previous pack under archive/, and add a
+# CHANGELOG.md entry. Signing beyond sha256 integrity (Ed25519) is a documented OWNER-STEP —
+# see docs/RULE_PACK_SLA.md; the repo holds no signing keys (JWT Ed25519 keys belong to the
+# auth provider, audit anchoring is hash-chained, so there is no in-repo signing precedent).
+pack: in-core
+version: "2026.07.2"
+rules_sha256: "1dc854a60ee9701bcffae4f7e69a93de8dec6f6d4a3bb2d933ba7e9c8fa858e1"
+# Staged-rollout flag: "stable" = current pack for all tenants (the default). To stage a new
+# pack, deploy a second Mahsa with MAHSA_RULES/MAHSA_RULES_MANIFEST pointing at the next pack
+# (channel: next) and route chosen tenants to it; to roll back, point at archive/ — see
+# docs/RULE_PACK_SLA.md. The channel is tenant-visible via /health.
+channel: stable

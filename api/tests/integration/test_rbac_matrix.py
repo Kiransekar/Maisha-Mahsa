@@ -375,6 +375,8 @@ API_ROUTE_GATES: dict[str, tuple[str, ...]] = {
     "GET /api/approvals": ("read",),
     "POST /api/approvals/{domain}/decide": ("approve_payment",),
     "GET /api/health/connections": ("read",),
+    # WS1.E3 rule-pack version — read-only, behind the health router's READ gate.
+    "GET /api/health/rulepack": ("read",),
     "GET /api/domains": ("read",),
     "GET /api/domains/{domain}": ("read",),
     # P2-3: trend series for the SPA sparklines — read-only, same query the HTMX page reads.
@@ -491,6 +493,8 @@ API_ROUTE_GATES: dict[str, tuple[str, ...]] = {
     "POST /api/compliance/deadlines/{deadline_id}/file": ("read", "filing"),
     "GET /api/compliance/alerts": ("read",),
     "POST /api/compliance/fold": ("read",),
+    # WS1.B4 Labour-Code watch list — read-only, behind the compliance router's READ gate.
+    "GET /api/compliance/watch": ("read",),
     # equity (entitlement 402s sit BEHIND the rbac gates and are tested elsewhere)
     "POST /api/equity/shareholders": ("read", "write"),
     "GET /api/equity/cap-table": ("read",),
@@ -518,6 +522,13 @@ API_ROUTE_GATES: dict[str, tuple[str, ...]] = {
     "GET /api/legal/dpdp/requests": ("read",),
     "GET /api/legal/notice": ("read",),
     "POST /api/legal/notice/accept": ("read",),
+    # WS10.4 — ToS/Privacy (and any DocType) served + versioned + acceptance-logged. POST
+    # accept is deliberately read-gated: an acceptance is the verified caller binding
+    # THEMSELVES to a published version — identity is the authorization (the /notice/accept
+    # precedent above); it writes only the caller's own acceptance row.
+    "GET /api/legal/docs": ("read",),
+    "GET /api/legal/docs/{doc_type}": ("read",),
+    "POST /api/legal/docs/{doc_type}/accept": ("read",),
     # SPEC-MEMCITE-1.0 MEM.P0-2 (§A9 OWNER-DECISION): memory steers the agent's narrative —
     # an admin surface. Owner/Admin write via the existing manage_users gate; every read role
     # (incl. CA, deliberately) may view the block and its history. Playbook feedback is a

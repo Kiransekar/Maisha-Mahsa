@@ -17,15 +17,32 @@ def mca_deadlines(*, agm_date: str) -> list[dict[str, Any]]:
     2013): AOC-4 within 30 days, MGT-7 within 60; DPT-3 by 30 Jun and DIR-3 KYC by 30 Sep."""
     agm = date.fromisoformat(agm_date)
     return [
-        {"domain": "roc", "form": "AOC-4", "statute": "Companies Act 2013 s.137",
-         "due_date": (agm + timedelta(days=30)).isoformat()},
-        {"domain": "roc", "form": "MGT-7", "statute": "Companies Act 2013 s.92",
-         "due_date": (agm + timedelta(days=60)).isoformat()},
-        {"domain": "roc", "form": "DPT-3", "statute": "Companies Act 2013 Rule 16",
-         "due_date": f"{agm.year}-06-30"},
-        {"domain": "roc", "form": "DIR-3 KYC", "statute": "Companies Act 2013 Rule 12A",
-         "due_date": f"{agm.year}-09-30"},
+        {
+            "domain": "roc",
+            "form": "AOC-4",
+            "statute": "Companies Act 2013 s.137",
+            "due_date": (agm + timedelta(days=30)).isoformat(),
+        },
+        {
+            "domain": "roc",
+            "form": "MGT-7",
+            "statute": "Companies Act 2013 s.92",
+            "due_date": (agm + timedelta(days=60)).isoformat(),
+        },
+        {
+            "domain": "roc",
+            "form": "DPT-3",
+            "statute": "Companies Act 2013 Rule 16",
+            "due_date": f"{agm.year}-06-30",
+        },
+        {
+            "domain": "roc",
+            "form": "DIR-3 KYC",
+            "statute": "Companies Act 2013 Rule 12A",
+            "due_date": f"{agm.year}-09-30",
+        },
     ]
+
 
 def _add_months(d: date, months: int) -> date:
     total = d.month - 1 + months
@@ -68,27 +85,85 @@ def secretarial_calendar(fy_end: str) -> list[dict[str, Any]]:
     end = date.fromisoformat(fy_end)
     fy_start = _add_months(end, -12)
     items = [
-        {"item": "Annual General Meeting", "statute": "Companies Act 2013 s.96",
-         "due_date": _add_months(end, 6).isoformat()},
-        {"item": "Maintain statutory registers", "statute": "Companies Act 2013 s.88",
-         "due_date": end.isoformat()},
-        {"item": "Record minutes of meetings", "statute": "Companies Act 2013 s.118",
-         "due_date": end.isoformat()},
+        {
+            "item": "Annual General Meeting",
+            "statute": "Companies Act 2013 s.96",
+            "due_date": _add_months(end, 6).isoformat(),
+        },
+        {
+            "item": "Maintain statutory registers",
+            "statute": "Companies Act 2013 s.88",
+            "due_date": end.isoformat(),
+        },
+        {
+            "item": "Record minutes of meetings",
+            "statute": "Companies Act 2013 s.118",
+            "due_date": end.isoformat(),
+        },
     ]
     for q in range(4):  # one board meeting target per quarter
         items.append(
-            {"item": f"Board meeting Q{q + 1}", "statute": "Companies Act 2013 s.173",
-             "due_date": _add_months(fy_start, q * 3 + 3).isoformat()}
+            {
+                "item": f"Board meeting Q{q + 1}",
+                "statute": "Companies Act 2013 s.173",
+                "due_date": _add_months(fy_start, q * 3 + 3).isoformat(),
+            }
         )
     return items
+
+
+# ---- Labour-Code watch items (WS1.B4) -------------------------------------------------
+
+# Watch items are NOT deadlines: they carry no due_date, never enter overdue/health math, and
+# exist so a date-to-be-notified mandate is visible instead of silently absent. Citations are
+# verbatim from the India Code texts cited in tests/statutory_oracle/vectors/ (aA2020-36.pdf,
+# aA2019-29.pdf).
+LABOUR_CODE_WATCH_ITEMS: tuple[dict[str, Any], ...] = (
+    {
+        "item": "Gratuity compulsory insurance mandate",
+        "statute": "Code on Social Security 2020 s.57(1)",
+        "status": "watch",
+        "due_date": None,
+        "note": (
+            's.57(1): employers must insure their gratuity liability "with effect from such '
+            'date as may be notified by the appropriate Government" — no date notified yet; '
+            "dormant until notification. s.57(2) exemption path: approved gratuity fund."
+        ),
+    },
+    {
+        "item": "State Labour-Code rules tracker",
+        "statute": "Code on Social Security 2020 s.156; Code on Wages 2019 s.67",
+        "status": "watch",
+        "due_date": None,
+        "note": (
+            "State rules under the Labour Codes are notified state-by-state; until a state's "
+            "rules issue, instruments under the repealed Acts continue as saved by CoSS 2020 "
+            "s.164(2) / CoW 2019 s.69(2). Re-check the tenant's state on each pack update."
+        ),
+    },
+)
+
+
+def labour_code_watch_items() -> list[dict[str, Any]]:
+    """The Labour-Code watch list (no due dates — informational, never overdue). Pure."""
+    return [dict(item) for item in LABOUR_CODE_WATCH_ITEMS]
 
 
 # ---- Audit support package ------------------------------------------------------------
 
 AUDIT_CHECKLIST = (
-    "trial_balance", "general_ledger", "bank_statements", "bank_reconciliation",
-    "fixed_asset_register", "gst_returns", "tds_returns", "payroll_records",
-    "invoices", "bills", "board_minutes", "cap_table",
+    "trial_balance",
+    "general_ledger",
+    "bank_statements",
+    "bank_reconciliation",
+    "fixed_asset_register",
+    "gst_returns",
+    "tds_returns",
+    "payroll_records",
+    "invoices",
+    "bills",
+    "board_minutes",
+    "cap_table",
 )
 
 

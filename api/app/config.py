@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     # Override (MAISHA_SIGNIN_URL) when the frontend is served from a different origin.
     signin_url: str = "/sign-in"
 
+    # WS10.2 — CERT-In posture: severity events (unhandled 5xx, and anything else that calls
+    # app.core.alerting.emit) POST a JSON alert here (e.g. a Slack/Discord/ops webhook or an
+    # internal alertmanager receiver). Empty = alerts log locally only (dev default).
+    # OWNER-STEP: point this at a real webhook before GA — see docs/DEPLOYMENT.md §10.
+    alert_webhook_url: str = ""
+
     # Filer GSTIN for GSTR-1 JSON export (set MAISHA_COMPANY_GSTIN in production).
     company_gstin: str = ""
     # GST filing profile for the QRMP/composition obligation calendar (WS1.D2):

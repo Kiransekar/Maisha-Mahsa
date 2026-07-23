@@ -26,6 +26,8 @@ pub struct Health {
     pub status: &'static str,
     pub engine_version: &'static str,
     pub rules_version: String,
+    /// WS1.E3 staged-rollout channel from the pack manifest ("stable" default).
+    pub rules_channel: String,
 }
 
 #[derive(Serialize)]
@@ -59,6 +61,7 @@ async fn health(State(st): State<AppState>) -> Json<Health> {
         status: "ok",
         engine_version: crate::ENGINE_VERSION,
         rules_version: st.rules.version.clone(),
+        rules_channel: st.rules.channel.clone(),
     })
 }
 

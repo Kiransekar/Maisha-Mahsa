@@ -12,6 +12,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
+from app.core.legal import DISCLAIMER_TEXT
 from app.core.money import Paise
 
 _GRID = TableStyle(
@@ -31,8 +32,21 @@ def _inr(paise: Any) -> str:
     return Paise(int(paise)).format_inr()
 
 
-def _doc(buf: BytesIO, title: str) -> SimpleDocTemplate:
-    return SimpleDocTemplate(buf, pagesize=A4, title=title, author="Maisha-Mahsa")
+def _disclaimer_footer(canvas: Any, _doc_template: Any) -> None:
+    """WS10.4 — the byte-exact ``DISCLAIMER_TEXT`` on the foot of EVERY page of EVERY PDF this
+    module emits (DISCLAIMERS.md placement policy). 8pt on a 9pt body — legible, not fine
+    print."""
+    canvas.saveState()
+    canvas.setFont("Helvetica-Oblique", 8)
+    canvas.drawCentredString(A4[0] / 2, 20, DISCLAIMER_TEXT)
+    canvas.restoreState()
+
+
+def _build(buf: BytesIO, title: str, elems: list[Any]) -> None:
+    """One build path for every PDF, so the disclaimer footer cannot be forgotten on a new
+    builder."""
+    doc = SimpleDocTemplate(buf, pagesize=A4, title=title, author="Maisha-Mahsa")
+    doc.build(elems, onFirstPage=_disclaimer_footer, onLaterPages=_disclaimer_footer)
 
 
 def payslip_pdf(data: dict) -> bytes:
@@ -63,7 +77,7 @@ def payslip_pdf(data: dict) -> bytes:
     table.setStyle(_GRID)
     net = Paragraph(f"<b>Net pay: {_inr(data['net'])}</b>", styles["Heading2"])
     elems += [table, Spacer(1, 12), net]
-    _doc(buf, f"Payslip {data['period']}").build(elems)
+    _build(buf, f"Payslip {data['period']}", elems)
     return buf.getvalue()
 
 
@@ -105,15 +119,23 @@ def audit_pack_pdf(pack: dict) -> bytes:
         figures = pack["sections"][name]
         if figures:
             rows = [["Particulars", "Amount (₹)", "Badge", "Evidence"]]
-            rows += [
-                [
+            for f in figures:
+                rows.append([
                     Paragraph(f["label"], styles["BodyText"]),
                     _inr(f["value_paise"]),
                     badge_text(f["badge"]),
                     Paragraph(f["evidence_ref"], styles["BodyText"]),
-                ]
-                for f in figures
-            ]
+                ])
+                # CITE.P1-1 (SPEC-MEMCITE-1.0 §B4.2): the figure's cell-level source anchors —
+                # excerpt + resolution state verbatim from the sealed pack. A MOVED or BROKEN
+                # citation prints as such; the export never claims RESOLVED for it.
+                for a in f.get("anchors", []):
+                    rows.append([
+                        Paragraph(f"source: {a.get('excerpt', '')}", styles["BodyText"]),
+                        "",
+                        str(a.get("resolution", "")).upper(),
+                        Paragraph(a.get("note") or "", styles["BodyText"]),
+                    ])
             table = Table(rows, colWidths=[210, 100, 70, 120])
             table.setStyle(_GRID)
             elems.append(table)
@@ -129,7 +151,7 @@ def audit_pack_pdf(pack: dict) -> bytes:
                 styles["Italic"],
             )
         )
-    _doc(buf, "Audit Pack").build(elems)
+    _build(buf, "Audit Pack", elems)
     return buf.getvalue()
 
 
@@ -168,5 +190,5 @@ def form16_pdf(data: dict) -> bytes:
             styles["Italic"],
         ),
     ]
-    _doc(buf, f"Form 16 {data['financial_year']}").build(elems)
+    _build(buf, f"Form 16 {data['financial_year']}", elems)
     return buf.getvalue()

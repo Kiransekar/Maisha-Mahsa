@@ -8,9 +8,20 @@ use mahsa::validate::RuleSet;
 async fn main() {
     let rules = match std::env::var("MAHSA_RULES") {
         Ok(path) => {
+            // WS1.E3: a file-loaded pack must arrive WITH its manifest and pass sha256 +
+            // version verification — fail loud at boot, never serve an unverified pack.
+            let manifest_path = std::env::var("MAHSA_RULES_MANIFEST").unwrap_or_else(|_| {
+                panic!(
+                    "MAHSA_RULES is set but MAHSA_RULES_MANIFEST is not: a rule pack loads \
+                     only with its manifest (version + sha256), see docs/RULE_PACK_SLA.md"
+                )
+            });
             let text = std::fs::read_to_string(&path)
                 .unwrap_or_else(|e| panic!("cannot read MAHSA_RULES={path}: {e}"));
-            RuleSet::from_yaml(&text).expect("rules.yaml failed validation")
+            let manifest = std::fs::read_to_string(&manifest_path)
+                .unwrap_or_else(|e| panic!("cannot read MAHSA_RULES_MANIFEST={manifest_path}: {e}"));
+            RuleSet::load_verified(&text, &manifest)
+                .unwrap_or_else(|e| panic!("rule pack failed manifest verification: {e}"))
         }
         Err(_) => RuleSet::embedded(),
     };

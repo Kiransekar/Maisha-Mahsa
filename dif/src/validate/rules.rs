@@ -93,6 +93,36 @@ impl Rule {
 pub struct RuleSet {
     pub version: String,
     pub rules: Vec<Rule>,
+    /// Staged-rollout channel (WS1.E3), set from the pack manifest at verified load
+    /// ("stable" default = current pack for all tenants). Tenant-visible via `/health`.
+    #[serde(default = "default_channel")]
+    pub channel: String,
+}
+
+fn default_channel() -> String {
+    "stable".to_string()
+}
+
+/// Rule-pack manifest (WS1.E3): binds the pack `version` to a sha256 of the exact rules.yaml
+/// bytes. Integrity is sha256; signing beyond that (Ed25519) is a documented OWNER-STEP
+/// (docs/RULE_PACK_SLA.md) — the repo holds no signing keys.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Manifest {
+    pub version: String,
+    pub rules_sha256: String,
+    #[serde(default = "default_channel")]
+    pub channel: String,
+}
+
+impl Manifest {
+    pub fn from_yaml(text: &str) -> Result<Manifest, String> {
+        serde_yaml::from_str(text).map_err(|e| e.to_string())
+    }
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    Sha256::digest(bytes).iter().map(|b| format!("{b:02x}")).collect()
 }
 
 impl RuleSet {
@@ -120,10 +150,38 @@ impl RuleSet {
         Ok(())
     }
 
-    /// The embedded, version-controlled default rule set (always available, even with no FS).
+    /// WS1.E3 verified load: the pack is accepted only when sha256(rules bytes) and `version`
+    /// both match the manifest. Any mismatch is a hard error — fail loud at boot, never serve
+    /// a drifted pack.
+    pub fn load_verified(rules_text: &str, manifest_text: &str) -> Result<RuleSet, String> {
+        let manifest = Manifest::from_yaml(manifest_text)?;
+        let digest = sha256_hex(rules_text.as_bytes());
+        if digest != manifest.rules_sha256 {
+            return Err(format!(
+                "rule-pack integrity failure: sha256 of rules is {digest} but the manifest \
+                 declares {} — the pack bytes and manifest have drifted",
+                manifest.rules_sha256
+            ));
+        }
+        let mut set = RuleSet::from_yaml(rules_text)?;
+        if set.version != manifest.version {
+            return Err(format!(
+                "rule-pack version mismatch: rules.yaml says {} but the manifest says {}",
+                set.version, manifest.version
+            ));
+        }
+        set.channel = manifest.channel;
+        Ok(set)
+    }
+
+    /// The embedded, version-controlled default rule set (always available, even with no FS),
+    /// verified against its embedded manifest (WS1.E3).
     pub fn embedded() -> RuleSet {
-        RuleSet::from_yaml(include_str!("../../rules/rules.yaml"))
-            .expect("embedded rules.yaml must be valid")
+        RuleSet::load_verified(
+            include_str!("../../rules/rules.yaml"),
+            include_str!("../../rules/MANIFEST.yaml"),
+        )
+        .expect("embedded rule pack failed manifest verification")
     }
 }
 
@@ -157,5 +215,61 @@ rules:
   - { id: A, domain: treasury, description: d, statute: "", section: "", severity: block, all_of: [{metric: runway_months, op: lt, value: 3}] }
 "#;
         assert!(RuleSet::from_yaml(yaml).is_err());
+    }
+
+    // ---- WS1.E3: pack manifest verification --------------------------------------------
+
+    const PACK: &str = include_str!("../../rules/rules.yaml");
+    const MANIFEST: &str = include_str!("../../rules/MANIFEST.yaml");
+
+    #[test]
+    fn verified_load_accepts_the_shipped_pack_and_carries_the_channel() {
+        let rs = RuleSet::load_verified(PACK, MANIFEST).unwrap();
+        assert_eq!(rs.version, Manifest::from_yaml(MANIFEST).unwrap().version);
+        assert_eq!(rs.channel, "stable");
+        assert!(!rs.rules.is_empty());
+    }
+
+    #[test]
+    fn verified_load_rejects_drifted_pack_bytes() {
+        // One flipped byte in the pack must fail integrity, loudly naming the mismatch.
+        let tampered = PACK.replacen("severity: block", "severity: info", 1);
+        assert_ne!(tampered, PACK, "mutation must actually change the pack");
+        let err = RuleSet::load_verified(&tampered, MANIFEST).unwrap_err();
+        assert!(err.contains("integrity"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn verified_load_rejects_version_mismatch() {
+        // Correct the sha so ONLY the version disagrees — proves the version check is separate.
+        let manifest = format!(
+            "pack: in-core\nversion: \"9999.99.9\"\nrules_sha256: \"{}\"\n",
+            sha256_hex(PACK.as_bytes())
+        );
+        let err = RuleSet::load_verified(PACK, &manifest).unwrap_err();
+        assert!(err.contains("version mismatch"), "unexpected error: {err}");
+    }
+
+    #[test]
+    fn rollback_previous_pack_loads_verified_and_the_engine_computes_with_it() {
+        // WS1.E3 rollback: the archived previous pack (as MAHSA_RULES would pin it) loads
+        // through the same verified path and its rules actually evaluate — the pre-sweep
+        // PAYROLL-001 still cites the repealed Act as primary, proving the OLD pack is live.
+        let rs = RuleSet::load_verified(
+            include_str!("../../rules/archive/rules-2026.07.1.yaml"),
+            include_str!("../../rules/archive/MANIFEST-2026.07.1.yaml"),
+        )
+        .unwrap();
+        assert_eq!(rs.version, "2026.07.1");
+        assert_eq!(rs.channel, "archived");
+        let pf = rs.rules.iter().find(|r| r.id == "PAYROLL-001").unwrap();
+        assert_eq!(pf.statute, "EPF & MP Act 1952"); // the archived pack's pre-sweep citation
+        // The engine computes with the old pack: PAYROLL-001 triggers on overdue PF.
+        let mut snap = Snapshot::default();
+        snap.metrics.insert("pf_days_overdue".to_string(), 3.0);
+        let intent = IntentVec::zeros();
+        assert!(pf.triggers(&intent, &snap));
+        snap.metrics.insert("pf_days_overdue".to_string(), 0.0);
+        assert!(!pf.triggers(&intent, &snap));
     }
 }

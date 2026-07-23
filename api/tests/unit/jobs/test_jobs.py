@@ -110,8 +110,12 @@ async def test_run_once_iterates_orgs_and_isolates_a_failing_tenant(monkeypatch)
 
     assert seen == ["org-a", "org-b"]  # org-b still ran after org-a blew up
     assert res["summary"] == {
-        "command": "capture", "period": "2026-07-22", "orgs": 2,
-        "ok": 1, "failed": 1, "skipped": 0,
+        "command": "capture",
+        "period": "2026-07-22",
+        "orgs": 2,
+        "ok": 1,
+        "failed": 1,
+        "skipped": 0,
     }
     (err,) = [r for r in res["results"] if "error" in r]
     assert err["org"] == "org-a" and "boom" in err["error"]
@@ -136,8 +140,12 @@ async def test_rerun_of_a_completed_period_is_a_noop(monkeypatch) -> None:
 
     second = await run_once("capture", settings=Settings(), now_utc=NOW, factory=factory)
     assert second["summary"] == {
-        "command": "capture", "period": "2026-07-22", "orgs": 1,
-        "ok": 0, "failed": 0, "skipped": 1,
+        "command": "capture",
+        "period": "2026-07-22",
+        "orgs": 1,
+        "ok": 0,
+        "failed": 0,
+        "skipped": 1,
     }
     assert second["results"][0]["skipped"] == "already ran"
 
@@ -169,8 +177,12 @@ async def test_an_error_run_does_not_block_the_retry(monkeypatch) -> None:
     fail["on"] = False  # retry within the SAME period must actually run, not skip
     second = await run_once("capture", settings=Settings(), now_utc=NOW, factory=factory)
     assert second["summary"] == {
-        "command": "capture", "period": "2026-07-22", "orgs": 1,
-        "ok": 1, "failed": 0, "skipped": 0,
+        "command": "capture",
+        "period": "2026-07-22",
+        "orgs": 1,
+        "ok": 1,
+        "failed": 0,
+        "skipped": 0,
     }
 
 
@@ -186,6 +198,62 @@ async def test_no_orgs_falls_back_to_the_legacy_single_tenant_pass() -> None:
     (run,) = s.scalars(select(JobRun)).all()
     s.close()
     assert (run.org_id, run.job, run.period, run.status) == (
-        LEGACY_ORG, "capture", "2026-07-22", "done"
+        LEGACY_ORG,
+        "capture",
+        "2026-07-22",
+        "done",
     )
     assert json.dumps(res)  # the whole result is JSON-serializable for the CLI print
+
+
+# --- MEM.P1-2: the per-org jobs thread the memory profile block (context only) --------------
+
+
+async def test_brief_and_dunning_jobs_thread_the_org_memory_block(monkeypatch) -> None:
+    """The brief and dunning closures fetch THIS org's profile block under the bound GUC and
+    pass it down; the legacy single-tenant pass (no org identity) honestly passes none."""
+    from app.db.models.memory import OrgMemory
+
+    factory = _factory("org-a")
+    s = factory()
+    s.add(
+        OrgMemory(
+            org_id="org-a",
+            kind="cfo_posture",
+            content="- dunning tone: gentle",
+            updated_at="2026-07-23T00:00:00+00:00",
+            updated_by="owner",
+        )
+    )
+    s.commit()
+    s.close()
+
+    seen: dict[str, str | None] = {}
+
+    async def fake_brief(session, mahsa, registry, channel, *, memory=None, **kw):
+        seen["brief"] = memory
+        return {"job": "brief", "to": kw["to"], "needs_attention": 0, "overall_score": None}
+
+    async def fake_dunning(self, session, as_of, channel, *, memory=None, **kw):
+        seen["dunning"] = memory
+        return {"as_of": str(as_of), "pending": 0, "sent": 0, "skipped_no_email": []}
+
+    monkeypatch.setattr(jobs_mod, "run_brief", fake_brief)
+    monkeypatch.setattr(jobs_mod.RevenueService, "dunning_run", fake_dunning)
+
+    res = await run_once("brief", settings=Settings(), now_utc=NOW, factory=factory)
+    assert res["summary"]["ok"] == 1
+    res = await run_once("dunning", settings=Settings(), now_utc=NOW, factory=factory)
+    assert res["summary"]["ok"] == 1
+
+    for job in ("brief", "dunning"):
+        block = seen[job]
+        assert block is not None
+        assert "dunning tone: gentle" in block
+        assert "context only, NEVER a source of numbers" in block  # the verbatim label
+
+    # Legacy single-tenant pass: no org identity -> no memory, never another org's.
+    s = factory()
+    assert jobs_mod._org_memory_block(s, None) is None
+    assert "dunning tone: gentle" in (jobs_mod._org_memory_block(s, "org-a") or "")
+    s.close()

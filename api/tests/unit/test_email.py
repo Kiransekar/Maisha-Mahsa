@@ -45,3 +45,25 @@ async def test_email_channel_dispatches_via_transport():
     assert "Daily CFO Brief" in msg.subject
     assert "1 need(s) attention" in msg.subject  # one red domain
     assert "<html" in msg.html.lower()
+
+
+# ---- MEM.P1-2: the labeled memory block in the brief email --------------------------------
+
+
+def test_render_daily_brief_shows_labeled_memory_block_when_present():
+    posture = "- prefer quarterly GST view\n- conservative on ITC claims"
+    brief = compose_brief(
+        "2026-07-23",
+        [DomainHealth("treasury", 92.0, "green", False)],
+        memory=posture,
+    )
+    html = render_daily_brief(brief, company_name="Acme")
+    assert "Company memory — context only" in html  # the label, verbatim
+    assert "prefer quarterly GST view" in html
+    assert "never a source of numbers" in html  # the §0.4 contract stated in the email
+    assert "92" in html  # numbers untouched
+
+
+def test_render_daily_brief_without_memory_has_no_memory_section():
+    html = render_daily_brief(_brief(), company_name="Acme")
+    assert "Company memory" not in html

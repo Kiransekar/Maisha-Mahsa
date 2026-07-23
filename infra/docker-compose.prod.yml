@@ -5,6 +5,17 @@
 # api starts. No MailHog (real SMTP via .env); Ollama optional (add back if using LLM).
 # MAISHA_DATABASE_URL comes from .env (compose interpolates ./.env): leave it unset for the
 # default on-volume SQLite, or set the Postgres/Supabase URL for the multi-tenant launch path.
+
+# WS10.2 — CERT-In 180-day log retention: every service logs to the HOST's systemd-journal
+# (`docker logs` still works), and the retention window itself is set host-side by
+# infra/host/journald-maisha.conf (MaxRetentionSec=180 days) — install per docs/DEPLOYMENT.md
+# §0 host requirements. Docker's json-file driver only rotates by SIZE, which cannot express a
+# time-based retention floor; journald can.
+x-logging: &certin-logging
+  driver: journald
+  options:
+    tag: "maisha/{{.Name}}"
+
 services:
   migrate:
     build: { context: ../api, dockerfile: Dockerfile }
@@ -15,6 +26,7 @@ services:
     volumes:
       - maisha_data:/data
     restart: "no"
+    logging: *certin-logging
 
   dif:
     build: { context: ../dif, dockerfile: Dockerfile }
@@ -22,6 +34,7 @@ services:
       MAHSA_ADDR: "0.0.0.0:8088"
     expose: ["8088"]
     restart: unless-stopped
+    logging: *certin-logging
 
   api:
     build: { context: ../api, dockerfile: Dockerfile }
@@ -44,6 +57,7 @@ services:
       migrate: { condition: service_completed_successfully }
       dif: { condition: service_started }
     restart: unless-stopped
+    logging: *certin-logging
 
   scheduler:
     build: { context: ../api, dockerfile: Dockerfile }
@@ -59,6 +73,7 @@ services:
       migrate: { condition: service_completed_successfully }
       dif: { condition: service_started }
     restart: unless-stopped
+    logging: *certin-logging
 
   # redis removed 2026-07-22 (launch-pack drift check): no code path in api/, dif/ or frontend/
   # reads Redis — grep for "redis" across the codebase finds nothing. Re-add when something does.
@@ -77,6 +92,7 @@ services:
     depends_on:
       api: { condition: service_healthy }
     restart: unless-stopped
+    logging: *certin-logging
 
 volumes:
   maisha_data:

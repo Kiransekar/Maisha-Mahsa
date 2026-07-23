@@ -223,6 +223,9 @@ def test_valid_token_returns_the_tokens_own_principal(auth_server, client):
         "org_id": "org-7",
         "role": "owner",
         "email": "cfo@example.com",
+        # WS10.4 — /me is the sign-in surface: it reports which in-force legal documents the
+        # caller still has to accept. Empty while nothing is published (drafts publish nothing).
+        "legal_acceptance_required": [],
     }
 
 

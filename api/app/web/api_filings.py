@@ -170,17 +170,20 @@ def _figure(
     inputs: list[dict[str, str]] | None = None,
     note: str | None = None,
     documents: list[dict[str, Any]] | None = None,
+    anchors: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """One badged figure in the WS7.2 shape VerifiedNumber renders: value + state + working.
 
     ``documents`` (SPEC-MEMCITE-1.0 CITE.P0-3, §B4.1) carries rendered citation anchors —
-    excerpt + /vault url + resolution state. The filing flows compute from TYPED user inputs,
-    not imported files, so no anchor exists for them today and the block stays honestly empty
-    (§B5: never fabricated provenance); the seam is here for figures that gain row-level
-    sources."""
+    excerpt + /vault url + resolution state. ``anchors`` (CITE.P1-3, §B4.4) carries the full
+    §B1 anchor structs; when present they ride into the sealed ``_seal`` detail via
+    :func:`_detail`, so the audit chain carries the figure's input provenance. The filing
+    flows compute from TYPED user inputs, not imported files, so no anchor exists for them
+    today and both stay honestly empty (§B5: never fabricated provenance); the seam is here
+    for figures that gain row-level sources."""
     state = _state(chk)
     resolved_note = note or (chk.note if chk else (None if mahsa_up else _MAHSA_DOWN_NOTE))
-    return {
+    fig: dict[str, Any] = {
         "target": target,
         "label": label,
         "value_paise": value_paise,  # null == "not yet known — we don't guess", NEVER ₹0
@@ -194,6 +197,9 @@ def _figure(
             "note": resolved_note,
         },
     }
+    if anchors:
+        fig["anchors"] = anchors
+    return fig
 
 
 def _seal(
@@ -234,6 +240,11 @@ def _detail(
     trace_id: str,
     **extra: Any,
 ) -> dict[str, Any]:
+    """The sealed evidence payload. CITE.P1-3 (SPEC-MEMCITE-1.0 §B4.4): a figure carrying
+    cell-level anchors seals its anchor list too — the audit chain rides input provenance,
+    with NO change to ``compute_verdict_hash`` (the verdict seals outputs; this detail seals
+    input provenance). Anchor-less figures serialize byte-identically to before, so existing
+    chains and hashes are untouched (backward-compatible by construction)."""
     return {
         "kind": kind,
         "figures": [
@@ -242,6 +253,7 @@ def _detail(
                 "label": f["label"],
                 "value_paise": f["value_paise"],
                 "state": f["state"],
+                **({"anchors": f["anchors"]} if f.get("anchors") else {}),
             }
             for f in figures
         ],

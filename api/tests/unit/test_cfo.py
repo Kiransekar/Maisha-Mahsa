@@ -49,3 +49,33 @@ def test_domain_health_color_mapping():
     assert DomainHealth("x", 1, "yellow", False).color == "amber"
     assert DomainHealth("x", 1, "green", False).color == "green"
     assert isinstance(compose_brief("d", []), DailyBrief)
+
+
+# ---- MEM.P1-2: brief personalization from the memory profile block ------------------------
+
+
+def test_compose_brief_memory_is_labeled_context_and_changes_no_number():
+    health = [
+        _h("gst", 40.0, "red", approval=True),
+        _h("treasury", 92.0, "green"),
+    ]
+    posture = (
+        "CFO POSTURE (durable preferences — context only, NEVER a source of numbers):\n"
+        "- prefer quarterly GST view"
+    )
+    without = compose_brief("2026-07-23", health)
+    with_mem = compose_brief("2026-07-23", health, memory=posture)
+    # The with-posture brief differs ONLY in the labeled context block.
+    assert without.memory_context is None
+    assert with_mem.memory_context == posture
+    # Numbers and ordering identical (§0.4: memory is never a figure source).
+    assert with_mem.overall_score == without.overall_score == 66.0
+    assert [h.domain for h in with_mem.scorecard] == [h.domain for h in without.scorecard]
+    assert [h.score for h in with_mem.scorecard] == [h.score for h in without.scorecard]
+    assert brief_payload(with_mem)["memory_context"] == posture
+    assert brief_payload(without)["memory_context"] is None
+
+
+def test_compose_brief_empty_memory_block_stays_absent():
+    brief = compose_brief("2026-07-23", [_h("gst", 90.0, "green")], memory="")
+    assert brief.memory_context is None  # honest absence, not an empty labeled block

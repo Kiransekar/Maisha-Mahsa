@@ -43,14 +43,21 @@ ENTITY_DATA = {
     "statutory_registers": {
         "tds_returns": [
             {
-                "return_type": "24Q", "quarter": "2026-Q1", "status": "filed",
-                "total_deducted": 250_000, "late_filing_fee": 40_000,
+                "return_type": "24Q",
+                "quarter": "2026-Q1",
+                "status": "filed",
+                "total_deducted": 250_000,
+                "late_filing_fee": 40_000,
             }
         ],
         "gst_returns": [
             {
-                "return_type": "GSTR-3B", "filing_period": "2026-06", "status": "filed",
-                "tax_payable": 90_000, "late_fee": 5_000, "interest": 1_200,
+                "return_type": "GSTR-3B",
+                "filing_period": "2026-06",
+                "status": "filed",
+                "tax_payable": 90_000,
+                "late_fee": 5_000,
+                "interest": 1_200,
             }
         ],
         "payroll": {
@@ -314,3 +321,84 @@ def test_pdf_artifact_embeds_hash_and_badge_text() -> None:
     assert pack["integrity"]["hash"][:16].encode() in text
     assert b"VERIFIED" in text  # the 234E late fee row
     assert b"PENDING" in text  # every unported figure
+
+
+# ---- CITE.P1-1 (SPEC-MEMCITE-1.0 §B4.2): anchor excerpts in the export artifacts ----------
+
+_ANCHORED_FIGURE = {
+    "label": "Cash & bank balances (per imported bank statements)",
+    "value_paise": 800_000,
+    "target": "treasury.metrics.cash",
+    "evidence_ref": "treasury.metrics:cash_paise",
+    "anchors": [
+        {
+            "doc_sha256": "a" * 64,
+            "file_name": "HDFC-May.csv",
+            "locator": {"kind": "csv_row", "source_row": 47},
+            "row_hash": "b" * 64,
+            "occurrence": 1,
+            "excerpt": "HDFC-May.csv, row 47: 12/05 NEFT-000123 ₹1,20,000.00 Dr",
+            "resolution": "resolved",
+            "note": None,
+        },
+        {
+            "doc_sha256": "a" * 64,
+            "file_name": "HDFC-May.csv",
+            "locator": {"kind": "csv_row", "source_row": 12},
+            "row_hash": "c" * 64,
+            "occurrence": 1,
+            "excerpt": "HDFC-May.csv, row 12: 02/05 RENT ₹50,000.00 Dr",
+            "resolution": "broken",
+            "note": "no row in the stored source file matches this citation's content hash "
+            "(occurrence 1)",
+        },
+    ],
+}
+
+
+def _anchored_entity_data() -> dict:
+    data = copy.deepcopy(ENTITY_DATA)
+    data["balance_sheet"]["extra_figures"] = [copy.deepcopy(_ANCHORED_FIGURE)]
+    return data
+
+
+def test_anchors_ride_the_pack_figure_and_are_sealed() -> None:
+    pack = build_audit_pack(_anchored_entity_data())
+    [fig] = [
+        f for f in pack["sections"]["balance_sheet"] if f["label"] == _ANCHORED_FIGURE["label"]
+    ]
+    assert fig["badge"] == "honest_pending"  # unported target never fabricates a ✓
+    assert [a["resolution"] for a in fig["anchors"]] == ["resolved", "broken"]
+    assert verify_pack_integrity(pack) is True
+    # The anchors are INSIDE the sealed sections: tampering one breaks the integrity hash —
+    # a sealed export cannot silently claim RESOLVED for a citation broken at export time.
+    tampered = copy.deepcopy(pack)
+    [tfig] = [
+        f for f in tampered["sections"]["balance_sheet"] if f["label"] == _ANCHORED_FIGURE["label"]
+    ]
+    tfig["anchors"][1]["resolution"] = "resolved"
+    assert verify_pack_integrity(tampered) is False
+
+
+def test_zip_renders_anchor_excerpts_with_honest_resolution_state() -> None:
+    sheets = _zip_sheets(pack_to_csv_zip(build_audit_pack(_anchored_entity_data())))
+    bs = sheets["03_balance_sheet.csv"]
+    source_rows = [r for r in bs if r and r[0] == "SOURCE"]
+    assert len(source_rows) == 2
+    resolved, broken = source_rows
+    assert resolved[1] == _ANCHORED_FIGURE["anchors"][0]["excerpt"]
+    assert resolved[3] == "RESOLVED" and resolved[4] == ""
+    # The broken citation states it is broken, with the reason — never rendered as resolved.
+    assert broken[1] == _ANCHORED_FIGURE["anchors"][1]["excerpt"]
+    assert broken[3] == "BROKEN"
+    assert "content hash" in broken[4]
+    # A figure without anchors contributes no SOURCE rows (absence renders as absence, §B5).
+    assert not any(r and r[0] == "SOURCE" for r in sheets["01_trial_balance.csv"])
+
+
+def test_pdf_renders_anchor_excerpts_and_broken_state() -> None:
+    blob = audit_pack_pdf(build_audit_pack(_anchored_entity_data()))
+    text = _pdf_text(blob)
+    assert b"NEFT-000123" in text  # the excerpt made it into the artifact
+    assert b"RESOLVED" in text
+    assert b"BROKEN" in text  # the broken citation is stated, not silently dropped

@@ -5,8 +5,11 @@ data so they are trivial to update and test. Re-verify against the current Finan
 year before relying on these (see skills/indian-fin-rules). No value here is read from a
 clock; the caller passes the month where it matters (PT February special).
 
-References: EPF & MP Act 1952 (PF), ESI Act 1948, Income-Tax Act 1961 s.192/87A,
-Payment of Bonus Act 1965, Payment of Gratuity Act 1972, state Professional Tax Acts.
+References (Labour-Code regime in force 21-11-2025; repealed Acts appear only as "(ex ...)"
+traces per the WS1.B4 convention): Code on Social Security 2020 s.16(1)(a) (PF, ex EPF & MP Act
+1952), s.29 (ESI, ex ESI Act 1948), s.53 (gratuity, ex Payment of Gratuity Act 1972);
+Code on Wages 2019 s.26 (bonus, ex Payment of Bonus Act 1965) and s.2(y) (wage base);
+Income-Tax Act 1961 s.192/87A; state Professional Tax Acts.
 """
 
 from __future__ import annotations

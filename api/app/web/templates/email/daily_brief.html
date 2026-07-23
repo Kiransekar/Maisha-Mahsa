@@ -56,6 +56,14 @@
         {% endfor %}
       </table>
 
+      {% if brief.memory_context %}
+      <!-- MEM.P1-2: labeled context-only block from the org's memory profile. Never a source
+           of numbers — every figure above comes from Mahsa-verified snapshot facts. -->
+      <h2 style="font-size:14px;margin:24px 0 8px;text-transform:uppercase;letter-spacing:0.04em;color:#667085;">Company memory — context only</h2>
+      <div style="border:1px solid #e6e8ec;border-radius:10px;padding:12px;font-size:12px;color:#475467;white-space:pre-wrap;">{{ brief.memory_context }}</div>
+      <p style="margin:6px 0 0;font-size:11px;color:#98a2b3;">Standing preferences from your company memory. Context only — never a source of numbers; every figure in this brief is computed from verified snapshot facts.</p>
+      {% endif %}
+
       <p style="margin:24px 0 0;font-size:11px;color:#98a2b3;line-height:1.5;">
         Every figure was recomputed and validated by Mahsa (the deterministic Rust core) and
         recorded in the hash-chained audit log. Reply to act on any approval.
